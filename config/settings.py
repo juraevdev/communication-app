@@ -153,7 +153,7 @@ JAZZMIN_SETTINGS = {
     "site_header": "StudyFlow Uz",
     "site_brand": "StudyFlow Uz",
     "site_logo": None,
-    "login_logo": 'gerb.png',
+    # "login_logo": 'gerb.png',
     "login_logo_dark": None,
     "site_logo_classes": "img-circle",
     "site_icon": None,
