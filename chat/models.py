@@ -47,7 +47,7 @@ class Notification(models.Model):
 class FileUpload(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='uploaded_files')
     message = models.ForeignKey(Message, on_delete=models.SET_NULL, null=True, blank=True, related_name='attachments')
-    file = models.FileField(upload_to='uploads/', null=True)
+    file = models.FileField(upload_to='mdeia/uploads/', null=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
 
