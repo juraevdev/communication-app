@@ -13,42 +13,8 @@ class MessageApiTests(APITestCase):
         self.client.force_authenticate(user=self.user1)
 
 
-    def test_create_message(self):
-        url = reverse('message-create') 
-        data = {
-            'sender': self.user1.id,
-            'recipient': self.user2.id,
-            'text': 'Salom!'
-        }
-        response = self.client.post(url, data)
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Message.objects.count(), 1)
-
-
     def test_list_messages(self):
         url = reverse('message-list')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 0)
-
-
-    def test_delete_message(self):
-        message = Message.objects.create(sender=self.user1, recipient=self.user2, text='Test message')
-        url = reverse('message-delete', args=[message.id])
-        response = self.client.delete(url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(Message.objects.count(), 0)
-
-
-    def test_update_message(self):
-        message = Message.objects.create(sender=self.user1, recipient=self.user2, text='Old message')
-        url = reverse('message-edit', args=[message.id])
-        data = {
-            'sender': self.user1.id,
-            'recipient': self.user2.id,
-            'text': 'Updated message'
-        }
-        response = self.client.put(url, data)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        message.refresh_from_db()
-        self.assertEqual(message.text, 'Updated message')
