@@ -20,13 +20,16 @@ class JWTAuthMiddleware(BaseMiddleware):
         if token:
             try:
                 validated_token = AccessToken(token)
-                user_id = validated_token('user_id')
-                user = self.get_user(user_id)
+                user_id = validated_token['user_id']
+                user = await self.get_user(user_id)
                 scope['user'] = user
             except Exception as e:
-                scope['user'] = AnonymousUser
+                print(e)
+                scope['user'] = AnonymousUser()
         else:
-            scope['user'] = AnonymousUser
+            scope['user'] = AnonymousUser()
+
+        return await super().__call__(scope, receive, send)
 
     @database_sync_to_async
     def get_user(self, user_id):
