@@ -3,11 +3,15 @@ from accounts.models import CustomUser
 
 
 class Room(models.Model):
-    members = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="room")
+    user1 = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='chat_room_sender', null=True)
+    user2 = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='chat_room_receiver', null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        unique_together = ['user1', 'user2']
+
     def __str__(self):
-        return self.name
+        return f'{self.user1} - {self.user2}'
 
 
 class Message(models.Model):
@@ -16,6 +20,7 @@ class Message(models.Model):
     recipient = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='received_messages')
     text = models.TextField()
     timestamp = models.DateTimeField(auto_now_add=True)
+    is_updated = models.BooleanField(default=False)
     is_read = models.BooleanField(default=False)
 
     class Meta:
@@ -58,6 +63,7 @@ class FileUpload(models.Model):
     message = models.ForeignKey(Message, on_delete=models.SET_NULL, null=True, blank=True, related_name='attachments')
     file = models.FileField(upload_to='uploads/', null=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
 
 
     def __str__(self):
