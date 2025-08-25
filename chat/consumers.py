@@ -20,7 +20,6 @@ class P2PChatConsumer(AsyncJsonWebsocketConsumer):
             await self.close()
             return
 
-        # Room ni olish va tekshirish
         self.room = await self.get_room()
         if not self.room or not await self.user_in_room():
             await self.close()
@@ -123,7 +122,6 @@ class P2PChatConsumer(AsyncJsonWebsocketConsumer):
                 await self.send_json({"error": "file_data and file_name are required"})
                 return
             
-            # Faylni saqlash
             file_upload = await self.save_file(file_data, file_name, file_type)
             if file_upload:
                 file_info = await self.get_file_data(file_upload.id)
@@ -166,7 +164,6 @@ class P2PChatConsumer(AsyncJsonWebsocketConsumer):
         
 
     async def chat_message(self, event):
-        # Eventdan faqat kerakli ma'lumotlarni olamiz
         await self.send_json({
             'type': 'new_message',
             'id': event['id'],
@@ -179,7 +176,6 @@ class P2PChatConsumer(AsyncJsonWebsocketConsumer):
 
     @database_sync_to_async
     def get_message_data(self, message_id):
-        """Message ma'lumotlarini sync kontekstda olish"""
         try:
             message = Message.objects.select_related('sender').get(id=message_id)
             return {
@@ -285,7 +281,6 @@ class P2PChatConsumer(AsyncJsonWebsocketConsumer):
         
 
     async def file_uploaded(self, event):
-        """Fayl yuklanganligi haqida xabar yuborish"""
         await self.send_json({
             'type': 'file_uploaded',
             'id': event['id'],
@@ -299,14 +294,11 @@ class P2PChatConsumer(AsyncJsonWebsocketConsumer):
     def save_file(self, file_data, file_name, file_type=None):
         """Base64 faylni saqlash"""
         try:
-            # Base64 ni decode qilish
             format, file_str = file_data.split(';base64,')
             file_bytes = base64.b64decode(file_str)
             
-            # Fayl yaratish
             file_content = ContentFile(file_bytes, name=file_name)
             
-            # FileUpload yaratish
             file_upload = FileUpload.objects.create(
                 user=self.user,
                 file=file_content
@@ -367,3 +359,40 @@ class P2PChatConsumer(AsyncJsonWebsocketConsumer):
         
         except FileUpload.DoesNotExist:
             return False
+
+
+
+import json
+from channels.generic.websocket import AsyncJsonWebsocketConsumer
+
+class NotificationConsumer(AsyncJsonWebsocketConsumer):
+    async def connect(self):
+        self.user = self.scope['user']
+        if not self.user.is_authenticated:
+            await self.close()
+            return
+
+        self.group_name = f'notifications_{self.user.id}'
+
+        await self.channel_layer.group_add(
+            self.group_name,
+            self.channel_name
+        )
+
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(
+            self.group_name,
+            self.channel_name
+        )
+
+    async def notify(self, event):
+        """
+        Signal orqali keladigan eventni clientga jo‘natamiz
+        """
+        await self.send_json({
+            'type': 'notification',
+            'message': event['message'],
+            'data': event['data']
+        })

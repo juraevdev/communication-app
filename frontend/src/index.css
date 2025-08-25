@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+/* Shadcn theme (agar v0.dev keltirgan bo‘lsa qo‘shing) */
+@layer base {
+  :root {
+    --radius: 0.5rem;
+  }
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+}
