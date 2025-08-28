@@ -36,12 +36,15 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'drf_yasg',
     'channels',
+    "corsheaders",
     'rest_framework',
     'rest_framework_simplejwt',
 
     'accounts',
     'chat',
 ]
+
+CORS_ALLOW_ALL_ORIGINS = True
 
 ASGI_APPLICATION = 'config.asgi.application'
 
@@ -63,6 +66,7 @@ CHANNEL_LAYERS = {
 
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',

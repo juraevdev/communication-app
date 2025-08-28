@@ -6,7 +6,7 @@ import { Home, MessageCircle, FileText, LogOut, Shield, Users } from "lucide-rea
 
 interface UserInterface {
   email: string;
-  role: string;
+  role: "Admin" | "Employee" | string;
   name: string;
 }
 
@@ -16,9 +16,13 @@ export function Sidebar() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const userData = localStorage.getItem("user");
-    if (userData) {
-      setUser(JSON.parse(userData));
+    try {
+      const userData = localStorage.getItem("user");
+      if (userData) {
+        setUser(JSON.parse(userData));
+      }
+    } catch (error) {
+      console.error("Failed to parse user data:", error);
     }
   }, []);
 
@@ -27,16 +31,16 @@ export function Sidebar() {
     navigate("/login");
   };
 
-  const navItems = [
-    { href: "/dashboard", icon: Home, label: "Dashboard" },
+  const baseNavItems = [
+    { href: "/", icon: Home, label: "Dashboard" },
     { href: "/chat", icon: MessageCircle, label: "Messages" },
     { href: "/files", icon: FileText, label: "Files" },
     { href: "/profile", icon: LogOut, label: "Profile" },
   ];
 
-  if (user?.role === "Admin") {
-    navItems.splice(1, 0, { href: "/users", icon: Users, label: "Users" });
-  }
+  const navItems = user?.role === "Admin"
+    ? [{ href: "/users", icon: Users, label: "Users" }, ...baseNavItems]
+    : baseNavItems;
 
   return (
     <div className="w-64 bg-white border-r border-slate-200 h-screen flex flex-col">
@@ -59,7 +63,7 @@ export function Sidebar() {
           <div className="flex items-center space-x-3">
             <Avatar className="w-10 h-10">
               <AvatarFallback className="bg-blue-100 text-blue-600">
-                {user.name.charAt(0).toUpperCase()}
+                {user.name?.charAt(0).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
@@ -74,7 +78,7 @@ export function Sidebar() {
       <nav className="flex-1 p-4">
         <ul className="space-y-2">
           {navItems.map((item) => {
-            const isActive = location.pathname === item.href;
+            const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + "/");
             return (
               <li key={item.href}>
                 <button

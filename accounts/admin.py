@@ -1,13 +1,13 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.utils.translation import gettext_lazy as _
-from accounts.models import CustomUser, UserProfile
+from accounts.models import CustomUser, UserProfile, Contact
 
 
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
     fieldsets = (
-        (None, {"fields": ("fullname", "password")}),
+        (None, {"fields": ("username", "fullname", "password")}),
         (_("Personal info"), {"fields": ("email",)}),
         (
             _("Permissions"),
@@ -28,7 +28,7 @@ class CustomUserAdmin(UserAdmin):
             None,
             {
                 "classes": ("wide",),
-                "fields": ("fullname", "password1", "password2"),
+                "fields": ("username", "fullname", "password1", "password2"),
             },
         ),
     )
@@ -39,3 +39,4 @@ class CustomUserAdmin(UserAdmin):
 
 
 admin.site.register(UserProfile)
+admin.site.register(Contact)

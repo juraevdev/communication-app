@@ -7,14 +7,14 @@ interface MainLayoutProps {
 }
 
 export function MainLayout({ children }: MainLayoutProps) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const navigate = useNavigate();
 
   useEffect(() => {
     const user = localStorage.getItem("user");
     if (!user) {
-      navigate("/");
+      navigate("/login"); // ✅ Login sahifasiga yuborish
     } else {
       setIsAuthenticated(true);
     }
@@ -32,9 +32,9 @@ export function MainLayout({ children }: MainLayoutProps) {
     );
   }
 
-  // if (!isAuthenticated) {
-  //   return null;
-  // }
+  if (!isAuthenticated) {
+    return null; // ✅ foydalanuvchi login qilmagan bo‘lsa hech narsa ko‘rsatmaydi
+  }
 
   return (
     <div className="flex h-screen bg-slate-50">

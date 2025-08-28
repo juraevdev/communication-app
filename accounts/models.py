@@ -7,7 +7,7 @@ from accounts.managers import CustomUserManager
 
 
 class CustomUser(AbstractUser):
-    username = None
+    username = models.CharField(max_length=20, unique=True, null=True)
     fullname = models.CharField(max_length=100, unique=True)
     email = models.EmailField(unique=True)
 
@@ -32,3 +32,12 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f'{self.user} - {self.phone_number}'
+    
+
+class Contact(models.Model):
+    owner = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="my_contacts", null=True)
+    contact_user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="contact_of", null=True)
+    alias = models.CharField(max_length=50, null=True, blank=True)
+
+    def __str__(self):
+        return f'{self.contact_user} contact of {self.owner}'

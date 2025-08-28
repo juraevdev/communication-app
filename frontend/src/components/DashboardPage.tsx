@@ -19,11 +19,19 @@ export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
-    const userData = localStorage.getItem("user")
+  try {
+    const userData = localStorage.getItem("user");
     if (userData) {
-      setUser(JSON.parse(userData))
+      setUser(JSON.parse(userData));
+    } else {
+      setUser(null); // yoki default qiymat
     }
-  }, [])
+  } catch (error) {
+    console.error("Failed to parse user data:", error);
+    setUser(null);
+  }
+}, []);
+
 
   const recentConversations = [
     { id: 1, name: "John Smith", lastMessage: "Thanks for the update on the project...", time: "2 min ago", unread: 2 },
