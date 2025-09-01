@@ -18,13 +18,17 @@ export function Sidebar() {
   useEffect(() => {
     try {
       const userData = localStorage.getItem("user");
-      if (userData) {
+      if (userData && userData !== "undefined") {
         setUser(JSON.parse(userData));
+      } else {
+        setUser(null);
       }
     } catch (error) {
       console.error("Failed to parse user data:", error);
+      setUser(null);
     }
   }, []);
+
 
   const handleLogout = () => {
     localStorage.removeItem("user");
@@ -83,11 +87,10 @@ export function Sidebar() {
               <li key={item.href}>
                 <button
                   onClick={() => navigate(item.href)}
-                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-colors w-full ${
-                    isActive
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-colors w-full ${isActive
                       ? "bg-blue-50 text-blue-600 border border-blue-200"
                       : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
-                  }`}
+                    }`}
                 >
                   <item.icon className="w-5 h-5" />
                   <span>{item.label}</span>

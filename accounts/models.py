@@ -40,4 +40,4 @@ class Contact(models.Model):
     alias = models.CharField(max_length=50, null=True, blank=True)
 
     def __str__(self):
-        return f'{self.contact_user} contact of {self.owner}'
+        return self.alias

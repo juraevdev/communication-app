@@ -27,3 +27,13 @@ interface RegisterData {
 
 export const registerUser = (data: RegisterData) =>
   apiClient.post("/api/v1/accounts/register/", data);
+
+
+
+export const getCurrentUserInfo = async (token: string) => {
+  return axios.get("http://localhost:8000/api/v1/accounts/me/", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+};

@@ -14,6 +14,7 @@ class Room(models.Model):
         return f'{self.user1} - {self.user2}'
 
 
+
 class Message(models.Model):
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='messages', null=True)
     sender = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='sent_messages')

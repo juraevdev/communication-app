@@ -1,7 +1,8 @@
 from django.shortcuts import get_object_or_404
 from django.utils.timezone import now
 
-from rest_framework import generics, status, permissions
+from rest_framework import generics, status, permissions 
+from rest_framework.views import APIView
 from rest_framework.response import Response
 
 from asgiref.sync import async_to_sync
@@ -12,15 +13,9 @@ from chat.serializers import MessageSerializer, NotificationSerializer, FileSeri
 from chat.utils import send_notification
 
 
-# class MessageApiView(generics.GenericAPIView):
-#     serializer_class = MessageSerializer
+from accounts.services import get_or_create_room
+from accounts.models import CustomUser
 
-#     def post(self, request, *args, **kwargs):
-#         serializer = self.get_serializer(data=request.data)
-#         if serializer.is_valid():
-#             serializer.save()
-#             return Response({'message': 'Message created'}, status=status.HTTP_201_CREATED)
-#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 
 
@@ -33,33 +28,6 @@ class MessageListApiView(generics.GenericAPIView):
         serializer = self.get_serializer(message, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
-
-
-# class MessageDeleteApiView(generics.GenericAPIView):
-#     serializer_class = MessageSerializer
-#     queryset = Message.objects.all()
-
-#     def delete(self, request, id):
-#         try: 
-#             message = Message.objects.get(id=id)
-#         except Message.DoesNotExist:
-#             return Response({'message': 'Message not exist'}, status=status.HTTP_404_NOT_FOUND)
-#         message.delete()
-#         return Response({'message': 'Message deleted'}, status=status.HTTP_200_OK)
-    
-
-
-# class MessageUpdateApiView(generics.GenericAPIView):
-#     serializer_class = MessageSerializer
-#     queryset = Message.objects.all()
-
-#     def put(self, request, id):
-#         message = get_object_or_404(Message, id=id)
-#         serializer = self.get_serializer(message, data=request.data)
-#         if serializer.is_valid():
-#             serializer.save()
-#             return Response(serializer.data, status=status.HTTP_200_OK)
-#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class FileUploadApiView(generics.GenericAPIView):
@@ -106,4 +74,24 @@ class FileUploadApiView(generics.GenericAPIView):
         )
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+
+class StartChatApiView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        username = request.data.get("username")
+        if not username:
+            return Response({"error": "Username is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            other_user = CustomUser.objects.get(username=username)
+        except CustomUser.DoesNotExist:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if other_user == request.user:
+            return Response({"error": "You cannot chat with yourself"}, status=status.HTTP_400_BAD_REQUEST)
+
+        room = get_or_create_room(request.user, other_user)
+        return Response({"room_id": room.id}, status=status.HTTP_200_OK)
     

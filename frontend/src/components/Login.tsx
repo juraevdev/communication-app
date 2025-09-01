@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Shield, Mail, Lock } from "lucide-react";
+import { getCurrentUserInfo } from "@/utils/api";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -24,17 +25,19 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-
+  
     try {
       const response = await loginUser({ email, password });
-
-      // ✅ Token va user ma'lumotlarini saqlaymiz
-      const { access, refresh, user } = response.data;
+      const { access, refresh } = response.data;
+  
       localStorage.setItem("access_token", access);
       localStorage.setItem("refresh_token", refresh);
-      localStorage.setItem("user", JSON.stringify(user));
-
-      navigate("/dashboard");
+  
+      // ✅ User ma’lumotini olish
+      const userResponse = await getCurrentUserInfo(access);
+      localStorage.setItem("user", JSON.stringify(userResponse.data));
+  
+      navigate("/");
     } catch (error: any) {
       console.error(error.response?.data || error.message);
       alert("Login failed. Check your credentials.");

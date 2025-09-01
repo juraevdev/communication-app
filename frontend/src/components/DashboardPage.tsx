@@ -19,18 +19,20 @@ export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
-  try {
-    const userData = localStorage.getItem("user");
-    if (userData) {
-      setUser(JSON.parse(userData));
-    } else {
-      setUser(null); // yoki default qiymat
+    try {
+      const userData = localStorage.getItem("user");
+      if (userData && userData !== "undefined") {
+        setUser(JSON.parse(userData));
+      } else {
+        setUser(null);
+      }
+    } catch (error) {
+      console.error("Failed to parse user data:", error);
+      setUser(null);
     }
-  } catch (error) {
-    console.error("Failed to parse user data:", error);
-    setUser(null);
-  }
-}, []);
+  }, []);
+  
+  
 
 
   const recentConversations = [
@@ -105,7 +107,7 @@ export default function DashboardPage() {
                   <CardDescription>Your latest message exchanges</CardDescription>
                 </div>
                 <Link to="/chat">
-                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
                     <Plus className="w-4 h-4 mr-2" />
                     New Chat
                   </Button>
@@ -154,25 +156,17 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <Link to="/chat">
-                <Button variant="outline" className="w-full justify-start bg-transparent">
+                <Button variant="outline" className="w-full justify-start bg-transparent hover:bg-slate-50">
                   <MessageCircle className="w-4 h-4 mr-3" />
                   Start New Conversation
                 </Button>
               </Link>
               <Link to="/files">
-                <Button variant="outline" className="w-full justify-start bg-transparent">
+                <Button variant="outline" className="w-full justify-start bg-transparent hover:bg-slate-50">
                   <FileText className="w-4 h-4 mr-3" />
                   Upload File
                 </Button>
               </Link>
-              {user?.role === "Admin" && (
-                <Link to="/users">
-                  <Button variant="outline" className="w-full justify-start bg-transparent">
-                    <Users className="w-4 h-4 mr-3" />
-                    Manage Users
-                  </Button>
-                </Link>
-              )}
               <Link to="/profile">
                 <Button variant="outline" className="w-full justify-start bg-transparent">
                   <Shield className="w-4 h-4 mr-3" />

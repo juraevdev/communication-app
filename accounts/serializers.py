@@ -1,5 +1,12 @@
 from rest_framework import serializers
-from accounts.models import CustomUser, UserProfile
+from accounts.models import CustomUser, UserProfile, Contact
+
+
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = '__all__'
 
 
 class RegisterSerializer(serializers.Serializer):
@@ -44,3 +51,21 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
         fields = '__all__'
+
+
+class ContactSerializer(serializers.Serializer):
+    class Meta:
+        model = Contact
+        fields = ['owner', 'contact_user', 'alias']
+
+
+class ContactSearchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ['username']
+
+
+class ContactListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Contact
+        fields = ['id', 'owner', 'contact_user', 'alias']

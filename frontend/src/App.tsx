@@ -3,6 +3,7 @@ import DashboardPage from "./components/DashboardPage";
 import ChatPage from "./components/ChatPage";
 import LoginPage from "./components/Login";
 import RegisterPage from "./components/Register";
+import ProfilePage from "./components/ProfilePage";
 
 
 export default function App() {
@@ -13,6 +14,7 @@ export default function App() {
         <Route path="/chat" element={<ChatPage/>}/>
         <Route path="/login" element={<LoginPage/>}/>
         <Route path="/register" element={<RegisterPage/>}/>
+        <Route path="/profile" element={<ProfilePage/>}/>
       </Routes>
     </BrowserRouter>
   )
