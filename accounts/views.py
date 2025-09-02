@@ -88,10 +88,10 @@ class ContactApiView(generics.GenericAPIView):
     
 
 class ContactSearchApiView(generics.ListAPIView):
-    queryset = CustomUser.objects.all()
+    queryset = Contact.objects.all()
     serializer_class = ContactSearchSerializer
     filter_backends = [filters.SearchFilter]
-    search_fields = ['username']
+    search_fields = ['alias']
 
 
 class ContactListApiView(generics.GenericAPIView):

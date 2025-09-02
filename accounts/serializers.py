@@ -61,8 +61,8 @@ class ContactSerializer(serializers.Serializer):
 
 class ContactSearchSerializer(serializers.ModelSerializer):
     class Meta:
-        model = CustomUser
-        fields = ['username']
+        model = Contact
+        fields = ['alias']
 
 
 class ContactListSerializer(serializers.ModelSerializer):

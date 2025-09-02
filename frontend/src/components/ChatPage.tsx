@@ -50,11 +50,9 @@ export default function ChatPage() {
       
       const parsedUser = JSON.parse(storedUser);
       
-      // DEBUG: Log what's actually stored
       console.log("Stored user object:", parsedUser);
       console.log("Stored user keys:", Object.keys(parsedUser));
       
-      // Faqat localStorage'dagi ma'lumotlarni ishlatamiz
       return parsedUser.fullname || 
              parsedUser.full_name || 
              parsedUser.username || 
@@ -87,7 +85,7 @@ export default function ChatPage() {
 
         const data = response.data.map((user: any, index: number) => ({
           id: index + 1,
-          name: user.username,
+          name: user.alias,
           lastMessage: "",
           timestamp: "",
           unread: 0,
@@ -265,10 +263,7 @@ export default function ChatPage() {
                   <div className="relative">
                     <Avatar className="w-12 h-12">
                       <AvatarFallback className="bg-blue-100 text-blue-600">
-                        {contact.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
+                        {contact.name}
                       </AvatarFallback>
                     </Avatar>
                     {contact.online && (
@@ -301,10 +296,7 @@ export default function ChatPage() {
                   <div className="flex items-center space-x-3">
                     <Avatar className="w-10 h-10">
                       <AvatarFallback className="bg-blue-100 text-blue-600">
-                        {selectedContact.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
+                        {selectedContact.name}
                       </AvatarFallback>
                     </Avatar>
                     <div>
