@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { MainLayout } from "@/components/layout/main-layout";
 import { Button } from "@/components/ui/button";
@@ -26,9 +26,11 @@ interface Contact {
   lastMessage: string;
   timestamp: string;
   unread: number;
-  last_seen?: string;
+  last_seen?: string | null;
   is_online?: boolean;
 }
+
+type StatusMap = Record<number, { is_online: boolean; last_seen: string | null }>;
 
 export default function ChatPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -38,37 +40,34 @@ export default function ChatPage() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [ws, setWs] = useState<WebSocket | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const statusSocketRef = useRef<WebSocket | null>(null);
 
-  // Get the real-time contact data from contacts state
-  const realTimeSelectedContact = selectedContact
-    ? contacts.find(c => c.id === selectedContact.id) || selectedContact
-    : null;
+  const [statusMap, setStatusMap] = useState<StatusMap>({});
+
+  const normalizeTimestamp = (ts?: string | null) => {
+    if (!ts) return null;
+    return ts.includes("T") ? ts : ts.replace(" ", "T");
+  };
 
   const getCurrentUser = () => {
     try {
       const storedUser = localStorage.getItem("user");
-
-      if (!storedUser || storedUser === "undefined" || storedUser === "null") {
-        console.warn("No valid user data found in localStorage");
-        return "";
-      }
-
+      if (!storedUser || storedUser === "undefined" || storedUser === "null") return "";
       const parsedUser = JSON.parse(storedUser);
-
-      return parsedUser.fullname ||
+      return (
+        parsedUser.fullname ||
         parsedUser.username ||
         parsedUser.name ||
         parsedUser.email ||
-        "";
-    } catch (error) {
-      console.error("Invalid user data in localStorage", error);
+        ""
+      );
+    } catch {
       return "";
     }
   };
-
-  const currentUser = getCurrentUser();
+  const currentUser = useMemo(getCurrentUser, []);
 
   useEffect(() => {
     const fetchContacts = async () => {
@@ -78,23 +77,34 @@ export default function ChatPage() {
           {
             params: { search: searchTerm },
             headers: {
-              Authorization: `Bearer ${localStorage.getItem("access_token")}`
-            }
+              Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+            },
           }
         );
 
-        const data = response.data.map((user: any) => ({
+        const data: Contact[] = response.data.map((user: any) => ({
           id: user.id,
           name: user.alias || user.fullname || user.username || user.email,
           image: user.image || "",
           lastMessage: user.last_message || "",
           timestamp: user.last_message_timestamp || "",
           unread: user.unread_count || 0,
-          is_online: user.is_online || false,
+          is_online: !!user.is_online,
           last_seen: user.last_seen || null,
         }));
 
         setContacts(data);
+
+        setStatusMap((prev) => {
+          const next: StatusMap = { ...prev };
+          for (const c of data) {
+            next[c.id] = {
+              is_online: c.is_online ?? false,
+              last_seen: c.last_seen ? normalizeTimestamp(c.last_seen) : null,
+            };
+          }
+          return next;
+        });
       } catch (error) {
         console.error("Error fetching contacts", error);
       }
@@ -107,10 +117,28 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Establish status WebSocket connection on component mount
+  const contactsView: Contact[] = useMemo(() => {
+    if (contacts.length === 0) return [];
+    return contacts.map((c) => {
+      const s = statusMap[c.id];
+      return {
+        ...c,
+        is_online: s?.is_online ?? c.is_online ?? false,
+        last_seen: s?.last_seen ?? (c.last_seen ? normalizeTimestamp(c.last_seen) : null),
+      };
+    });
+  }, [contacts, statusMap]);
+
+  const realTimeSelectedContact = useMemo(() => {
+    if (!selectedContact) return null;
+    return contactsView.find((c) => c.id === selectedContact.id) || selectedContact;
+  }, [selectedContact, contactsView]);
+
   useEffect(() => {
     const token = localStorage.getItem("access_token");
-    if (token && !statusSocketRef.current) {
+    if (!token) return;
+
+    if (!statusSocketRef.current) {
       const socket = new WebSocket(`ws://127.0.0.1:8000/ws/status/?token=${token}`);
 
       socket.onopen = () => console.log("✅ Status WebSocket connected");
@@ -120,22 +148,18 @@ export default function ChatPage() {
         console.log("📡 Status update:", data);
 
         if (data.type === "status_update") {
-          setContacts(prevContacts =>
-            prevContacts.map(contact =>
-              String(contact.id) === String(data.user_id)
-                ? {
-                  ...contact,
-                  is_online: data.status === "online",
-                  last_seen: data.status === "offline" ? data.timestamp : contact.last_seen
-                }
-                : contact
-            )
-          );
-        }
-      };
+          const id = Number(data.user_id);
+          const online = data.status === "online";
+          const ts = normalizeTimestamp(data.timestamp);
 
-      socket.onerror = (error) => {
-        console.error("WebSocket error:", error);
+          setStatusMap((prev) => ({
+            ...prev,
+            [id]: {
+              is_online: online,
+              last_seen: online ? prev[id]?.last_seen ?? null : (ts ?? prev[id]?.last_seen ?? null),
+            },
+          }));
+        }
       };
 
       socket.onclose = () => {
@@ -144,83 +168,83 @@ export default function ChatPage() {
       };
 
       statusSocketRef.current = socket;
-    }
 
-    return () => {
-      if (statusSocketRef.current) {
-        statusSocketRef.current.close();
-        statusSocketRef.current = null;
-      }
-    };
-  }, []);
+      const handleUnload = () => {
+        try {
+          statusSocketRef.current?.close();
+        } catch {}
+      };
+      window.addEventListener("beforeunload", handleUnload);
+
+    }
+  }, [statusSocketRef]);
 
   useEffect(() => {
-    if (roomId) {
-      const token = localStorage.getItem("access_token");
-      const socket = new WebSocket(`ws://127.0.0.1:8000/ws/chat/room/${roomId}/?token=${token}`);
+    if (!roomId) return;
 
-      socket.onopen = () => {
-        console.log("✅ Connected to room:", roomId);
-        console.log("🔍 Current user:", currentUser);
-      };
+    const token = localStorage.getItem("access_token");
+    const socket = new WebSocket(`ws://127.0.0.1:8000/ws/chat/room/${roomId}/?token=${token}`);
 
-      socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        console.log("📩 Message from server:", data);
+    socket.onopen = () => {
+      console.log("✅ Connected to room:", roomId);
+      console.log("🔍 Current user:", currentUser);
+    };
 
-        if (data.type === "new_message") {
-          setMessages((prev) => {
-            const messageExists = prev.some(msg =>
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log("📩 Message from server:", data);
+
+      if (data.type === "new_message") {
+        setMessages((prev) => {
+          const messageExists = prev.some(
+            (msg) =>
               msg.id === parseInt(data.id) ||
-              (msg.sender === (data.sender.fullname || data.sender.full_name) &&
+              ((data.sender?.fullname || data.sender?.full_name || "") === msg.sender &&
                 msg.content === data.message &&
-                Math.abs(new Date(msg.timestamp).getTime() - new Date(data.timestamp).getTime()) < 5000)
-            );
+                Math.abs(
+                  new Date(msg.timestamp).getTime() - new Date(data.timestamp).getTime()
+                ) < 5000)
+          );
+          if (messageExists) return prev;
 
-            if (messageExists) {
-              return prev;
-            }
+          const senderName = data.sender.fullname || data.sender.full_name || "";
+          const isOwnMessage = senderName === currentUser;
 
-            const senderName = data.sender.fullname || data.sender.full_name || "";
-            const isOwnMessage = senderName === currentUser;
-
-            return [
-              ...prev,
-              {
-                id: parseInt(data.id),
-                sender: senderName,
-                content: data.message,
-                timestamp: new Date(data.timestamp).toLocaleTimeString(),
-                isOwn: isOwnMessage,
-                type: "text",
-              },
-            ];
-          });
-        }
-
-        if (data.type === "message_history") {
-          const history = data.messages.map((msg: any) => {
-            const senderName = msg.sender.fullname || msg.sender.full_name || "";
-            const isOwnMessage = senderName === currentUser;
-
-            return {
-              id: parseInt(msg.id),
+          return [
+            ...prev,
+            {
+              id: parseInt(data.id),
               sender: senderName,
-              content: msg.message,
-              timestamp: new Date(msg.timestamp).toLocaleTimeString(),
+              content: data.message,
+              timestamp: new Date(data.timestamp).toLocaleTimeString(),
               isOwn: isOwnMessage,
               type: "text",
-            };
-          });
-          setMessages(history.reverse());
-        }
-      };
+            },
+          ];
+        });
+      }
 
-      socket.onclose = () => console.log("❌ Disconnected from room:", roomId);
-      setWs(socket);
+      if (data.type === "message_history") {
+        const history = data.messages.map((msg: any) => {
+          const senderName = msg.sender.fullname || msg.sender.full_name || "";
+          const isOwnMessage = senderName === currentUser;
 
-      return () => socket.close();
-    }
+          return {
+            id: parseInt(msg.id),
+            sender: senderName,
+            content: msg.message,
+            timestamp: new Date(msg.timestamp).toLocaleTimeString(),
+            isOwn: isOwnMessage,
+            type: "text",
+          };
+        });
+        setMessages(history.reverse());
+      }
+    };
+
+    socket.onclose = () => console.log("❌ Disconnected from room:", roomId);
+    setWs(socket);
+    return () => socket.close();
   }, [roomId, currentUser]);
 
   const startChat = async (contact: Contact) => {
@@ -228,15 +252,8 @@ export default function ChatPage() {
     try {
       const response = await axios.post(
         "http://127.0.0.1:8000/api/v1/chat/start/",
-        {
-          contact_user: contact.id,
-          alias: contact.name
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("access_token")}`
-          }
-        }
+        { contact_user: contact.id, alias: contact.name },
+        { headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` } }
       );
 
       setRoomId(response.data.room_id);
@@ -274,6 +291,7 @@ export default function ChatPage() {
   return (
     <MainLayout>
       <div className="flex h-full">
+        {/* Left: Contacts */}
         <div className="w-80 bg-white border-r border-slate-200 flex flex-col">
           <div className="p-4 border-b border-slate-200">
             <div className="relative">
@@ -288,18 +306,23 @@ export default function ChatPage() {
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            {contacts.map((contact) => (
+            {contactsView.map((contact) => (
               <div
                 key={contact.id}
                 onClick={() => startChat(contact)}
-                className={`p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-50 ${selectedContact?.id === contact.id ? "bg-blue-50 border-blue-200" : ""
-                  }`}
+                className={`p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-50 ${
+                  realTimeSelectedContact?.id === contact.id ? "bg-blue-50 border-blue-200" : ""
+                }`}
               >
                 <div className="flex items-center space-x-3">
                   <div className="relative">
                     <Avatar className="w-12 h-12">
                       {contact.image ? (
-                        <img src={contact.image} alt={contact.name} className="w-full h-full object-cover rounded-full" />
+                        <img
+                          src={contact.image}
+                          alt={contact.name}
+                          className="w-full h-full object-cover rounded-full"
+                        />
                       ) : (
                         <AvatarFallback className="bg-blue-100 text-blue-600">
                           {contact.name.charAt(0)}
@@ -315,10 +338,15 @@ export default function ChatPage() {
                     ) : (
                       <div
                         className="absolute bottom-0 right-0 w-3 h-3 bg-gray-400 border-2 border-white rounded-full"
-                        title={contact.last_seen ? `Last seen: ${new Date(contact.last_seen).toLocaleString()}` : ""}
+                        title={
+                          contact.last_seen
+                            ? `Last seen: ${new Date(contact.last_seen).toLocaleString()}`
+                            : ""
+                        }
                       />
                     )}
                   </div>
+
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium text-slate-800 truncate">{contact.name}</p>
@@ -326,15 +354,19 @@ export default function ChatPage() {
                         {contact.is_online
                           ? "Online"
                           : contact.last_seen
-                            ? new Date(contact.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                            : "Offline"
-                        }
+                          ? new Date(contact.last_seen).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "Offline"}
                       </span>
                     </div>
                     <div className="flex items-center justify-between mt-1">
                       <p className="text-sm text-slate-600 truncate">{contact.lastMessage}</p>
                       {contact.unread > 0 && (
-                        <Badge className="bg-blue-600 text-white text-xs px-2 py-1 ml-2">{contact.unread}</Badge>
+                        <Badge className="bg-blue-600 text-white text-xs px-2 py-1 ml-2">
+                          {contact.unread}
+                        </Badge>
                       )}
                     </div>
                   </div>
@@ -344,6 +376,7 @@ export default function ChatPage() {
           </div>
         </div>
 
+        {/* Right: Chat */}
         <div className="flex-1 flex flex-col">
           {realTimeSelectedContact ? (
             <>
@@ -352,7 +385,11 @@ export default function ChatPage() {
                   <div className="flex items-center space-x-3">
                     <Avatar className="w-12 h-12">
                       {realTimeSelectedContact.image ? (
-                        <img src={realTimeSelectedContact.image} alt={realTimeSelectedContact.name} className="w-full h-full object-cover rounded-full" />
+                        <img
+                          src={realTimeSelectedContact.image}
+                          alt={realTimeSelectedContact.name}
+                          className="w-full h-full object-cover rounded-full"
+                        />
                       ) : (
                         <AvatarFallback className="bg-blue-100 text-blue-600">
                           {realTimeSelectedContact.name.charAt(0)}
@@ -366,9 +403,10 @@ export default function ChatPage() {
                         {realTimeSelectedContact.is_online
                           ? "Online"
                           : realTimeSelectedContact.last_seen
-                            ? `Last seen ${new Date(realTimeSelectedContact.last_seen).toLocaleTimeString()}`
-                            : "Offline"
-                        }
+                          ? `Last seen ${new Date(
+                              realTimeSelectedContact.last_seen
+                            ).toLocaleTimeString()}`
+                          : "Offline"}
                       </p>
                     </div>
                   </div>
@@ -380,49 +418,43 @@ export default function ChatPage() {
 
               <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
                 <div className="space-y-2">
-                  {messages.map((msg) => {
-                    console.log("Rendering message:", msg.id, "Sender:", msg.sender, "IsOwn:", msg.isOwn);
-                    return (
-                      <div
-                        key={msg.id}
-                        className={`flex ${msg.isOwn ? "justify-end" : "justify-start"}`}
-                      >
-                        <div className={`max-w-xs lg:max-w-md ${msg.isOwn ? "ml-auto" : "mr-auto"}`}>
-                          {msg.type === "text" ? (
-                            <div
-                              className={`px-4 py-2 rounded-2xl ${msg.isOwn
+                  {messages.map((msg) => (
+                    <div key={msg.id} className={`flex ${msg.isOwn ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-xs lg:max-w-md ${msg.isOwn ? "ml-auto" : "mr-auto"}`}>
+                        {msg.type === "text" ? (
+                          <div
+                            className={`px-4 py-2 rounded-2xl ${
+                              msg.isOwn
                                 ? "bg-blue-600 text-white rounded-br-none"
                                 : "bg-white text-slate-800 border border-slate-200 rounded-bl-none"
-                                }`}
-                            >
-                              <p className="text-sm">{msg.content}</p>
-                            </div>
-                          ) : (
-                            <Card className={`${msg.isOwn ? "bg-blue-50 border-blue-200" : ""}`}>
-                              <CardContent className="p-3">
-                                <div className="flex items-center space-x-3">
-                                  {getFileIcon(msg.fileType || "file")}
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-slate-800 truncate">{msg.fileName}</p>
-                                    <p className="text-xs text-slate-500">Document</p>
-                                  </div>
-                                  <Button size="sm" variant="ghost">
-                                    <Download className="w-4 h-4" />
-                                  </Button>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          )}
-                          <p
-                            className={`text-xs text-slate-500 mt-1 ${msg.isOwn ? "text-right" : "text-left"
-                              }`}
+                            }`}
                           >
-                            {msg.timestamp}
-                          </p>
-                        </div>
+                            <p className="text-sm">{msg.content}</p>
+                          </div>
+                        ) : (
+                          <Card className={`${msg.isOwn ? "bg-blue-50 border-blue-200" : ""}`}>
+                            <CardContent className="p-3">
+                              <div className="flex items-center space-x-3">
+                                {getFileIcon(msg.fileType || "file")}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-slate-800 truncate">
+                                    {msg.fileName}
+                                  </p>
+                                  <p className="text-xs text-slate-500">Document</p>
+                                </div>
+                                <Button size="sm" variant="ghost">
+                                  <Download className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+                        <p className={`text-xs text-slate-500 mt-1 ${msg.isOwn ? "text-right" : "text-left"}`}>
+                          {msg.timestamp}
+                        </p>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                   <div ref={messagesEndRef} />
                 </div>
               </div>

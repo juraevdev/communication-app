@@ -47,14 +47,13 @@ class StatusConsumer(AsyncJsonWebsocketConsumer):
                     "type": "status_update",
                     "user_id": user.id,
                     "status": "online",
-                    "timestamp": str(timezone.now())
+                    "timestamp": timezone.now().isoformat()  # ✅ ISO format
                 }
             )
 
-
     async def disconnect(self, code):
         user = self.scope["user"]
-        await set_user_online_status(user, False)  # ✅ offline qilamiz
+        await set_user_online_status(user, False)
         await self.channel_layer.group_discard("status", self.channel_name)
         await self.channel_layer.group_send(
             "status",
@@ -62,10 +61,9 @@ class StatusConsumer(AsyncJsonWebsocketConsumer):
                 "type": "status_update",
                 "user_id": user.id,
                 "status": "offline",
-                "timestamp": str(timezone.now())
+                "timestamp": timezone.now().isoformat()  # ✅ ISO format
             }
         )
-
 
     async def status_update(self, event):
         await self.send_json({
@@ -74,7 +72,6 @@ class StatusConsumer(AsyncJsonWebsocketConsumer):
             "status": event["status"],
             "timestamp": event["timestamp"]
         })
-
 
 
 class BaseChatConsumer(AsyncJsonWebsocketConsumer):
