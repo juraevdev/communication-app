@@ -14,8 +14,7 @@ from chat.utils import send_notification
 
 
 from accounts.services import get_or_create_room
-from accounts.models import CustomUser
-
+from accounts.models import CustomUser, Contact
     
 
 
@@ -80,18 +79,20 @@ class StartChatApiView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        username = request.data.get("username")
-        if not username:
-            return Response({"error": "Username is required"}, status=status.HTTP_400_BAD_REQUEST)
+        alias = request.data.get("alias")
+        if not alias:
+            return Response({"error": "alias is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            other_user = CustomUser.objects.get(username=username)
-        except CustomUser.DoesNotExist:
-            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+            contact = Contact.objects.get(owner=request.user, alias=alias)
+            other_user = contact.contact_user
+        except Contact.DoesNotExist:
+            return Response({"error": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
 
         if other_user == request.user:
             return Response({"error": "You cannot chat with yourself"}, status=status.HTTP_400_BAD_REQUEST)
 
         room = get_or_create_room(request.user, other_user)
         return Response({"room_id": room.id}, status=status.HTTP_200_OK)
+
     

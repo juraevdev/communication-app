@@ -1,4 +1,4 @@
-from rest_framework import generics, status, filters
+from rest_framework import generics, status, filters, permissions
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -77,21 +77,27 @@ class ContactApiView(generics.GenericAPIView):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
-            contact = serializer.save()
-            target_user = get_object_or_404(CustomUser, id=contact.user_id)
+            contact = serializer.save(owner=request.user)
+            target_user = get_object_or_404(CustomUser, id=contact.contact_user.id)
             room = get_or_create_room(request.user, target_user)
             return Response({
                 "contact": serializer.data,
                 "room_id": room.id
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
     
 
 class ContactSearchApiView(generics.ListAPIView):
-    queryset = Contact.objects.all()
     serializer_class = ContactSearchSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['alias']
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Contact.objects.filter(owner=self.request.user)
+
+
 
 
 class ContactListApiView(generics.GenericAPIView):

@@ -60,9 +60,23 @@ class ContactSerializer(serializers.Serializer):
 
 
 class ContactSearchSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+    is_online = serializers.SerializerMethodField()
+
     class Meta:
         model = Contact
-        fields = ['alias']
+        fields = ['id', 'alias', 'image', 'is_online']
+
+    def get_image(self, obj):
+        profile = getattr(obj.contact_user, 'profile').first()
+        if profile and profile.image:
+            return self.context['request'].build_absolute_uri(profile.image.url)
+        return None
+
+    def get_is_online(self, obj):
+        return getattr(obj.contact_user, 'is_online', False)
+
+
 
 
 class ContactListSerializer(serializers.ModelSerializer):

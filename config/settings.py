@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'drf_yasg',
+    'daphne',
     'channels',
     "corsheaders",
     'django_filters',
@@ -44,8 +45,6 @@ INSTALLED_APPS = [
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
-
-ASGI_APPLICATION = 'config.asgi.application'
 
 
 MIDDLEWARE = [
@@ -78,6 +77,7 @@ TEMPLATES = [
     },
 ]
 
+ASGI_APPLICATION = 'config.asgi.application'
 WSGI_APPLICATION = 'config.wsgi.application'
 
 

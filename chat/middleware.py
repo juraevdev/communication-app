@@ -10,13 +10,11 @@ class JWTAuthMiddleware(BaseMiddleware):
         query_string = scope.get("query_string", b"").decode()
         params = parse_qs(query_string)
 
-        token = None
+        token = params.get("token", [None])[0]
 
-        if "token" in params:
-            token = params["token"][0]
-
-        if not token and b'authorization' in dict(scope["headers"]):
-            auth_header = dict(scope["headers"])[b'authorization'].decode()
+        headers = dict(scope["headers"])
+        if not token and b'authorization' in headers:
+            auth_header = headers[b'authorization'].decode()
             if auth_header.startswith("Bearer "):
                 token = auth_header.split(" ")[1]
 
@@ -26,14 +24,12 @@ class JWTAuthMiddleware(BaseMiddleware):
                 user_id = validated_token["user_id"]
                 user = await self.get_user(user_id)
                 scope["user"] = user
-            except Exception as e:
-                print("❌ Token xatosi:", e)
+            except Exception:
                 scope["user"] = AnonymousUser()
         else:
             scope["user"] = AnonymousUser()
 
         return await super().__call__(scope, receive, send)
-
 
     @database_sync_to_async
     def get_user(self, user_id):
