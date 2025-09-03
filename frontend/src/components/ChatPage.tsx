@@ -30,7 +30,6 @@ interface Contact {
   is_online?: boolean;
 }
 
-
 export default function ChatPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -41,11 +40,11 @@ export default function ChatPage() {
   const [ws, setWs] = useState<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const statusSocketRef = useRef<WebSocket | null>(null);
+
+  // Get the real-time contact data from contacts state
   const realTimeSelectedContact = selectedContact
     ? contacts.find(c => c.id === selectedContact.id) || selectedContact
     : null;
-
-
 
   const getCurrentUser = () => {
     try {
@@ -70,7 +69,6 @@ export default function ChatPage() {
   };
 
   const currentUser = getCurrentUser();
-
 
   useEffect(() => {
     const fetchContacts = async () => {
@@ -109,10 +107,10 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-
+  // Establish status WebSocket connection on component mount
   useEffect(() => {
-    if (contacts.length > 0 && !statusSocketRef.current) {
-      const token = localStorage.getItem("access_token");
+    const token = localStorage.getItem("access_token");
+    if (token && !statusSocketRef.current) {
       const socket = new WebSocket(`ws://127.0.0.1:8000/ws/status/?token=${token}`);
 
       socket.onopen = () => console.log("✅ Status WebSocket connected");
@@ -142,11 +140,19 @@ export default function ChatPage() {
 
       socket.onclose = () => {
         console.log("Status WebSocket disconnected");
+        statusSocketRef.current = null;
       };
+
       statusSocketRef.current = socket;
     }
-  }, [contacts]);
 
+    return () => {
+      if (statusSocketRef.current) {
+        statusSocketRef.current.close();
+        statusSocketRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (roomId) {
@@ -208,12 +214,12 @@ export default function ChatPage() {
           });
           setMessages(history.reverse());
         }
-      }, [socket];
+      };
 
       socket.onclose = () => console.log("❌ Disconnected from room:", roomId);
       setWs(socket);
 
-      return () => socket.close(); ``
+      return () => socket.close();
     }
   }, [roomId, currentUser]);
 
