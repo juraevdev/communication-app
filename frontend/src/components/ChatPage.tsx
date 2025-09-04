@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import axios from "axios";
 import { MainLayout } from "@/components/layout/main-layout";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,15 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Send, Paperclip, Search, MoreVertical, FileText, ImageIcon, Download } from "lucide-react";
+import {
+  Send,
+  Paperclip,
+  Search,
+  MoreVertical,
+  FileText,
+  ImageIcon,
+  Download,
+} from "lucide-react";
 
 interface Message {
   id: number;
@@ -26,30 +34,28 @@ interface Contact {
   lastMessage: string;
   timestamp: string;
   unread: number;
-  last_seen?: string | null;
-  is_online?: boolean;
+  isOnline?: boolean;
+  lastSeen?: string;
 }
 
-type StatusMap = Record<number, { is_online: boolean; last_seen: string | null }>;
+interface StatusUpdate {
+  type: "status_update";
+  user_id: number;
+  status: "online" | "offline";
+  timestamp: string;
+}
 
 export default function ChatPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [userStatuses, setUserStatuses] = useState<Map<number, { isOnline: boolean; lastSeen?: string }>>(new Map());
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [roomId, setRoomId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [ws, setWs] = useState<WebSocket | null>(null);
-
+  const [statusWs, setStatusWs] = useState<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const statusSocketRef = useRef<WebSocket | null>(null);
-
-  const [statusMap, setStatusMap] = useState<StatusMap>({});
-
-  const normalizeTimestamp = (ts?: string | null) => {
-    if (!ts) return null;
-    return ts.includes("T") ? ts : ts.replace(" ", "T");
-  };
 
   const getCurrentUser = () => {
     try {
@@ -69,6 +75,62 @@ export default function ChatPage() {
   };
   const currentUser = useMemo(getCurrentUser, []);
 
+  const handleStatusUpdate = useCallback((data: StatusUpdate) => {
+    console.log("📡 Status update:", data);
+    
+    const newStatus = {
+      isOnline: data.status === "online",
+      lastSeen: data.status === "offline" ? data.timestamp : undefined
+    };
+
+    setUserStatuses(prev => {
+      const updated = new Map(prev);
+      updated.set(data.user_id, newStatus);
+      return updated;
+    });
+  }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+
+    console.log("🔌 Connecting to status WebSocket...");
+    const statusSocket = new WebSocket(`ws://127.0.0.1:8000/ws/status/?token=${token}`);
+    
+    statusSocket.onopen = () => {
+      console.log("✅ Status WebSocket connected - READY FOR REAL-TIME");
+    };
+
+    statusSocket.onmessage = (event) => {
+      try {
+        const data: StatusUpdate = JSON.parse(event.data);
+        if (data.type === "status_update") {
+          handleStatusUpdate(data);
+        }
+      } catch (error) {
+        console.error("Status parse error:", error);
+      }
+    };
+
+    statusSocket.onclose = () => {
+      console.log("❌ Status WebSocket disconnected");
+      setTimeout(() => {
+        console.log("🔄 Attempting to reconnect status WebSocket...");
+      }, 3000);
+    };
+
+    statusSocket.onerror = (error) => {
+      console.error("Status WebSocket error:", error);
+    };
+
+    setStatusWs(statusSocket);
+
+    return () => {
+      console.log("🔌 Closing status WebSocket");
+      statusSocket.close();
+    };
+  }, []); 
+
   useEffect(() => {
     const fetchContacts = async () => {
       try {
@@ -81,119 +143,60 @@ export default function ChatPage() {
             },
           }
         );
-
-        const data: Contact[] = response.data.map((user: any) => ({
-          id: user.id,
-          name: user.alias || user.fullname || user.username || user.email,
-          image: user.image || "",
-          lastMessage: user.last_message || "",
-          timestamp: user.last_message_timestamp || "",
-          unread: user.unread_count || 0,
-          is_online: !!user.is_online,
-          last_seen: user.last_seen || null,
-        }));
-
-        setContacts(data);
-
-        setStatusMap((prev) => {
-          const next: StatusMap = { ...prev };
-          for (const c of data) {
-            next[c.id] = {
-              is_online: c.is_online ?? false,
-              last_seen: c.last_seen ? normalizeTimestamp(c.last_seen) : null,
-            };
-          }
-          return next;
+        
+        const data: Contact[] = response.data.map((user: any) => {
+          const liveStatus = userStatuses.get(user.id);
+          
+          return {
+            id: user.id,
+            name: user.alias || user.fullname || user.username || user.email,
+            image: user.image || "",
+            lastMessage: user.last_message || "",
+            timestamp: user.last_message_timestamp || "",
+            unread: user.unread_count || 0,
+            isOnline: liveStatus ? liveStatus.isOnline : (user.is_online || false),
+            lastSeen: liveStatus ? liveStatus.lastSeen : (user.last_seen || ""),
+          };
         });
+        
+        setContacts(data);
+        console.log("📋 Contacts loaded with real-time status");
       } catch (error) {
         console.error("Error fetching contacts", error);
       }
     };
-
+    
     fetchContacts();
-  }, [searchTerm]);
+  }, [searchTerm, userStatuses]);
+
+  useEffect(() => {
+    if (selectedContact) {
+      const liveStatus = userStatuses.get(selectedContact.id);
+      if (liveStatus) {
+        setSelectedContact(prev => prev ? {
+          ...prev,
+          isOnline: liveStatus.isOnline,
+          lastSeen: liveStatus.lastSeen || prev.lastSeen
+        } : null);
+      }
+    }
+  }, [userStatuses, selectedContact?.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const contactsView: Contact[] = useMemo(() => {
-    if (contacts.length === 0) return [];
-    return contacts.map((c) => {
-      const s = statusMap[c.id];
-      return {
-        ...c,
-        is_online: s?.is_online ?? c.is_online ?? false,
-        last_seen: s?.last_seen ?? (c.last_seen ? normalizeTimestamp(c.last_seen) : null),
-      };
-    });
-  }, [contacts, statusMap]);
-
-  const realTimeSelectedContact = useMemo(() => {
-    if (!selectedContact) return null;
-    return contactsView.find((c) => c.id === selectedContact.id) || selectedContact;
-  }, [selectedContact, contactsView]);
-
-  useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) return;
-
-    if (!statusSocketRef.current) {
-      const socket = new WebSocket(`ws://127.0.0.1:8000/ws/status/?token=${token}`);
-
-      socket.onopen = () => console.log("✅ Status WebSocket connected");
-
-      socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        console.log("📡 Status update:", data);
-
-        if (data.type === "status_update") {
-          const id = Number(data.user_id);
-          const online = data.status === "online";
-          const ts = normalizeTimestamp(data.timestamp);
-
-          setStatusMap((prev) => ({
-            ...prev,
-            [id]: {
-              is_online: online,
-              last_seen: online ? prev[id]?.last_seen ?? null : (ts ?? prev[id]?.last_seen ?? null),
-            },
-          }));
-        }
-      };
-
-      socket.onclose = () => {
-        console.log("Status WebSocket disconnected");
-        statusSocketRef.current = null;
-      };
-
-      statusSocketRef.current = socket;
-
-      const handleUnload = () => {
-        try {
-          statusSocketRef.current?.close();
-        } catch {}
-      };
-      window.addEventListener("beforeunload", handleUnload);
-
-    }
-  }, [statusSocketRef]);
-
   useEffect(() => {
     if (!roomId) return;
-
     const token = localStorage.getItem("access_token");
     const socket = new WebSocket(`ws://127.0.0.1:8000/ws/chat/room/${roomId}/?token=${token}`);
-
     socket.onopen = () => {
       console.log("✅ Connected to room:", roomId);
-      console.log("🔍 Current user:", currentUser);
+      console.log("👤 Current user:", currentUser);
     };
-
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
       console.log("📩 Message from server:", data);
-
       if (data.type === "new_message") {
         setMessages((prev) => {
           const messageExists = prev.some(
@@ -206,10 +209,8 @@ export default function ChatPage() {
                 ) < 5000)
           );
           if (messageExists) return prev;
-
           const senderName = data.sender.fullname || data.sender.full_name || "";
           const isOwnMessage = senderName === currentUser;
-
           return [
             ...prev,
             {
@@ -223,12 +224,10 @@ export default function ChatPage() {
           ];
         });
       }
-
       if (data.type === "message_history") {
         const history = data.messages.map((msg: any) => {
           const senderName = msg.sender.fullname || msg.sender.full_name || "";
           const isOwnMessage = senderName === currentUser;
-
           return {
             id: parseInt(msg.id),
             sender: senderName,
@@ -241,7 +240,6 @@ export default function ChatPage() {
         setMessages(history.reverse());
       }
     };
-
     socket.onclose = () => console.log("❌ Disconnected from room:", roomId);
     setWs(socket);
     return () => socket.close();
@@ -255,7 +253,6 @@ export default function ChatPage() {
         { contact_user: contact.id, alias: contact.name },
         { headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` } }
       );
-
       setRoomId(response.data.room_id);
       setMessages([]);
     } catch (error) {
@@ -288,10 +285,39 @@ export default function ChatPage() {
     }
   };
 
+  const formatLastSeen = (lastSeen: string) => {
+    if (!lastSeen) return "";
+    const date = new Date(lastSeen);
+    const now = new Date();
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return "just now";
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+    return date.toLocaleDateString();
+  };
+
+  const OnlineIndicator = ({ isOnline }: { isOnline?: boolean }) => {
+    return (
+      <div className={`absolute bottom-0 right-0 w-3 h-3 border-2 border-white rounded-full ${
+        isOnline ? 'bg-green-500' : 'bg-gray-400'
+      }`}></div>
+    );
+  };
+
+  const StatusText = ({ isOnline, lastSeen }: { isOnline?: boolean; lastSeen?: string }) => {
+    if (isOnline) {
+      return <span className="text-xs text-green-600 font-medium">online</span>;
+    }
+    if (lastSeen) {
+      return <span className="text-xs text-gray-500">last seen {formatLastSeen(lastSeen)}</span>;
+    }
+    return <span className="text-xs text-gray-500">offline</span>;
+  };
+
   return (
     <MainLayout>
       <div className="flex h-full">
-        {/* Left: Contacts */}
         <div className="w-80 bg-white border-r border-slate-200 flex flex-col">
           <div className="p-4 border-b border-slate-200">
             <div className="relative">
@@ -304,14 +330,13 @@ export default function ChatPage() {
               />
             </div>
           </div>
-
           <div className="flex-1 overflow-y-auto">
-            {contactsView.map((contact) => (
+            {contacts.map((contact) => (
               <div
                 key={contact.id}
                 onClick={() => startChat(contact)}
-                className={`p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-50 ${
-                  realTimeSelectedContact?.id === contact.id ? "bg-blue-50 border-blue-200" : ""
+                className={`p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors ${
+                  selectedContact?.id === contact.id ? "bg-blue-50 border-blue-200" : ""
                 }`}
               >
                 <div className="flex items-center space-x-3">
@@ -329,40 +354,17 @@ export default function ChatPage() {
                         </AvatarFallback>
                       )}
                     </Avatar>
-
-                    {contact.is_online ? (
-                      <div
-                        className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"
-                        title="Online"
-                      />
-                    ) : (
-                      <div
-                        className="absolute bottom-0 right-0 w-3 h-3 bg-gray-400 border-2 border-white rounded-full"
-                        title={
-                          contact.last_seen
-                            ? `Last seen: ${new Date(contact.last_seen).toLocaleString()}`
-                            : ""
-                        }
-                      />
-                    )}
+                    <OnlineIndicator isOnline={contact.isOnline} />
                   </div>
-
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium text-slate-800 truncate">{contact.name}</p>
-                      <span className="text-xs text-slate-500">
-                        {contact.is_online
-                          ? "Online"
-                          : contact.last_seen
-                          ? new Date(contact.last_seen).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
-                          : "Offline"}
-                      </span>
                     </div>
                     <div className="flex items-center justify-between mt-1">
-                      <p className="text-sm text-slate-600 truncate">{contact.lastMessage}</p>
+                      <div className="flex flex-col">
+                        <p className="text-sm text-slate-600 truncate">{contact.lastMessage}</p>
+                        <StatusText isOnline={contact.isOnline} lastSeen={contact.lastSeen} />
+                      </div>
                       {contact.unread > 0 && (
                         <Badge className="bg-blue-600 text-white text-xs px-2 py-1 ml-2">
                           {contact.unread}
@@ -376,38 +378,31 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Right: Chat */}
         <div className="flex-1 flex flex-col">
-          {realTimeSelectedContact ? (
+          {selectedContact ? (
             <>
               <div className="bg-white border-b border-slate-200 p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    <Avatar className="w-12 h-12">
-                      {realTimeSelectedContact.image ? (
-                        <img
-                          src={realTimeSelectedContact.image}
-                          alt={realTimeSelectedContact.name}
-                          className="w-full h-full object-cover rounded-full"
-                        />
-                      ) : (
-                        <AvatarFallback className="bg-blue-100 text-blue-600">
-                          {realTimeSelectedContact.name.charAt(0)}
-                        </AvatarFallback>
-                      )}
-                    </Avatar>
-
+                    <div className="relative">
+                      <Avatar className="w-12 h-12">
+                        {selectedContact.image ? (
+                          <img
+                            src={selectedContact.image}
+                            alt={selectedContact.name}
+                            className="w-full h-full object-cover rounded-full"
+                          />
+                        ) : (
+                          <AvatarFallback className="bg-blue-100 text-blue-600">
+                            {selectedContact.name.charAt(0)}
+                          </AvatarFallback>
+                        )}
+                      </Avatar>
+                      <OnlineIndicator isOnline={selectedContact.isOnline} />
+                    </div>
                     <div>
-                      <h2 className="font-medium text-slate-800">{realTimeSelectedContact.name}</h2>
-                      <p className="text-sm text-slate-500">
-                        {realTimeSelectedContact.is_online
-                          ? "Online"
-                          : realTimeSelectedContact.last_seen
-                          ? `Last seen ${new Date(
-                              realTimeSelectedContact.last_seen
-                            ).toLocaleTimeString()}`
-                          : "Offline"}
-                      </p>
+                      <h2 className="font-medium text-slate-800">{selectedContact.name}</h2>
+                      <StatusText isOnline={selectedContact.isOnline} lastSeen={selectedContact.lastSeen} />
                     </div>
                   </div>
                   <Button variant="ghost" size="sm">
@@ -423,11 +418,10 @@ export default function ChatPage() {
                       <div className={`max-w-xs lg:max-w-md ${msg.isOwn ? "ml-auto" : "mr-auto"}`}>
                         {msg.type === "text" ? (
                           <div
-                            className={`px-4 py-2 rounded-2xl ${
-                              msg.isOwn
+                            className={`px-4 py-2 rounded-2xl ${msg.isOwn
                                 ? "bg-blue-600 text-white rounded-br-none"
                                 : "bg-white text-slate-800 border border-slate-200 rounded-bl-none"
-                            }`}
+                              }`}
                           >
                             <p className="text-sm">{msg.content}</p>
                           </div>

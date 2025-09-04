@@ -94,5 +94,3 @@ class StartChatApiView(APIView):
 
         room = get_or_create_room(request.user, other_user)
         return Response({"room_id": room.id}, status=status.HTTP_200_OK)
-
-    

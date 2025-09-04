@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from chat.models import Message, Notification, FileUpload
+from chat.models import Message, Notification, FileUpload, Room
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -19,4 +19,10 @@ class NotificationSerializer(serializers.ModelSerializer):
 class FileSerializer(serializers.ModelSerializer):
     class Meta:
         model = FileUpload
+        fields = '__all__'
+
+    
+class RoomSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Room
         fields = '__all__'

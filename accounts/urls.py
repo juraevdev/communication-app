@@ -3,7 +3,7 @@ from accounts.views import (
     RegisterApiView, LoginApiView, 
     UserProfileApiView, ProfileListApiView,
     ContactApiView, ContactSearchApiView, 
-    ContactListApiView, MeApiView
+    ContactListApiView, MeApiView, UserFilterApiView
 )
 
 
@@ -16,4 +16,5 @@ urlpatterns = [
     path('contact/all/', ContactListApiView.as_view()),
     path('contact/filter/', ContactSearchApiView.as_view()),
     path('me/', MeApiView.as_view()),
+    path('filter/', UserFilterApiView.as_view()),
 ]

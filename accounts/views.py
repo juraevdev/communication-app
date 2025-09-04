@@ -115,3 +115,11 @@ class MeApiView(generics.GenericAPIView):
     def get(self, request):
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)
+
+
+class UserFilterApiView(generics.ListAPIView):
+    serializer_class = UserSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['username']
+    permission_classes = [permissions.IsAuthenticated]
+    queryset = CustomUser.objects.all()
