@@ -3,25 +3,26 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import { Lock, Shield, Camera, Save, Eye, EyeOff } from "lucide-react"
+import axios from "axios"
+import { MainLayout } from "./layout/main-layout"
 
 interface UserProfile {
+  id: number
+  fullname: string
   email: string
-  role: string
-  name: string
+  username: string
+  is_online: boolean
+  last_seen: string
+  date_joined?: string
+  profile?: {
+    phone_number: string
+    image: string
+    id: number
+  }
 }
-
-// MainLayout komponenti o'rniga oddiy div ishlatamiz yoki alohida yaratishingiz mumkin
-const MainLayout = ({ children }: { children: React.ReactNode }) => (
-  <div className="min-h-screen bg-gray-50">
-    <div className="max-w-7xl mx-auto">
-      {children}
-    </div>
-  </div>
-)
 
 export default function ProfilePage() {
   const [user, setUser] = useState<UserProfile | null>(null)
@@ -29,140 +30,228 @@ export default function ProfilePage() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [imageError, setImageError] = useState(false)
 
   const [profileData, setProfileData] = useState({
-    fullName: "",
+    fullname: "",
     email: "",
-    role: "",
-    department: "",
-    phone: "",
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
+    username: "",
+    phone_number: "",
+    password: "",
+    new_password: "",
+    confirm_password: "",
   })
 
   useEffect(() => {
-    // localStorage o'rniga demo data ishlatamiz (Vite muhitida localStorage ishlamaydi)
-    const demoUser = {
-      name: "John Smith",
-      email: "john.smith@company.com",
-      role: "Admin"
-    }
-    
-    setUser(demoUser)
-    setProfileData({
-      fullName: demoUser.name,
-      email: demoUser.email,
-      role: demoUser.role,
-      department: "Information Technology",
-      phone: "+1 (555) 123-4567",
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    })
+    fetchUserData()
   }, [])
 
-  const handleSaveProfile = () => {
-    console.log("Saving profile:", profileData)
-    setIsEditing(false)
+  const fetchUserData = async () => {
+    try {
+      const token = localStorage.getItem("access_token")
+      const response = await axios.get("http://127.0.0.1:8000/api/v1/accounts/user", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
 
-    // User ma'lumotlarini yangilash
-    const updatedUser = {
-      ...user,
-      name: profileData.fullName,
-      email: profileData.email,
+      setUser(response.data)
+      setProfileData({
+        fullname: response.data.fullname,
+        email: response.data.email,
+        username: response.data.username,
+        phone_number: response.data.profile?.phone_number || "",
+        password: "",
+        new_password: "",
+        confirm_password: "",
+      })
+    } catch (error) {
+      console.error("Failed to fetch user data:", error)
+      alert("Failed to load user data")
+    } finally {
+      setIsLoading(false)
     }
-    
-    setUser(updatedUser as UserProfile)
-    alert("Profile updated successfully!")
   }
 
-  const handleChangePassword = () => {
-    if (profileData.newPassword !== profileData.confirmPassword) {
-      alert("New passwords do not match")
-      return
-    }
+  const handleSaveProfile = async () => {
+    try {
+      const token = localStorage.getItem("access_token")
 
-    if (profileData.newPassword.length < 6) {
-      alert("Password must be at least 6 characters long")
-      return
-    }
+      await axios.patch(
+        `http://127.0.0.1:8000/api/v1/accounts/user/${user?.id}/`,
+        {
+          fullname: profileData.fullname,
+          email: profileData.email,
+          username: profileData.username,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
 
-    console.log("Changing password")
-    setProfileData((prev) => ({
-      ...prev,
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    }))
-    alert("Password changed successfully")
+      if (user?.profile) {
+        await axios.patch(
+          `http://127.0.0.1:8000/api/v1/accounts/profile/${user.profile.id}/`,
+          {
+            phone_number: profileData.phone_number,
+          },
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+      }
+
+      setIsEditing(false)
+      fetchUserData() 
+      alert("Profile updated successfully!")
+    } catch (error) {
+      console.error("Failed to update profile:", error)
+      alert("Failed to update profile")
+    }
   }
+
+  const handleChangePassword = async () => {
+    if (profileData.new_password !== profileData.confirm_password) {
+      alert("Yangi parollar mos kelmadi");
+      return;
+    }
+
+    if (profileData.new_password.length < 6) {
+      alert("Parol kamida 6 ta belgidan iborat bo'lishi kerak");
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("access_token");
+
+      await axios.post(
+        "http://127.0.0.1:8000/api/v1/accounts/change-password/",
+        {
+          password: profileData.password,
+          new_password: profileData.new_password,
+          confirm_password: profileData.confirm_password,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setProfileData((prev) => ({
+        ...prev,
+        password: "",
+        new_password: "",
+        confirm_password: "",
+      }));
+    } catch (error: any) {
+      console.error("Parolni o'zgartirishda xatolik:", error);
+    }
+  };
 
   const handleInputChange = (field: string, value: string) => {
     setProfileData((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleProfileImageChange = () => {
-    alert("Profile image upload feature would be implemented here")
+  const handleProfileImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !e.target.files[0]) return
+
+    const file = e.target.files[0]
+    const formData = new FormData()
+    formData.append("image", file)
+
+    try {
+      const token = localStorage.getItem("access_token")
+
+      if (user?.profile) {
+        await axios.patch(
+          `http://127.0.0.1:8000/api/v1/accounts/profile/${user.profile.id}/`,
+          formData,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "multipart/form-data"
+            }
+          }
+        )
+      } else {
+        await axios.post(
+          "http://127.0.0.1:8000/api/v1/accounts/profile/",
+          formData,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "multipart/form-data"
+            }
+          }
+        )
+      }
+
+      setImageError(false)
+      fetchUserData() 
+      alert("Profile image updated successfully!")
+    } catch (error) {
+      console.error("Failed to update profile image:", error)
+      alert("Failed to update profile image")
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-slate-600">Loading profile...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
     <MainLayout>
-      <div className="p-6 max-w-4xl mx-auto space-y-6">
-        {/* Header */}
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-semibold text-slate-800">Profile Settings</h1>
           <p className="text-slate-600 mt-1">Manage your account information and security settings</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Profile Overview */}
           <Card className="border-slate-200">
             <CardHeader className="text-center">
               <div className="relative mx-auto">
                 <Avatar className="w-24 h-24 mx-auto">
+                  {user?.profile?.image && !imageError ? (
+                    <AvatarImage 
+                      src={user.profile.image} 
+                      alt={user.fullname}
+                      onError={() => setImageError(true)}
+                    />
+                  ) : null}
                   <AvatarFallback className="bg-blue-100 text-blue-600 text-2xl">
-                    {user?.name.charAt(0).toUpperCase()}
+                    {user?.fullname?.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="absolute bottom-0 right-0 rounded-full w-8 h-8 p-0 bg-white hover:bg-gray-50"
-                  onClick={handleProfileImageChange}
-                >
-                  <Camera className="w-4 h-4" />
-                </Button>
+                <label htmlFor="profile-image" className="cursor-pointer">
+                  <div className="absolute bottom-0 right-0 rounded-full w-8 h-8 p-0 bg-white hover:bg-gray-50 border border-slate-200 flex items-center justify-center">
+                    <Camera className="w-4 h-4" />
+                  </div>
+                  <input
+                    id="profile-image"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleProfileImageChange}
+                  />
+                </label>
               </div>
               <div className="space-y-2">
-                <h3 className="font-semibold text-slate-800">{user?.name}</h3>
-                <Badge
-                  className={user?.role === "Admin" ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800"}
-                >
-                  {user?.role}
-                </Badge>
+                <h3 className="font-semibold text-slate-800">{user?.fullname}</h3>
                 <p className="text-sm text-slate-600">{user?.email}</p>
+                <p className="text-xs text-slate-500">@{user?.username}</p>
               </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-3 text-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-600">Department:</span>
-                  <span className="font-medium">IT</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-600">Member since:</span>
-                  <span className="font-medium">Jan 2024</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-600">Last login:</span>
-                  <span className="font-medium">Today</span>
+                  <span className="text-slate-600">Phone:</span>
+                  <span className="font-medium">{user?.profile?.phone_number || "Not set"}</span>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Profile Information */}
           <div className="lg:col-span-2 space-y-6">
             <Card className="border-slate-200">
               <CardHeader>
@@ -179,11 +268,11 @@ export default function ProfilePage() {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="fullName">Full Name</Label>
+                    <Label htmlFor="fullname">Full Name</Label>
                     <Input
-                      id="fullName"
-                      value={profileData.fullName}
-                      onChange={(e) => handleInputChange("fullName", e.target.value)}
+                      id="fullname"
+                      value={profileData.fullname}
+                      onChange={(e) => handleInputChange("fullname", e.target.value)}
                       disabled={!isEditing}
                       className="disabled:bg-gray-50 disabled:text-gray-500"
                     />
@@ -202,24 +291,25 @@ export default function ProfilePage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="department">Department</Label>
+                    <Label htmlFor="username">Username</Label>
                     <Input
-                      id="department"
-                      value={profileData.department}
-                      onChange={(e) => handleInputChange("department", e.target.value)}
+                      id="username"
+                      value={profileData.username}
+                      onChange={(e) => handleInputChange("username", e.target.value)}
                       disabled={!isEditing}
                       className="disabled:bg-gray-50 disabled:text-gray-500"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number</Label>
+                    <Label htmlFor="phone_number">Phone Number</Label>
                     <Input
-                      id="phone"
-                      value={profileData.phone}
-                      onChange={(e) => handleInputChange("phone", e.target.value)}
+                      id="phone_number"
+                      value={profileData.phone_number}
+                      onChange={(e) => handleInputChange("phone_number", e.target.value)}
                       disabled={!isEditing}
                       className="disabled:bg-gray-50 disabled:text-gray-500"
+                      placeholder="+998901234567"
                     />
                   </div>
                 </div>
@@ -238,7 +328,6 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
 
-            {/* Security Settings */}
             <Card className="border-slate-200">
               <CardHeader>
                 <CardTitle className="flex items-center">
@@ -250,14 +339,14 @@ export default function ProfilePage() {
               <CardContent className="space-y-4">
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="currentPassword">Current Password</Label>
+                    <Label htmlFor="password">Current Password</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                       <Input
-                        id="currentPassword"
+                        id="password"
                         type={showCurrentPassword ? "text" : "password"}
-                        value={profileData.currentPassword}
-                        onChange={(e) => handleInputChange("currentPassword", e.target.value)}
+                        value={profileData.password}
+                        onChange={(e) => handleInputChange("password", e.target.value)}
                         className="pl-10 pr-10"
                         placeholder="Enter current password"
                       />
@@ -274,14 +363,14 @@ export default function ProfilePage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="newPassword">New Password</Label>
+                    <Label htmlFor="new_password">New Password</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                       <Input
-                        id="newPassword"
+                        id="new_password"
                         type={showNewPassword ? "text" : "password"}
-                        value={profileData.newPassword}
-                        onChange={(e) => handleInputChange("newPassword", e.target.value)}
+                        value={profileData.new_password}
+                        onChange={(e) => handleInputChange("new_password", e.target.value)}
                         className="pl-10 pr-10"
                         placeholder="Enter new password"
                       />
@@ -298,14 +387,14 @@ export default function ProfilePage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                    <Label htmlFor="confirm_password">Confirm New Password</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                       <Input
-                        id="confirmPassword"
+                        id="confirm_password"
                         type={showConfirmPassword ? "text" : "password"}
-                        value={profileData.confirmPassword}
-                        onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
+                        value={profileData.confirm_password}
+                        onChange={(e) => handleInputChange("confirm_password", e.target.value)}
                         className="pl-10 pr-10"
                         placeholder="Confirm new password"
                       />
@@ -321,7 +410,6 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 </div>
-
                 <Separator />
 
                 <div className="flex justify-between items-center">
@@ -337,7 +425,7 @@ export default function ProfilePage() {
                 <div className="flex justify-end space-x-2 pt-4">
                   <Button
                     onClick={handleChangePassword}
-                    disabled={!profileData.currentPassword || !profileData.newPassword || !profileData.confirmPassword}
+                    disabled={!profileData.password || !profileData.new_password || !profileData.confirm_password}
                     className="bg-blue-600 hover:bg-blue-700"
                   >
                     <Lock className="w-4 h-4 mr-2" />
@@ -346,59 +434,10 @@ export default function ProfilePage() {
                 </div>
               </CardContent>
             </Card>
-
-            {/* Activity Log */}
-            <Card className="border-slate-200">
-              <CardHeader>
-                <CardTitle>Recent Activity</CardTitle>
-                <CardDescription>Your recent account activity and login history</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <div>
-                        <p className="text-sm font-medium text-slate-800">Successful login</p>
-                        <p className="text-xs text-slate-500">Today at 9:30 AM</p>
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="text-green-600 border-green-200">
-                      Success
-                    </Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <div>
-                        <p className="text-sm font-medium text-slate-800">Profile updated</p>
-                        <p className="text-xs text-slate-500">Yesterday at 3:45 PM</p>
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="text-blue-600 border-blue-200">
-                      Update
-                    </Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between py-2">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <div>
-                        <p className="text-sm font-medium text-slate-800">File uploaded</p>
-                        <p className="text-xs text-slate-500">2 days ago at 11:20 AM</p>
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="text-green-600 border-green-200">
-                      Success
-                    </Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </div>
+    </div>
     </MainLayout>
   )
 }

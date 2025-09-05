@@ -68,7 +68,7 @@ class ContactSearchSerializer(serializers.ModelSerializer):
         fields = ['id', 'alias', 'image', 'is_online']
 
     def get_image(self, obj):
-        profile = getattr(obj.contact_user, 'profile').first()
+        profile = getattr(obj.contact_user, 'profile')
         if profile and profile.image:
             return self.context['request'].build_absolute_uri(profile.image.url)
         return None
@@ -83,3 +83,39 @@ class ContactListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contact
         fields = ['id', 'owner', 'contact_user', 'alias']
+
+
+class UserProfileUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = ["phone_number", "image"]
+
+
+class UserUpdateSerializer(serializers.ModelSerializer):
+    # Nested profile serializer
+    profile = UserProfileUpdateSerializer(required=False)
+
+    class Meta:
+        model = CustomUser
+        fields = ["username", "fullname", "email", "profile", "password"]
+
+    def update(self, instance, validated_data):
+        # Profile ma'lumotlarini alohida ajratib olamiz
+        profile_data = validated_data.pop("profile", None)
+
+        # User ma'lumotlarini yangilash
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # Agar profile bo'lsa uni ham yangilash
+        if profile_data:
+            profile = instance.profile.first()
+            if profile:
+                for attr, value in profile_data.items():
+                    setattr(profile, attr, value)
+                profile.save()
+            else:
+                UserProfile.objects.create(user=instance, **profile_data)
+
+        return instance

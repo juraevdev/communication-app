@@ -61,11 +61,27 @@ class Notification(models.Model):
 
 class FileUpload(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='uploaded_files')
-    message = models.ForeignKey(Message, on_delete=models.SET_NULL, null=True, blank=True, related_name='attachments')
-    file = models.FileField(upload_to='uploads/', null=True)
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='files', null=True)
+    recipient = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='received_files', null=True)
+    file = models.FileField(upload_to='chat_files/', null=True)
+    original_filename = models.CharField(max_length=255, null=True)  
     uploaded_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f'File uploaded by {self.user}'
 
 
     def __str__(self):
         return f'File uploaded by {self.user}'
+    
+    def get_absolute_url(self):
+        from django.urls import reverse
+        return reverse('file_download', kwargs={'file_id': self.id})
+    
+    @property
+    def file_url(self):
+        if self.file:
+            from django.conf import settings
+            return f"{settings.BASE_URL}{self.file.url}"
+        return None

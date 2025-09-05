@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import {
   Send,
   Paperclip,
@@ -14,6 +15,10 @@ import {
   FileText,
   ImageIcon,
   Download,
+  X,
+  File,
+  Video,
+  Music,
 } from "lucide-react";
 
 interface Message {
@@ -25,6 +30,8 @@ interface Message {
   type: "text" | "file";
   fileName?: string;
   fileType?: string;
+  fileUrl?: string;
+  fileSize?: number;
 }
 
 interface Contact {
@@ -45,6 +52,13 @@ interface StatusUpdate {
   timestamp: string;
 }
 
+interface FileUploadState {
+  file: File | null;
+  preview: string | null;
+  uploading: boolean;
+  progress: number;
+}
+
 export default function ChatPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [userStatuses, setUserStatuses] = useState<Map<number, { isOnline: boolean; lastSeen?: string }>>(new Map());
@@ -55,7 +69,15 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [statusWs, setStatusWs] = useState<WebSocket | null>(null);
+  const [fileUpload, setFileUpload] = useState<FileUploadState>({
+    file: null,
+    preview: null,
+    uploading: false,
+    progress: 0
+  });
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getCurrentUser = () => {
     try {
@@ -77,7 +99,7 @@ export default function ChatPage() {
 
   const handleStatusUpdate = useCallback((data: StatusUpdate) => {
     console.log("📡 Status update:", data);
-    
+
     const newStatus = {
       isOnline: data.status === "online",
       lastSeen: data.status === "offline" ? data.timestamp : undefined
@@ -96,7 +118,7 @@ export default function ChatPage() {
 
     console.log("🔌 Connecting to status WebSocket...");
     const statusSocket = new WebSocket(`ws://127.0.0.1:8000/ws/status/?token=${token}`);
-    
+
     statusSocket.onopen = () => {
       console.log("✅ Status WebSocket connected - READY FOR REAL-TIME");
     };
@@ -129,7 +151,7 @@ export default function ChatPage() {
       console.log("🔌 Closing status WebSocket");
       statusSocket.close();
     };
-  }, []); 
+  }, []);
 
   useEffect(() => {
     const fetchContacts = async () => {
@@ -143,10 +165,10 @@ export default function ChatPage() {
             },
           }
         );
-        
+
         const data: Contact[] = response.data.map((user: any) => {
           const liveStatus = userStatuses.get(user.id);
-          
+
           return {
             id: user.id,
             name: user.alias || user.fullname || user.username || user.email,
@@ -158,14 +180,14 @@ export default function ChatPage() {
             lastSeen: liveStatus ? liveStatus.lastSeen : (user.last_seen || ""),
           };
         });
-        
+
         setContacts(data);
         console.log("📋 Contacts loaded with real-time status");
       } catch (error) {
         console.error("Error fetching contacts", error);
       }
     };
-    
+
     fetchContacts();
   }, [searchTerm, userStatuses]);
 
@@ -190,13 +212,16 @@ export default function ChatPage() {
     if (!roomId) return;
     const token = localStorage.getItem("access_token");
     const socket = new WebSocket(`ws://127.0.0.1:8000/ws/chat/room/${roomId}/?token=${token}`);
+
     socket.onopen = () => {
       console.log("✅ Connected to room:", roomId);
       console.log("👤 Current user:", currentUser);
     };
+
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
       console.log("📩 Message from server:", data);
+
       if (data.type === "new_message") {
         setMessages((prev) => {
           const messageExists = prev.some(
@@ -224,6 +249,35 @@ export default function ChatPage() {
           ];
         });
       }
+
+      if (data.type === "file_uploaded") {
+        setMessages((prev) => {
+          const senderName = data.user?.full_name || "";
+          const isOwnMessage = senderName === currentUser;
+          return [
+            ...prev,
+            {
+              id: parseInt(data.id),
+              sender: senderName,
+              content: data.file_name,
+              timestamp: new Date(data.uploaded_at).toLocaleTimeString(),
+              isOwn: isOwnMessage,
+              type: "file",
+              fileName: data.file_name,
+              fileUrl: data.file_url,
+              fileType: getFileTypeFromName(data.file_name),
+            },
+          ];
+        });
+        // Reset file upload state
+        setFileUpload({
+          file: null,
+          preview: null,
+          uploading: false,
+          progress: 0
+        });
+      }
+
       if (data.type === "message_history") {
         const history = data.messages.map((msg: any) => {
           const senderName = msg.sender.fullname || msg.sender.full_name || "";
@@ -240,6 +294,7 @@ export default function ChatPage() {
         setMessages(history.reverse());
       }
     };
+
     socket.onclose = () => console.log("❌ Disconnected from room:", roomId);
     setWs(socket);
     return () => socket.close();
@@ -274,15 +329,135 @@ export default function ChatPage() {
     }
   };
 
-  const getFileIcon = (fileType: string) => {
-    switch (fileType) {
-      case "pdf":
-        return <FileText className="w-4 h-4 text-red-600" />;
-      case "image":
-        return <ImageIcon className="w-4 h-4 text-blue-600" />;
-      default:
-        return <FileText className="w-4 h-4 text-slate-600" />;
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Check file size (limit to 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      alert("File size must be less than 10MB");
+      return;
     }
+
+    // Create preview for images
+    let preview = null;
+    if (file.type.startsWith('image/')) {
+      preview = URL.createObjectURL(file);
+    }
+
+    setFileUpload({
+      file,
+      preview,
+      uploading: false,
+      progress: 0
+    });
+  };
+
+  const handleFileUpload = async () => {
+    if (!fileUpload.file || !ws) return;
+
+    setFileUpload(prev => ({ ...prev, uploading: true, progress: 0 }));
+
+    try {
+      // Convert file to base64
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const base64Data = e.target?.result as string;
+
+        // Send file via WebSocket
+        ws.send(JSON.stringify({
+          action: "upload_file",
+          file_data: base64Data,
+          file_name: fileUpload.file!.name,
+          file_type: fileUpload.file!.type
+        }));
+
+        // Simulate upload progress
+        let progress = 0;
+        const interval = setInterval(() => {
+          progress += 10;
+          setFileUpload(prev => ({ ...prev, progress }));
+          if (progress >= 100) {
+            clearInterval(interval);
+          }
+        }, 200);
+      };
+
+      reader.readAsDataURL(fileUpload.file);
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      setFileUpload(prev => ({ ...prev, uploading: false, progress: 0 }));
+    }
+  };
+
+  const handleDownload = async (fileUrl: string, fileName: string) => {
+    try {
+      const token = localStorage.getItem("access_token");
+
+      const response = await fetch(fileUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Yuklab olishda xatolik:', error);
+      alert('Faylni yuklab olish mumkin emas. Iltimos, keyinroq urunib ko\'ring.');
+    }
+  };
+
+  const handleRemoveFile = () => {
+    if (fileUpload.preview) {
+      URL.revokeObjectURL(fileUpload.preview);
+    }
+    setFileUpload({
+      file: null,
+      preview: null,
+      uploading: false,
+      progress: 0
+    });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const getFileIcon = (fileType: string) => {
+    if (fileType?.includes('image')) return <ImageIcon className="w-4 h-4 text-blue-600" />;
+    if (fileType?.includes('video')) return <Video className="w-4 h-4 text-purple-600" />;
+    if (fileType?.includes('audio')) return <Music className="w-4 h-4 text-green-600" />;
+    if (fileType?.includes('pdf')) return <FileText className="w-4 h-4 text-red-600" />;
+    return <File className="w-4 h-4 text-slate-600" />;
+  };
+
+  const getFileTypeFromName = (fileName: string): string => {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extension || '')) return 'image';
+    if (['mp4', 'avi', 'mov', 'wmv'].includes(extension || '')) return 'video';
+    if (['mp3', 'wav', 'ogg', 'flac'].includes(extension || '')) return 'audio';
+    if (extension === 'pdf') return 'pdf';
+    return 'file';
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   const formatLastSeen = (lastSeen: string) => {
@@ -290,7 +465,7 @@ export default function ChatPage() {
     const date = new Date(lastSeen);
     const now = new Date();
     const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-    
+
     if (diffInMinutes < 1) return "just now";
     if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
     if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
@@ -299,9 +474,8 @@ export default function ChatPage() {
 
   const OnlineIndicator = ({ isOnline }: { isOnline?: boolean }) => {
     return (
-      <div className={`absolute bottom-0 right-0 w-3 h-3 border-2 border-white rounded-full ${
-        isOnline ? 'bg-green-500' : 'bg-gray-400'
-      }`}></div>
+      <div className={`absolute bottom-0 right-0 w-3 h-3 border-2 border-white rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-400'
+        }`}></div>
     );
   };
 
@@ -335,9 +509,8 @@ export default function ChatPage() {
               <div
                 key={contact.id}
                 onClick={() => startChat(contact)}
-                className={`p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors ${
-                  selectedContact?.id === contact.id ? "bg-blue-50 border-blue-200" : ""
-                }`}
+                className={`p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors ${selectedContact?.id === contact.id ? "bg-blue-50 border-blue-200" : ""
+                  }`}
               >
                 <div className="flex items-center space-x-3">
                   <div className="relative">
@@ -419,8 +592,8 @@ export default function ChatPage() {
                         {msg.type === "text" ? (
                           <div
                             className={`px-4 py-2 rounded-2xl ${msg.isOwn
-                                ? "bg-blue-600 text-white rounded-br-none"
-                                : "bg-white text-slate-800 border border-slate-200 rounded-bl-none"
+                              ? "bg-blue-600 text-white rounded-br-none"
+                              : "bg-white text-slate-800 border border-slate-200 rounded-bl-none"
                               }`}
                           >
                             <p className="text-sm">{msg.content}</p>
@@ -434,12 +607,32 @@ export default function ChatPage() {
                                   <p className="text-sm font-medium text-slate-800 truncate">
                                     {msg.fileName}
                                   </p>
-                                  <p className="text-xs text-slate-500">Document</p>
+                                  <p className="text-xs text-slate-500">
+                                    {msg.fileType === 'image' ? 'Image' :
+                                      msg.fileType === 'video' ? 'Video' :
+                                        msg.fileType === 'audio' ? 'Audio' : 'Document'}
+                                  </p>
                                 </div>
-                                <Button size="sm" variant="ghost">
-                                  <Download className="w-4 h-4" />
-                                </Button>
+                                {msg.fileUrl && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleDownload(msg.fileUrl!, msg.fileName!)}
+                                  >
+                                    <Download className="w-4 h-4" />
+                                  </Button>
+                                )}
                               </div>
+                              {msg.fileType === 'image' && msg.fileUrl && (
+                                <div className="mt-2">
+                                  <img
+                                    src={msg.fileUrl}
+                                    alt={msg.fileName}
+                                    className="max-w-full h-auto rounded-lg"
+                                    style={{ maxHeight: '200px' }}
+                                  />
+                                </div>
+                              )}
                             </CardContent>
                           </Card>
                         )}
@@ -453,9 +646,71 @@ export default function ChatPage() {
                 </div>
               </div>
 
+              {/* File preview section */}
+              {fileUpload.file && (
+                <div className="bg-white border-t border-slate-200 p-4">
+                  <div className="flex items-center space-x-3 bg-slate-50 rounded-lg p-3">
+                    {fileUpload.preview ? (
+                      <img
+                        src={fileUpload.preview}
+                        alt="Preview"
+                        className="w-12 h-12 object-cover rounded"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 bg-slate-200 rounded flex items-center justify-center">
+                        {getFileIcon(fileUpload.file.type)}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-800 truncate">
+                        {fileUpload.file.name}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {formatFileSize(fileUpload.file.size)}
+                      </p>
+                      {fileUpload.uploading && (
+                        <Progress value={fileUpload.progress} className="mt-2" />
+                      )}
+                    </div>
+                    <div className="flex space-x-2">
+                      {!fileUpload.uploading && (
+                        <Button
+                          size="sm"
+                          onClick={handleFileUpload}
+                          disabled={fileUpload.uploading}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          <Send className="w-4 h-4" />
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleRemoveFile}
+                        disabled={fileUpload.uploading}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="bg-white border-t border-slate-200 p-4">
                 <div className="flex items-center space-x-2">
-                  <Button variant="ghost" size="sm">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                    accept="*/*"
+                    className="hidden"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={fileUpload.uploading}
+                  >
                     <Paperclip className="w-4 h-4" />
                   </Button>
                   <Input
@@ -464,10 +719,11 @@ export default function ChatPage() {
                     onChange={(e) => setMessage(e.target.value)}
                     onKeyPress={handleKeyPress}
                     className="flex-1"
+                    disabled={fileUpload.uploading}
                   />
                   <Button
                     onClick={handleSendMessage}
-                    disabled={!message.trim()}
+                    disabled={!message.trim() || fileUpload.uploading}
                     className="bg-blue-600 hover:bg-blue-700"
                   >
                     <Send className="w-4 h-4" />

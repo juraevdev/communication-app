@@ -47,7 +47,7 @@ class StatusConsumer(AsyncJsonWebsocketConsumer):
                     "type": "status_update",
                     "user_id": user.id,
                     "status": "online",
-                    "timestamp": timezone.now().isoformat()  # ✅ ISO format
+                    "timestamp": timezone.now().isoformat()
                 }
             )
 
@@ -61,7 +61,7 @@ class StatusConsumer(AsyncJsonWebsocketConsumer):
                 "type": "status_update",
                 "user_id": user.id,
                 "status": "offline",
-                "timestamp": timezone.now().isoformat()  # ✅ ISO format
+                "timestamp": timezone.now().isoformat()
             }
         )
 
@@ -139,7 +139,6 @@ class P2PChatConsumer(BaseChatConsumer):
             )
         except Exception as e:
             logger.error(f"Error leaving group {self.room_group_name}: {e}")
-
 
     async def user_status(self, event):
         await self.send_json({
@@ -250,14 +249,19 @@ class P2PChatConsumer(BaseChatConsumer):
         file_data = content.get('file_data')
         file_name = content.get('file_name')
         file_type = content.get('file_type')
-        
+    
         if not file_data or not file_name:
             await self.send_error("file_data and file_name are required", 'params_required')
             return
-        
+    
         file_upload = await self.save_file(file_data, file_name, file_type)
         if file_upload:
-            file_info = await self.get_file_data(file_upload.id)
+            file_info = await database_sync_to_async(self.get_file_data)(file_upload.id)
+        
+            if file_info is None:
+                await self.send_error("Failed to get file information", 'data_error')
+                return
+            
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
@@ -310,6 +314,7 @@ class P2PChatConsumer(BaseChatConsumer):
             'user_id': event['user_id']
         })
 
+    # Fixed file_uploaded event handler
     async def file_uploaded(self, event):
         await self.send_json({
             'type': 'file_uploaded',
@@ -455,35 +460,52 @@ class P2PChatConsumer(BaseChatConsumer):
     def save_file(self, file_data, file_name, file_type=None):
         try:
             if ';base64,' not in file_data:
+                logger.error("Invalid file data format")
                 return None
-                
+            
             format, file_str = file_data.split(';base64,')
             file_bytes = base64.b64decode(file_str)
-            
+        
             file_content = ContentFile(file_bytes, name=file_name)
-            
+        
             recipient = self.room.user2 if self.user == self.room.user1 else self.room.user1
-            
-            file_upload = FileUpload.objects.create(
+        
+            file_upload = FileUpload(
                 user=self.user,
                 file=file_content,
                 room=self.room,
                 recipient=recipient
             )
+        
+            if hasattr(FileUpload, 'original_filename'):
+                file_upload.original_filename = file_name
             
+            file_upload.save()
+        
+            logger.info(f"File uploaded successfully: {file_upload.id}")
             return file_upload
         except Exception as e:
-            print(f"File upload error: {e}")
+            logger.error(f"File upload error: {e}")
             return None
 
-    @database_sync_to_async
     def get_file_data(self, file_upload_id):
         try:
             file_upload = FileUpload.objects.select_related('user').get(id=file_upload_id)
+        
+            from django.urls import reverse
+            file_url = f"http://127.0.0.1:8000{reverse('file_download', kwargs={'file_id': file_upload.id})}"
+        
+            if hasattr(file_upload, 'original_filename') and file_upload.original_filename:
+                file_name = file_upload.original_filename
+            else:
+                file_name = file_upload.file.name.split('/')[-1]
+        
             return {
                 'id': str(file_upload.id),
-                'file_name': file_upload.file.name,
-                'file_url': file_upload.file.url,
+                'file_name': file_name,
+                'file_url': file_url,
+                'file_size': file_upload.file.size if file_upload.file else 0,
+                'file_type': self.get_file_type(file_name),
                 'user': {
                     'id': str(file_upload.user.id),
                     'email': file_upload.user.email,
@@ -492,10 +514,36 @@ class P2PChatConsumer(BaseChatConsumer):
                 'uploaded_at': str(file_upload.uploaded_at)
             }
         except FileUpload.DoesNotExist:
+            logger.error(f"File upload not found: {file_upload_id}")
             return None
         except Exception as e:
             logger.error(f"Error getting file data: {e}")
             return None
+        
+    def get_file_type(self, file_name):
+        if not file_name:
+            return 'file'
+    
+        extension = file_name.split('.')[-1].lower() if '.' in file_name else ''
+    
+        if extension in ['jpg', 'jpeg', 'png', 'gif', 'webp']:
+            return 'image'
+        elif extension in ['mp4', 'avi', 'mov', 'wmv']:
+            return 'video'
+        elif extension in ['mp3', 'wav', 'ogg', 'flac']:
+            return 'audio'
+        elif extension == 'pdf':
+            return 'pdf'
+        elif extension in ['doc', 'docx']:
+            return 'word'
+        elif extension in ['xls', 'xlsx']:
+            return 'excel'
+        elif extension in ['zip', 'rar']:
+            return 'archive'
+        elif extension in ['txt']:
+            return 'text'
+        else:
+            return 'file'
 
     @database_sync_to_async
     def mark_file_as_read(self, file_id):
@@ -507,9 +555,6 @@ class P2PChatConsumer(BaseChatConsumer):
             file_upload.is_read = True
             file_upload.save()
             return True
-        except FileUpload.DoesNotExist:
-            return False
-        
         except FileUpload.DoesNotExist:
             return False
         except Exception as e:

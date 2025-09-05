@@ -1,9 +1,10 @@
+from django.http import FileResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404
-from django.utils.timezone import now
 
 from rest_framework import generics, status, permissions 
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.decorators import api_view
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -94,3 +95,21 @@ class StartChatApiView(APIView):
 
         room = get_or_create_room(request.user, other_user)
         return Response({"room_id": room.id}, status=status.HTTP_200_OK)
+    
+
+@api_view(['GET'])
+def download_file(request, file_id):
+    file_upload = get_object_or_404(FileUpload, id=file_id)
+    
+    if request.user not in [file_upload.user, file_upload.recipient]:
+        return Response(
+            {"error": "You don't have permission to access this file."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    original_filename = file_upload.original_filename
+    
+    response = FileResponse(file_upload.file.open(), as_attachment=True)
+    response['Content-Disposition'] = f'attachment; filename="{original_filename}"'
+    
+    return response
