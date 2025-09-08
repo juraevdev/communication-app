@@ -5,7 +5,8 @@ import logging
 from django.contrib.auth.models import AnonymousUser
 from django.core.files.base import ContentFile
 from django.utils import timezone
-from django.core.exceptions import ValidationError, ObjectDoesNotExist
+from django.core.exceptions import ValidationError
+from django.core.cache import cache
 
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db import database_sync_to_async
@@ -30,6 +31,21 @@ def set_user_online_status(user, status):
     except Exception as e:
         logger.error(f"Error setting user online status: {e}")
         return False
+    
+
+@database_sync_to_async
+def increment_connection(user_id):
+    key = f"user:{user_id}:connections"
+    count = cache.get(key, 0) + 1
+    cache.set(key, count, timeout=None)
+    return count
+
+@database_sync_to_async
+def decrement_connection(user_id):
+    key = f"user:{user_id}:connections"
+    count = max(cache.get(key, 0) - 1, 0)
+    cache.set(key, count, timeout=None)
+    return count
 
 
 class StatusConsumer(AsyncJsonWebsocketConsumer):
@@ -37,41 +53,45 @@ class StatusConsumer(AsyncJsonWebsocketConsumer):
         user = self.scope["user"]
         if user.is_anonymous:
             await self.close()
-        else:
-            await set_user_online_status(user, True)
-            await self.channel_layer.group_add("status", self.channel_name)
-            await self.accept()
-            await self.channel_layer.group_send(
-                "status",
-                {
-                    "type": "status_update",
-                    "user_id": user.id,
-                    "status": "online",
-                    "timestamp": timezone.now().isoformat()
-                }
-            )
+            return
 
-    async def disconnect(self, code):
-        user = self.scope["user"]
-        await set_user_online_status(user, False)
-        await self.channel_layer.group_discard("status", self.channel_name)
+        connections = await increment_connection(user.id)
+        if connections == 1:  # birinchi connection
+            await set_user_online_status(user, True)
+
+        await self.channel_layer.group_add("status", self.channel_name)
+        await self.accept()
+
         await self.channel_layer.group_send(
             "status",
             {
                 "type": "status_update",
                 "user_id": user.id,
-                "status": "offline",
+                "status": "online",
                 "timestamp": timezone.now().isoformat()
             }
         )
 
+    async def disconnect(self, code):
+            user = self.scope["user"]
+
+            remaining = await decrement_connection(user.id)
+            if remaining == 0:  # faqat oxirgi tab yopilganda
+                await set_user_online_status(user, False)
+                await self.channel_layer.group_send(
+                    "status",
+                    {
+                        "type": "status_update",
+                        "user_id": user.id,
+                        "status": "offline",
+                        "timestamp": timezone.now().isoformat()
+                    }
+                )
+
+            await self.channel_layer.group_discard("status", self.channel_name)
+
     async def status_update(self, event):
-        await self.send_json({
-            "type": "status_update",
-            "user_id": event["user_id"],
-            "status": event["status"],
-            "timestamp": event["timestamp"]
-        })
+        await self.send_json(event)
 
 
 class BaseChatConsumer(AsyncJsonWebsocketConsumer):
@@ -193,16 +213,35 @@ class P2PChatConsumer(BaseChatConsumer):
         )
 
     async def handle_read(self, content):
-        message_id = content.get('message_id')
+        message_id = content.get("message_id")
         if not message_id:
-            await self.send_error("message_id is required", 'id_required')
+            await self.send_error("message_id is required", "id_required")
             return
-        
+
         success = await self.mark_message_as_read(message_id)
+
         if success:
-            await self.send_success('Message marked as read')
+            await self.send_success("Message marked as read")
         else:
-            await self.send_error('Failed to mark message as read', 'mark_error')
+            await self.send_error("Failed to mark message as read", "mark_error")
+
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                "type": "read",
+                "message_id": message_id,
+                "success": success,
+            }
+        )
+
+
+    async def read(self, event):
+        await self.send_json({
+            "type": "read",
+            "message_id": event["message_id"],
+            "success": event["success"],
+        })
+
 
     async def handle_delete(self, content):
         message_id = content.get("message_id")

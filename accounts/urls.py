@@ -4,7 +4,8 @@ from accounts.views import (
     UserProfileApiView, ProfileListApiView,
     ContactApiView, ContactSearchApiView, 
     ContactListApiView, MeApiView, UserFilterApiView,
-    ChangePasswordView, UserUpdateApiView
+    ChangePasswordView, UserUpdateApiView,
+    UserSearchApiView
 )
 
 
@@ -20,4 +21,5 @@ urlpatterns = [
     path('filter/', UserFilterApiView.as_view()),
     path('change-password/', ChangePasswordView.as_view(), name='change-password'),
     path('user/', UserUpdateApiView.as_view()),
+    path('users/search/', UserSearchApiView.as_view()),
 ]

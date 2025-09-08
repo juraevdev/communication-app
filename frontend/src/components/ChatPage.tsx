@@ -4,9 +4,8 @@ import { MainLayout } from "@/components/layout/main-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import MessageBubble from "./MessageBubble";
 import {
   Send,
   Paperclip,
@@ -14,7 +13,6 @@ import {
   MoreVertical,
   FileText,
   ImageIcon,
-  Download,
   X,
   File,
   Video,
@@ -25,6 +23,7 @@ interface Message {
   id: number;
   sender: string;
   content: string;
+  timestampISO?: string;
   timestamp: string;
   isOwn: boolean;
   type: "text" | "file";
@@ -32,7 +31,10 @@ interface Message {
   fileType?: string;
   fileUrl?: string;
   fileSize?: number;
+  isRead?: boolean;
+  isUpdated?: boolean;
 }
+
 
 interface Contact {
   id: number;
@@ -68,7 +70,9 @@ export default function ChatPage() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [ws, setWs] = useState<WebSocket | null>(null);
-  const [statusWs, setStatusWs] = useState<WebSocket | null>(null);
+  const [, setStatusWs] = useState<WebSocket | null>(null);
+  const [showAllUsers, setShowAllUsers] = useState(false);
+  const [allUsers, setAllUsers] = useState<Contact[]>([]);
   const [fileUpload, setFileUpload] = useState<FileUploadState>({
     file: null,
     preview: null,
@@ -96,6 +100,7 @@ export default function ChatPage() {
     }
   };
   const currentUser = useMemo(getCurrentUser, []);
+
 
   const handleStatusUpdate = useCallback((data: StatusUpdate) => {
     console.log("📡 Status update:", data);
@@ -151,7 +156,7 @@ export default function ChatPage() {
       console.log("🔌 Closing status WebSocket");
       statusSocket.close();
     };
-  }, []);
+  }, [handleStatusUpdate]);
 
   useEffect(() => {
     const fetchContacts = async () => {
@@ -166,18 +171,21 @@ export default function ChatPage() {
           }
         );
 
-        const data: Contact[] = response.data.map((user: any) => {
-          const liveStatus = userStatuses.get(user.id);
+
+        const data: Contact[] = response.data.map((contact: any) => {
+
+          const actualUserId = contact.contact_user?.id || contact.contact_user;
+          const liveStatus = userStatuses.get(actualUserId);
 
           return {
-            id: user.id,
-            name: user.alias || user.fullname || user.username || user.email,
-            image: user.image || "",
-            lastMessage: user.last_message || "",
-            timestamp: user.last_message_timestamp || "",
-            unread: user.unread_count || 0,
-            isOnline: liveStatus ? liveStatus.isOnline : (user.is_online || false),
-            lastSeen: liveStatus ? liveStatus.lastSeen : (user.last_seen || ""),
+            id: actualUserId,
+            name: contact.alias || contact.contact_user?.fullname || contact.contact_user?.username || contact.contact_user?.email,
+            image: contact.image,
+            lastMessage: contact.last_message || "",
+            timestamp: contact.last_message_timestamp || "",
+            unread: contact.unread_count || 0,
+            isOnline: liveStatus ? liveStatus.isOnline : (contact.contact_user?.is_online || false),
+            lastSeen: liveStatus ? liveStatus.lastSeen : (contact.contact_user?.last_seen || ""),
           };
         });
 
@@ -188,8 +196,53 @@ export default function ChatPage() {
       }
     };
 
-    fetchContacts();
-  }, [searchTerm, userStatuses]);
+    const fetchAllUsers = async () => {
+      try {
+        const response = await axios.get(
+          "http://127.0.0.1:8000/api/v1/accounts/users/search/",
+          {
+            params: { search: searchTerm },
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+            },
+          }
+        );
+
+        const data: Contact[] = response.data.map((user: any) => {
+          const liveStatus = userStatuses.get(user.id);
+
+          const imageUrl = user.image
+            ? `http://127.0.0.1:8000${user.image}`
+            : "";
+
+          const userName = user.username || user.full_name || user.email;
+
+          return {
+            id: user.id,
+            name: userName,
+            image: imageUrl,
+            lastMessage: "",
+            timestamp: "",
+            unread: 0,
+            isOnline: liveStatus ? liveStatus.isOnline : (user.is_online || false),
+            lastSeen: liveStatus ? liveStatus.lastSeen : (user.last_seen || ""),
+            isContact: false
+          };
+        });
+
+        setAllUsers(data);
+      } catch (error) {
+        console.error("Error fetching non-contact users", error);
+      }
+    };
+
+    if (showAllUsers) {
+      fetchAllUsers();
+    } else {
+      fetchContacts();
+    }
+  }, [searchTerm, userStatuses, showAllUsers]);
+
 
   useEffect(() => {
     if (selectedContact) {
@@ -224,31 +277,31 @@ export default function ChatPage() {
 
       if (data.type === "new_message") {
         setMessages((prev) => {
-          const messageExists = prev.some(
-            (msg) =>
-              msg.id === parseInt(data.id) ||
-              ((data.sender?.fullname || data.sender?.full_name || "") === msg.sender &&
-                msg.content === data.message &&
-                Math.abs(
-                  new Date(msg.timestamp).getTime() - new Date(data.timestamp).getTime()
-                ) < 5000)
-          );
+          const messageExists = prev.some(msg => msg.id === parseInt(data.id));
           if (messageExists) return prev;
+
           const senderName = data.sender.fullname || data.sender.full_name || "";
           const isOwnMessage = senderName === currentUser;
+          const iso = data.timestamp;
+          const displayTime = iso ? new Date(iso).toLocaleTimeString() : new Date().toLocaleTimeString();
+
           return [
             ...prev,
             {
               id: parseInt(data.id),
               sender: senderName,
               content: data.message,
-              timestamp: new Date(data.timestamp).toLocaleTimeString(),
+              timestampISO: iso,
+              timestamp: displayTime,
               isOwn: isOwnMessage,
               type: "text",
+              isRead: data.is_read || false,
+              isUpdated: data.is_updated || false,
             },
           ];
         });
       }
+
 
       if (data.type === "file_uploaded") {
         setMessages((prev) => {
@@ -260,16 +313,18 @@ export default function ChatPage() {
               id: parseInt(data.id),
               sender: senderName,
               content: data.file_name,
+              timestampISO: data.uploaded_at,
               timestamp: new Date(data.uploaded_at).toLocaleTimeString(),
               isOwn: isOwnMessage,
               type: "file",
               fileName: data.file_name,
               fileUrl: data.file_url,
               fileType: getFileTypeFromName(data.file_name),
+              isRead: false,
+              isUpdated: false,
             },
           ];
         });
-        // Reset file upload state
         setFileUpload({
           file: null,
           preview: null,
@@ -280,18 +335,35 @@ export default function ChatPage() {
 
       if (data.type === "message_history") {
         const history = data.messages.map((msg: any) => {
+          const iso = msg.timestamp;
           const senderName = msg.sender.fullname || msg.sender.full_name || "";
           const isOwnMessage = senderName === currentUser;
+
           return {
             id: parseInt(msg.id),
-            sender: senderName,
+            sender: msg.sender.fullname || msg.sender.full_name || "",
             content: msg.message,
-            timestamp: new Date(msg.timestamp).toLocaleTimeString(),
+            timestampISO: iso,
+            timestamp: iso ? new Date(iso).toLocaleTimeString() : new Date().toLocaleTimeString(),
             isOwn: isOwnMessage,
             type: "text",
+            isRead: msg.is_read || false,
+            isUpdated: msg.is_updated || false,
           };
         });
         setMessages(history.reverse());
+      }
+
+      if (data.type === "read") {
+        setMessages(prev => prev.map(msg =>
+          msg.id === parseInt(data.message_id)
+            ? { ...msg, isRead: true }
+            : msg
+        ));
+      }
+
+      if (data.type === "success") {
+        console.log("Server response:", data.message);
       }
     };
 
@@ -322,6 +394,62 @@ export default function ChatPage() {
     }
   };
 
+  const groupedMessages = useMemo(() => {
+    const groups: Record<string, Message[]> = {};
+    messages.forEach(msg => {
+      const iso = (msg as any).timestampISO || (msg.timestamp ? msg.timestamp : null);
+      const dateObj = iso ? new Date(iso) : new Date(NaN);
+      const dateKey = isNaN(dateObj.getTime())
+        ? 'unknown'
+        : dateObj.toISOString().split('T')[0];
+
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(msg);
+    });
+
+    const entries = Object.entries(groups).sort((a, b) => {
+      if (a[0] === 'unknown') return 1;
+      if (b[0] === 'unknown') return -1;
+      return new Date(a[0]).getTime() - new Date(b[0]).getTime();
+    });
+
+    return entries;
+  }, [messages]);
+
+
+  const formatChatDate = (isoDateStr: string) => {
+    if (!isoDateStr || isoDateStr === 'unknown') return '';
+    const [y, m, d] = isoDateStr.split('-').map(Number);
+    const date = new Date(y, (m || 1) - 1, d);
+
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) {
+      return "Today";
+    }
+    if (date.toDateString() === yesterday.toDateString()) {
+      return "Yesterday";
+    }
+
+    if (date.getFullYear() === today.getFullYear()) {
+      return date.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric"
+      });
+    }
+
+    return date.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric"
+    });
+  };
+
+
+
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -333,13 +461,11 @@ export default function ChatPage() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Check file size (limit to 10MB)
     if (file.size > 10 * 1024 * 1024) {
       alert("File size must be less than 10MB");
       return;
     }
 
-    // Create preview for images
     let preview = null;
     if (file.type.startsWith('image/')) {
       preview = URL.createObjectURL(file);
@@ -359,12 +485,10 @@ export default function ChatPage() {
     setFileUpload(prev => ({ ...prev, uploading: true, progress: 0 }));
 
     try {
-      // Convert file to base64
       const reader = new FileReader();
       reader.onload = (e) => {
         const base64Data = e.target?.result as string;
 
-        // Send file via WebSocket
         ws.send(JSON.stringify({
           action: "upload_file",
           file_data: base64Data,
@@ -372,7 +496,6 @@ export default function ChatPage() {
           file_type: fileUpload.file!.type
         }));
 
-        // Simulate upload progress
         let progress = 0;
         const interval = setInterval(() => {
           progress += 10;
@@ -389,6 +512,20 @@ export default function ChatPage() {
       setFileUpload(prev => ({ ...prev, uploading: false, progress: 0 }));
     }
   };
+
+  const markMessageAsRead = useCallback((messageId: number) => {
+    if (ws) {
+      ws.send(JSON.stringify({
+        action: "read",
+        message_id: messageId
+      }));
+
+      setMessages(prev => prev.map(msg =>
+        msg.id === messageId ? { ...msg, isRead: true } : msg
+      ));
+    }
+  }, [ws]);
+
 
   const handleDownload = async (fileUrl: string, fileName: string) => {
     try {
@@ -493,56 +630,56 @@ export default function ChatPage() {
     <MainLayout>
       <div className="flex h-full">
         <div className="w-80 bg-white border-r border-slate-200 flex flex-col">
-          <div className="p-4 border-b border-slate-200">
-            <div className="relative">
+          <div className="p-4 border-b border-slate-200 flex justify-between items-center">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
               <Input
-                placeholder="Search contacts..."
+                placeholder={showAllUsers ? "Search all users..." : "Search contacts..."}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
               />
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAllUsers(!showAllUsers)}
+              className="ml-2"
+            >
+              {showAllUsers ? "My Contacts" : "All Users"}
+            </Button>
           </div>
+
           <div className="flex-1 overflow-y-auto">
-            {contacts.map((contact) => (
+            {(showAllUsers ? allUsers : contacts).map((user) => (
               <div
-                key={contact.id}
-                onClick={() => startChat(contact)}
-                className={`p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors ${selectedContact?.id === contact.id ? "bg-blue-50 border-blue-200" : ""
-                  }`}
+                key={user.id}
+                onClick={() => startChat(user)}
+                className={`p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors ${selectedContact?.id === user.id ? "bg-blue-50 border-blue-200" : ""}`}
               >
                 <div className="flex items-center space-x-3">
                   <div className="relative">
                     <Avatar className="w-12 h-12">
-                      {contact.image ? (
+                      {user.image ? (
                         <img
-                          src={contact.image}
-                          alt={contact.name}
+                          src={user.image}
+                          alt={user.name}
                           className="w-full h-full object-cover rounded-full"
                         />
                       ) : (
                         <AvatarFallback className="bg-blue-100 text-blue-600">
-                          {contact.name.charAt(0)}
+                          {user.name.charAt(0)}
                         </AvatarFallback>
                       )}
                     </Avatar>
-                    <OnlineIndicator isOnline={contact.isOnline} />
+                    <OnlineIndicator isOnline={user.isOnline} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-slate-800 truncate">{contact.name}</p>
+                      <p className="text-sm font-medium text-slate-800 truncate">{user.name}</p>
                     </div>
                     <div className="flex items-center justify-between mt-1">
-                      <div className="flex flex-col">
-                        <p className="text-sm text-slate-600 truncate">{contact.lastMessage}</p>
-                        <StatusText isOnline={contact.isOnline} lastSeen={contact.lastSeen} />
-                      </div>
-                      {contact.unread > 0 && (
-                        <Badge className="bg-blue-600 text-white text-xs px-2 py-1 ml-2">
-                          {contact.unread}
-                        </Badge>
-                      )}
+                      <StatusText isOnline={user.isOnline} lastSeen={user.lastSeen} />
                     </div>
                   </div>
                 </div>
@@ -585,61 +722,23 @@ export default function ChatPage() {
               </div>
 
               <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
-                <div className="space-y-2">
-                  {messages.map((msg) => (
-                    <div key={msg.id} className={`flex ${msg.isOwn ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-xs lg:max-w-md ${msg.isOwn ? "ml-auto" : "mr-auto"}`}>
-                        {msg.type === "text" ? (
-                          <div
-                            className={`px-4 py-2 rounded-2xl ${msg.isOwn
-                              ? "bg-blue-600 text-white rounded-br-none"
-                              : "bg-white text-slate-800 border border-slate-200 rounded-bl-none"
-                              }`}
-                          >
-                            <p className="text-sm">{msg.content}</p>
-                          </div>
-                        ) : (
-                          <Card className={`${msg.isOwn ? "bg-blue-50 border-blue-200" : ""}`}>
-                            <CardContent className="p-3">
-                              <div className="flex items-center space-x-3">
-                                {getFileIcon(msg.fileType || "file")}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-slate-800 truncate">
-                                    {msg.fileName}
-                                  </p>
-                                  <p className="text-xs text-slate-500">
-                                    {msg.fileType === 'image' ? 'Image' :
-                                      msg.fileType === 'video' ? 'Video' :
-                                        msg.fileType === 'audio' ? 'Audio' : 'Document'}
-                                  </p>
-                                </div>
-                                {msg.fileUrl && (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => handleDownload(msg.fileUrl!, msg.fileName!)}
-                                  >
-                                    <Download className="w-4 h-4" />
-                                  </Button>
-                                )}
-                              </div>
-                              {msg.fileType === 'image' && msg.fileUrl && (
-                                <div className="mt-2">
-                                  <img
-                                    src={msg.fileUrl}
-                                    alt={msg.fileName}
-                                    className="max-w-full h-auto rounded-lg"
-                                    style={{ maxHeight: '200px' }}
-                                  />
-                                </div>
-                              )}
-                            </CardContent>
-                          </Card>
-                        )}
-                        <p className={`text-xs text-slate-500 mt-1 ${msg.isOwn ? "text-right" : "text-left"}`}>
-                          {msg.timestamp}
-                        </p>
+                <div className="space-y-4">
+                  {groupedMessages.map(([dateKey, msgs]) => (
+                    <div key={dateKey}>
+                      <div className="flex justify-center my-2">
+                        <span className="bg-slate-200 text-slate-700 text-xs px-3 py-1 rounded-full">
+                          {formatChatDate(dateKey)}
+                        </span>
                       </div>
+
+                      {msgs.map(msg => (
+                        <MessageBubble
+                          key={msg.id}
+                          msg={msg}
+                          onMarkAsRead={markMessageAsRead}
+                          onDownload={handleDownload}
+                        />
+                      ))}
                     </div>
                   ))}
                   <div ref={messagesEndRef} />

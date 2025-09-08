@@ -65,7 +65,7 @@ class ContactSearchSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Contact
-        fields = ['id', 'alias', 'image', 'is_online']
+        fields = ['id', 'alias', 'image', 'owner', 'contact_user', 'is_online']
 
     def get_image(self, obj):
         profile = getattr(obj.contact_user, 'profile')

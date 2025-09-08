@@ -1,13 +1,15 @@
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import update_session_auth_hash
+from django.db.models import Q
 
 from rest_framework import generics, status, filters, permissions
+from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
 
 from accounts.services import get_or_create_room
-from accounts.models import CustomUser, Contact, UserProfile
+from accounts.models import CustomUser, Contact, UserProfile, BlockedUser
 from accounts.serializers import (
     RegisterSerializer, LoginSerializer,
     UserProfileSerializer, ContactSerializer,
@@ -81,7 +83,7 @@ class ContactSearchApiView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Contact.objects.filter(owner=self.request.user)
+        return Contact.objects.filter(owner=self.request.user).select_related('contact_user', 'contact_user__profile')
 
 
 
@@ -170,3 +172,51 @@ class UserUpdateApiView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user
+    
+
+class UserSearchApiView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        search_term = request.query_params.get('search', '')
+
+        # Kontaktlardagi user ID larni olish
+        contact_user_ids = Contact.objects.filter(owner=request.user).values_list('contact_user_id', flat=True)
+        
+        # Bloklangan user ID larni olish
+        blocked_user_ids = BlockedUser.objects.filter(blocker=request.user).values_list('blocked_id', flat=True)
+        
+        # Filtrlash
+        users = CustomUser.objects.exclude(id=request.user.id)\
+                                  .exclude(id__in=contact_user_ids)\
+                                  .exclude(id__in=blocked_user_ids)
+        
+        if search_term:
+            users = users.filter(
+                Q(username__icontains=search_term) |
+                Q(fullname__icontains=search_term) |  # fullname deb o'zgartirildi
+                Q(email__icontains=search_term)
+            )
+        
+        user_data = []
+        for user in users:
+            try:
+                profile = user.profile 
+                image_url = profile.image.url if profile.image else None
+                phone_number = profile.phone_number
+            except UserProfile.DoesNotExist:
+                image_url = None
+                phone_number = None
+            
+            user_data.append({
+                'id': user.id,
+                'username': user.username,
+                'full_name': user.fullname,  # fullname deb
+                'email': user.email,
+                'image': image_url,
+                'phone_number': phone_number,
+                'is_online': user.is_online,
+                'last_seen': user.last_seen
+            })
+        
+        return Response(user_data, status=status.HTTP_200_OK)

@@ -8,7 +8,10 @@ class Room(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ['user1', 'user2']
+        constraints = [
+            models.UniqueConstraint(fields=['user1', 'user2'], name='unique_room_between_users')
+        ]
+
 
     def __str__(self):
         return f'{self.user1} - {self.user2}'
@@ -23,6 +26,7 @@ class Message(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
     is_updated = models.BooleanField(default=False)
     is_read = models.BooleanField(default=False)
+    read_at = models.DateTimeField(auto_now_add=True, null=True)
 
     class Meta:
         indexes = [

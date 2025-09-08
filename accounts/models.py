@@ -15,7 +15,7 @@ class CustomUser(AbstractUser):
 
 
     USERNAME_FIELD = 'fullname'
-    REQUIRED_FIELDS = ['email']
+    REQUIRED_FIELDS = ['email'] 
 
 
     objects = CustomUserManager()
@@ -53,3 +53,16 @@ class Contact(models.Model):
 
     def __str__(self):
         return self.alias
+    
+
+
+class BlockedUser(models.Model):
+    blocker = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='blocked_users')
+    blocked = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='blocked_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['blocker', 'blocked']
+
+    def __str__(self):
+        return f"{self.blocker} blocked {self.blocked}"

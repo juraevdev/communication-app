@@ -80,15 +80,16 @@ class StartChatApiView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        alias = request.data.get("alias")
-        if not alias:
-            return Response({"error": "alias is required"}, status=status.HTTP_400_BAD_REQUEST)
+        contact_user_id = request.data.get("contact_user")
+        alias = request.data.get("alias", "")
+        
+        if not contact_user_id:
+            return Response({"error": "contact_user is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            contact = Contact.objects.get(owner=request.user, alias=alias)
-            other_user = contact.contact_user
-        except Contact.DoesNotExist:
-            return Response({"error": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
+            other_user = CustomUser.objects.get(id=contact_user_id)
+        except CustomUser.DoesNotExist:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
         if other_user == request.user:
             return Response({"error": "You cannot chat with yourself"}, status=status.HTTP_400_BAD_REQUEST)
