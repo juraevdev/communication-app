@@ -35,7 +35,6 @@ interface Message {
   isUpdated?: boolean;
 }
 
-
 interface Contact {
   id: number;
   name: string;
@@ -45,6 +44,7 @@ interface Contact {
   unread: number;
   isOnline?: boolean;
   lastSeen?: string;
+  isContact?: boolean;
 }
 
 interface StatusUpdate {
@@ -52,6 +52,12 @@ interface StatusUpdate {
   user_id: number;
   status: "online" | "offline";
   timestamp: string;
+}
+
+interface UnreadCountUpdate {
+  type: "unread_count_update";
+  contact_id: number;
+  unread_count: number;
 }
 
 interface FileUploadState {
@@ -101,7 +107,6 @@ export default function ChatPage() {
   };
   const currentUser = useMemo(getCurrentUser, []);
 
-
   const handleStatusUpdate = useCallback((data: StatusUpdate) => {
     console.log("📡 Status update:", data);
 
@@ -117,6 +122,8 @@ export default function ChatPage() {
     });
   }, []);
 
+
+  // Status WebSocket
   useEffect(() => {
     const token = localStorage.getItem("access_token");
     if (!token) return;
@@ -130,7 +137,7 @@ export default function ChatPage() {
 
     statusSocket.onmessage = (event) => {
       try {
-        const data: StatusUpdate = JSON.parse(event.data);
+        const data = JSON.parse(event.data);
         if (data.type === "status_update") {
           handleStatusUpdate(data);
         }
@@ -158,6 +165,7 @@ export default function ChatPage() {
     };
   }, [handleStatusUpdate]);
 
+  // Kontaktlarni olish
   useEffect(() => {
     const fetchContacts = async () => {
       try {
@@ -171,9 +179,7 @@ export default function ChatPage() {
           }
         );
 
-
         const data: Contact[] = response.data.map((contact: any) => {
-
           const actualUserId = contact.contact_user?.id || contact.contact_user;
           const liveStatus = userStatuses.get(actualUserId);
 
@@ -187,6 +193,12 @@ export default function ChatPage() {
             isOnline: liveStatus ? liveStatus.isOnline : (contact.contact_user?.is_online || false),
             lastSeen: liveStatus ? liveStatus.lastSeen : (contact.contact_user?.last_seen || ""),
           };
+        });
+
+        data.sort((a, b) => {
+          if (a.unread > 0 && b.unread === 0) return -1;
+          if (a.unread === 0 && b.unread > 0) return 1;
+          return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
         });
 
         setContacts(data);
@@ -221,9 +233,9 @@ export default function ChatPage() {
             id: user.id,
             name: userName,
             image: imageUrl,
-            lastMessage: "",
-            timestamp: "",
-            unread: 0,
+            lastMessage: user.last_message || "",               // 🔹 qo‘shildi
+            timestamp: user.last_message_timestamp || "",       // 🔹 qo‘shildi
+            unread: user.unread_count || 0,                     // 🔹 endi serverdan keladigan qiymat olinadi
             isOnline: liveStatus ? liveStatus.isOnline : (user.is_online || false),
             lastSeen: liveStatus ? liveStatus.lastSeen : (user.last_seen || ""),
             isContact: false
@@ -236,6 +248,7 @@ export default function ChatPage() {
       }
     };
 
+
     if (showAllUsers) {
       fetchAllUsers();
     } else {
@@ -243,7 +256,67 @@ export default function ChatPage() {
     }
   }, [searchTerm, userStatuses, showAllUsers]);
 
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
 
+    console.log("🔔 Connecting to notifications WebSocket...");
+    const notifSocket = new WebSocket(`ws://127.0.0.1:8000/ws/notifications/?token=${token}`);
+
+    notifSocket.onopen = () => {
+      console.log("✅ Notifications WebSocket connected");
+    };
+
+    notifSocket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "unread_count_update") {
+          console.log("🔔 Unread update:", data);
+
+          // 🔹 Contacts ichida yangilash
+          setContacts(prev =>
+            prev.map(c =>
+              c.id === data.contact_id ? { ...c, unread: data.unread_count } : c
+            )
+          );
+
+          // 🔹 AllUsers ichida yangilash
+          setAllUsers(prev =>
+            prev.map(u =>
+              u.id === data.contact_id ? { ...u, unread: data.unread_count } : u
+            )
+          );
+
+          // 🔹 Agar ochilgan chat shu user bo‘lsa
+          if (selectedContact && selectedContact.id === data.contact_id) {
+            setSelectedContact(prev =>
+              prev ? { ...prev, unread: data.unread_count } : prev
+            );
+          }
+        }
+      } catch (err) {
+        console.error("Notif parse error:", err);
+      }
+    };
+
+    notifSocket.onclose = () => {
+      console.log("❌ Notifications WebSocket disconnected");
+      setTimeout(() => {
+        console.log("🔄 Reconnecting notifications WebSocket...");
+      }, 3000);
+    };
+
+    notifSocket.onerror = (err) => {
+      console.error("Notifications WebSocket error:", err);
+    };
+
+    return () => {
+      console.log("🔌 Closing notifications WebSocket");
+      notifSocket.close();
+    };
+  }, [selectedContact]);
+
+  // Tanlangan kontakt statusini yangilash
   useEffect(() => {
     if (selectedContact) {
       const liveStatus = userStatuses.get(selectedContact.id);
@@ -257,10 +330,12 @@ export default function ChatPage() {
     }
   }, [userStatuses, selectedContact?.id]);
 
+  // Xabarlarga scroll qilish
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Chat WebSocket
   useEffect(() => {
     if (!roomId) return;
     const token = localStorage.getItem("access_token");
@@ -272,105 +347,141 @@ export default function ChatPage() {
     };
 
     socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      console.log("📩 Message from server:", data);
+      try {
+        const data = JSON.parse(event.data);
+        console.log("📩 Message from server:", data);
 
-      if (data.type === "new_message") {
-        setMessages((prev) => {
-          const messageExists = prev.some(msg => msg.id === parseInt(data.id));
-          if (messageExists) return prev;
+        // Unread count yangilanishi
+        // WebSocket onmessage ichidagi unread_count_update qismini o'zgartiring
+        if (data.type === "unread_count_update") {
+          // Kontaktlar ro'yxatini yangilash
+          setContacts(prev =>
+            prev.map(contact =>
+              contact.id === data.contact_id
+                ? { ...contact, unread: data.unread_count }
+                : contact
+            )
+          );
 
-          const senderName = data.sender.fullname || data.sender.full_name || "";
-          const isOwnMessage = senderName === currentUser;
-          const iso = data.timestamp;
-          const displayTime = iso ? new Date(iso).toLocaleTimeString() : new Date().toLocaleTimeString();
+          // AllUsers ro'yxatini ham yangilash (agar mavjud bo'lsa)
+          setAllUsers(prev =>
+            prev.map(user =>
+              user.id === data.contact_id
+                ? { ...user, unread: data.unread_count }
+                : user
+            )
+          );
 
-          return [
-            ...prev,
-            {
-              id: parseInt(data.id),
-              sender: senderName,
-              content: data.message,
+          // Agar tanlangan kontakt bo'lsa, uni ham yangilash
+          if (selectedContact && selectedContact.id === data.contact_id) {
+            setSelectedContact(prev => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                unread: data.unread_count
+              };
+            });
+          }
+        }
+
+        if (data.type === "new_message") {
+          setMessages((prev) => {
+            const messageExists = prev.some(msg => msg.id === parseInt(data.id));
+            if (messageExists) return prev;
+
+            const senderName = data.sender.fullname || data.sender.full_name || "";
+            const isOwnMessage = senderName === currentUser;
+            const iso = data.timestamp;
+            const displayTime = iso ? new Date(iso).toLocaleTimeString() : new Date().toLocaleTimeString();
+
+            return [
+              ...prev,
+              {
+                id: parseInt(data.id),
+                sender: senderName,
+                content: data.message,
+                timestampISO: iso,
+                timestamp: displayTime,
+                isOwn: isOwnMessage,
+                type: "text",
+                isRead: data.is_read || false,
+                isUpdated: data.is_updated || false,
+              },
+            ];
+          });
+        }
+
+        if (data.type === "file_uploaded") {
+          setMessages((prev) => {
+            const senderName = data.user?.full_name || "";
+            const isOwnMessage = senderName === currentUser;
+            return [
+              ...prev,
+              {
+                id: parseInt(data.id),
+                sender: senderName,
+                content: data.file_name,
+                timestampISO: data.uploaded_at,
+                timestamp: new Date(data.uploaded_at).toLocaleTimeString(),
+                isOwn: isOwnMessage,
+                type: "file",
+                fileName: data.file_name,
+                fileUrl: data.file_url,
+                fileType: getFileTypeFromName(data.file_name),
+                isRead: false,
+                isUpdated: false,
+              },
+            ];
+          });
+          setFileUpload({
+            file: null,
+            preview: null,
+            uploading: false,
+            progress: 0
+          });
+        }
+
+        if (data.type === "message_history") {
+          const history = data.messages.map((msg: any) => {
+            const iso = msg.timestamp;
+            const senderName = msg.sender.fullname || msg.sender.full_name || "";
+            const isOwnMessage = senderName === currentUser;
+
+            return {
+              id: parseInt(msg.id),
+              sender: msg.sender.fullname || msg.sender.full_name || "",
+              content: msg.message,
               timestampISO: iso,
-              timestamp: displayTime,
+              timestamp: iso ? new Date(iso).toLocaleTimeString() : new Date().toLocaleTimeString(),
               isOwn: isOwnMessage,
               type: "text",
-              isRead: data.is_read || false,
-              isUpdated: data.is_updated || false,
-            },
-          ];
-        });
-      }
+              isRead: msg.is_read || false,
+              isUpdated: msg.is_updated || false,
+            };
+          });
+          setMessages(history.reverse());
+        }
 
+        if (data.type === "read") {
+          setMessages(prev => prev.map(msg =>
+            msg.id === parseInt(data.message_id)
+              ? { ...msg, isRead: true }
+              : msg
+          ));
+        }
 
-      if (data.type === "file_uploaded") {
-        setMessages((prev) => {
-          const senderName = data.user?.full_name || "";
-          const isOwnMessage = senderName === currentUser;
-          return [
-            ...prev,
-            {
-              id: parseInt(data.id),
-              sender: senderName,
-              content: data.file_name,
-              timestampISO: data.uploaded_at,
-              timestamp: new Date(data.uploaded_at).toLocaleTimeString(),
-              isOwn: isOwnMessage,
-              type: "file",
-              fileName: data.file_name,
-              fileUrl: data.file_url,
-              fileType: getFileTypeFromName(data.file_name),
-              isRead: false,
-              isUpdated: false,
-            },
-          ];
-        });
-        setFileUpload({
-          file: null,
-          preview: null,
-          uploading: false,
-          progress: 0
-        });
-      }
-
-      if (data.type === "message_history") {
-        const history = data.messages.map((msg: any) => {
-          const iso = msg.timestamp;
-          const senderName = msg.sender.fullname || msg.sender.full_name || "";
-          const isOwnMessage = senderName === currentUser;
-
-          return {
-            id: parseInt(msg.id),
-            sender: msg.sender.fullname || msg.sender.full_name || "",
-            content: msg.message,
-            timestampISO: iso,
-            timestamp: iso ? new Date(iso).toLocaleTimeString() : new Date().toLocaleTimeString(),
-            isOwn: isOwnMessage,
-            type: "text",
-            isRead: msg.is_read || false,
-            isUpdated: msg.is_updated || false,
-          };
-        });
-        setMessages(history.reverse());
-      }
-
-      if (data.type === "read") {
-        setMessages(prev => prev.map(msg =>
-          msg.id === parseInt(data.message_id)
-            ? { ...msg, isRead: true }
-            : msg
-        ));
-      }
-
-      if (data.type === "success") {
-        console.log("Server response:", data.message);
+        if (data.type === "success") {
+          console.log("Server response:", data.message);
+        }
+      } catch (error) {
+        console.error("WebSocket message parse error:", error);
       }
     };
 
     socket.onclose = () => console.log("❌ Disconnected from room:", roomId);
     setWs(socket);
     return () => socket.close();
-  }, [roomId, currentUser]);
+  }, [roomId, currentUser, selectedContact]); // ✅ selectedContact dependency qo'shildi
 
   const startChat = async (contact: Contact) => {
     setSelectedContact(contact);
@@ -382,6 +493,16 @@ export default function ChatPage() {
       );
       setRoomId(response.data.room_id);
       setMessages([]);
+
+      if (!contact.isContact) {
+        setAllUsers(prev =>
+          prev.map(user =>
+            user.id === contact.id
+              ? { ...user, unread: 0 }
+              : user
+          )
+        );
+      }
     } catch (error) {
       console.error("Error starting chat", error);
     }
@@ -416,7 +537,6 @@ export default function ChatPage() {
     return entries;
   }, [messages]);
 
-
   const formatChatDate = (isoDateStr: string) => {
     if (!isoDateStr || isoDateStr === 'unknown') return '';
     const [y, m, d] = isoDateStr.split('-').map(Number);
@@ -446,9 +566,6 @@ export default function ChatPage() {
       day: "numeric"
     });
   };
-
-
-
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -523,9 +640,30 @@ export default function ChatPage() {
       setMessages(prev => prev.map(msg =>
         msg.id === messageId ? { ...msg, isRead: true } : msg
       ));
-    }
-  }, [ws]);
 
+      if (selectedContact) {
+        if (selectedContact.unread > 0) {
+          setSelectedContact(prev => prev ? { ...prev, unread: prev.unread - 1 } : null);
+        }
+
+        setContacts(prev =>
+          prev.map(c =>
+            c.id === selectedContact.id
+              ? { ...c, unread: Math.max(0, c.unread - 1) }
+              : c
+          )
+        );
+
+        setAllUsers(prev =>
+          prev.map(user =>
+            user.id === selectedContact.id
+              ? { ...user, unread: Math.max(0, user.unread - 1) }
+              : user
+          )
+        );
+      }
+    }
+  }, [ws, selectedContact]);
 
   const handleDownload = async (fileUrl: string, fileName: string) => {
     try {
@@ -677,6 +815,11 @@ export default function ChatPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium text-slate-800 truncate">{user.name}</p>
+                      {user.unread > 0 && (
+                        <span className="ml-2 bg-blue-600 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
+                          {user.unread}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center justify-between mt-1">
                       <StatusText isOnline={user.isOnline} lastSeen={user.lastSeen} />

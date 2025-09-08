@@ -34,7 +34,6 @@ export default function DashboardPage() {
   
   
 
-
   const recentConversations = [
     { id: 1, name: "John Smith", lastMessage: "Thanks for the update on the project...", time: "2 min ago", unread: 2 },
     {

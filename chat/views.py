@@ -1,5 +1,6 @@
 from django.http import FileResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404
+from django.db.models import Q
 
 from rest_framework import generics, status, permissions 
 from rest_framework.views import APIView
@@ -9,7 +10,7 @@ from rest_framework.decorators import api_view
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
-from chat.models import Message, Notification, FileUpload
+from chat.models import Message, Notification, FileUpload, Room
 from chat.serializers import MessageSerializer, NotificationSerializer, FileSerializer
 from chat.utils import send_notification
 
@@ -114,3 +115,62 @@ def download_file(request, file_id):
     response['Content-Disposition'] = f'attachment; filename="{original_filename}"'
     
     return response
+
+
+@api_view(['GET'])
+def get_user_files(request):
+    try:
+        files = FileUpload.objects.filter(
+            Q(user=request.user) | Q(recipient=request.user)
+        ).select_related('user').order_by('-uploaded_at')
+        
+        data = [{
+            'id': file.id,
+            'name': file.original_filename if hasattr(file, 'original_filename') and file.original_filename else file.file.name.split('/')[-1],
+            'type': get_file_type(file.file.name),
+            'size': format_file_size(file.file.size),
+            'uploadedBy': file.user.fullname if file.user.fullname else file.user.email,
+            'uploadDate': file.uploaded_at.strftime("%Y-%m-%d %H:%M"),
+            'downloadCount': file.download_count if hasattr(file, 'download_count') else 0,
+            'isOwner': file.user == request.user,
+            'roomId': file.room.id if file.room else None
+        } for file in files]
+        
+        return Response(data)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+def get_file_type(filename):
+    if not filename:
+        return 'file'
+    
+    extension = filename.split('.')[-1].lower() if '.' in filename else ''
+    
+    if extension in ['jpg', 'jpeg', 'png', 'gif', 'webp']:
+        return 'image'
+    elif extension in ['mp4', 'avi', 'mov', 'wmv']:
+        return 'video'
+    elif extension in ['mp3', 'wav', 'ogg', 'flac']:
+        return 'audio'
+    elif extension == 'pdf':
+        return 'pdf'
+    elif extension in ['doc', 'docx']:
+        return 'document'
+    elif extension in ['xls', 'xlsx']:
+        return 'spreadsheet'
+    elif extension in ['zip', 'rar', '7z']:
+        return 'archive'
+    elif extension in ['txt']:
+        return 'text'
+    else:
+        return 'file'
+
+def format_file_size(size_bytes):
+    if size_bytes == 0:
+        return "0B"
+    size_names = ["B", "KB", "MB", "GB"]
+    i = 0
+    while size_bytes >= 1024 and i < len(size_names)-1:
+        size_bytes /= 1024.0
+        i += 1
+    return f"{size_bytes:.1f}{size_names[i]}"

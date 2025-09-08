@@ -56,7 +56,7 @@ class StatusConsumer(AsyncJsonWebsocketConsumer):
             return
 
         connections = await increment_connection(user.id)
-        if connections == 1:  # birinchi connection
+        if connections == 1: 
             await set_user_online_status(user, True)
 
         await self.channel_layer.group_add("status", self.channel_name)
@@ -73,22 +73,22 @@ class StatusConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def disconnect(self, code):
-            user = self.scope["user"]
+        user = self.scope["user"]
 
-            remaining = await decrement_connection(user.id)
-            if remaining == 0:  # faqat oxirgi tab yopilganda
-                await set_user_online_status(user, False)
-                await self.channel_layer.group_send(
-                    "status",
-                    {
-                        "type": "status_update",
-                        "user_id": user.id,
-                        "status": "offline",
-                        "timestamp": timezone.now().isoformat()
-                    }
-                )
+        remaining = await decrement_connection(user.id)
+        if remaining == 0:  
+            await set_user_online_status(user, False)
+            await self.channel_layer.group_send(
+                "status",
+                {
+                    "type": "status_update",
+                    "user_id": user.id,
+                    "status": "offline",
+                    "timestamp": timezone.now().isoformat()
+                }
+            )
 
-            await self.channel_layer.group_discard("status", self.channel_name)
+        await self.channel_layer.group_discard("status", self.channel_name)
 
     async def status_update(self, event):
         await self.send_json(event)
@@ -142,6 +142,11 @@ class P2PChatConsumer(BaseChatConsumer):
             self.room_group_name,
             self.channel_name
         )
+        
+        await self.channel_layer.group_add(
+            f"notifications_{self.user.id}",
+            self.channel_name
+        )
 
         await self.accept()
 
@@ -157,8 +162,12 @@ class P2PChatConsumer(BaseChatConsumer):
                 self.room_group_name,
                 self.channel_name
             )
+            await self.channel_layer.group_discard(
+                f"notifications_{self.user.id}",
+                self.channel_name
+            )
         except Exception as e:
-            logger.error(f"Error leaving group {self.room_group_name}: {e}")
+            logger.error(f"Error leaving groups: {e}")
 
     async def user_status(self, event):
         await self.send_json({
@@ -187,23 +196,25 @@ class P2PChatConsumer(BaseChatConsumer):
                 "Invalid action. Choose from: send, read, delete, edit, upload_file, read_file, delete_file", 
                 'invalid_action'
             )
+        if action == 'get_files':
+            await self.handle_get_files(content)
 
     async def handle_send(self, content):
         message_text = content.get('message')
         if not message_text or not message_text.strip():
             await self.send_error("Message is required", 'message_required')
             return
-        
+
         saved_message = await self.save_message(message_text)
         if not saved_message:
             await self.send_error("Failed to save message", 'save_error')
             return
-            
+
         message_data = await self.get_message_data(saved_message.id)
         if not message_data:
             await self.send_error("Failed to get message data", 'data_error')
             return
-        
+
         await self.channel_layer.group_send(
             self.room_group_name,
             {
@@ -211,6 +222,10 @@ class P2PChatConsumer(BaseChatConsumer):
                 **message_data
             }
         )
+
+        recipient = self.room.user2 if self.user == self.room.user1 else self.room.user1
+        unread_count = await self.get_unread_count(self.room.id, recipient.id)
+        await self.send_unread_count_update(recipient.id, unread_count)
 
     async def handle_read(self, content):
         message_id = content.get("message_id")
@@ -222,18 +237,17 @@ class P2PChatConsumer(BaseChatConsumer):
 
         if success:
             await self.send_success("Message marked as read")
+            
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    "type": "read",
+                    "message_id": message_id,
+                    "success": success,
+                }
+            )
         else:
             await self.send_error("Failed to mark message as read", "mark_error")
-
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                "type": "read",
-                "message_id": message_id,
-                "success": success,
-            }
-        )
-
 
     async def read(self, event):
         await self.send_json({
@@ -241,7 +255,6 @@ class P2PChatConsumer(BaseChatConsumer):
             "message_id": event["message_id"],
             "success": event["success"],
         })
-
 
     async def handle_delete(self, content):
         message_id = content.get("message_id")
@@ -341,6 +354,7 @@ class P2PChatConsumer(BaseChatConsumer):
             'id': event['id'],
             "message": event['message'],
             'sender': event['sender'],
+            'unread_count': event['unread_count'], 
             'is_updated': event['is_updated'],
             'is_read': event['is_read'],
             'timestamp': event['timestamp']
@@ -353,7 +367,6 @@ class P2PChatConsumer(BaseChatConsumer):
             'user_id': event['user_id']
         })
 
-    # Fixed file_uploaded event handler
     async def file_uploaded(self, event):
         await self.send_json({
             'type': 'file_uploaded',
@@ -364,6 +377,50 @@ class P2PChatConsumer(BaseChatConsumer):
             'uploaded_at': event['uploaded_at']
         })
 
+    async def unread_count_update(self, event):
+        await self.send_json({
+            "type": "unread_count_update",
+            "contact_id": event["contact_id"],
+            "unread_count": event["unread_count"],
+        })
+
+    async def send_unread_count_update(self, user_id, unread_count):
+        try:
+            contact_id = await self.get_contact_id_for_user(user_id)
+            
+            await self.channel_layer.group_send(
+                f"notifications_{user_id}",
+                {
+                    "type": "unread_count_update",
+                    "contact_id": contact_id,
+                    "unread_count": unread_count,
+                }
+            )
+        except Exception as e:
+            logger.error(f"Error in send_unread_count_update: {e}")
+
+    @database_sync_to_async
+    def get_contact_id_for_user(self, user_id):
+        try:
+            current_user_id = self.user.id
+            
+            if user_id == self.room.user1.id:
+                return self.room.user2.id  
+            else:
+                return self.room.user1.id  
+                
+        except Exception as e:
+            logger.error(f"Error getting contact ID: {e}")
+            return current_user_id
+        
+    @database_sync_to_async
+    def get_unread_count(self, room_id, recipient_id):
+        return Message.objects.filter(
+            room_id=room_id,
+            recipient_id=recipient_id,
+            is_read=False
+        ).count()
+
     @database_sync_to_async
     def get_message_data(self, message_id):
         try:
@@ -371,16 +428,22 @@ class P2PChatConsumer(BaseChatConsumer):
                 id=message_id, 
                 room=self.room
             )
+            unread_count = Message.objects.select_related('sender').filter(
+                room=self.room,
+                is_read=False
+            ).count()
             return {
                 'id': str(message.id),
                 "message": message.text,
                 'sender': {
                     "id": str(message.sender.id),
                     "email": message.sender.email,
-                    "full_name": message.sender.fullname
+                    "full_name": message.sender.fullname,
+                    "fullname": message.sender.fullname 
                 },
                 'is_updated': message.is_updated,
                 'is_read': message.is_read,
+                'unread_count': unread_count,
                 'timestamp': str(message.timestamp),
             }
         except (Message.DoesNotExist, ValidationError) as e:
@@ -432,7 +495,8 @@ class P2PChatConsumer(BaseChatConsumer):
                     'sender': {
                         "id": str(msg.sender.id),
                         "email": msg.sender.email,
-                        "full_name": msg.sender.fullname
+                        "full_name": msg.sender.fullname,
+                        "fullname": msg.sender.fullname  
                     },
                     "is_read": msg.is_read,
                     "is_updated": msg.is_updated,
@@ -616,6 +680,44 @@ class P2PChatConsumer(BaseChatConsumer):
         except Exception as e:
             logger.error(f"Error deleting file: {e}")
             return False
+    
+
+    async def handle_get_files(self, content):
+        files = await self.get_room_files()
+        await self.send_json({
+            "type": "file_list",
+            "files": files
+        })
+
+    @database_sync_to_async
+    def get_room_files(self):
+        try:
+            files = FileUpload.objects.filter(room=self.room).select_related('user')
+            return [
+                {
+                    'id': file.id,
+                    'name': file.original_filename if hasattr(file, 'original_filename') and file.original_filename else file.file.name.split('/')[-1],
+                    'type': self.get_file_type(file.file.name),
+                    'size': self.format_file_size(file.file.size),
+                    'uploadedBy': file.user.fullname,
+                    'uploadDate': file.uploaded_at.strftime("%Y-%m-%d %H:%M"),
+                    'downloadCount': file.download_count if hasattr(file, 'download_count') else 0
+                }
+                for file in files
+            ]
+        except Exception as e:
+            logger.error(f"Error getting room files: {e}")
+            return []
+
+    def format_file_size(self, size_bytes):
+        if size_bytes == 0:
+            return "0B"
+        size_names = ["B", "KB", "MB", "GB"]
+        i = 0
+        while size_bytes >= 1024 and i < len(size_names)-1:
+            size_bytes /= 1024.0
+            i += 1
+        return f"{size_bytes:.1f}{size_names[i]}"
 
 
 class NotificationConsumer(AsyncJsonWebsocketConsumer):
@@ -658,3 +760,10 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             })
         except Exception as e:
             logger.error(f"Error sending notification: {e}")
+            
+    async def unread_count_update(self, event):
+        await self.send_json({
+            "type": "unread_count_update",
+            "contact_id": event["contact_id"],
+            "unread_count": event["unread_count"],
+        })

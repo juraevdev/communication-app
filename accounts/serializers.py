@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from accounts.models import CustomUser, UserProfile, Contact
 
+from chat.models import Message
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -62,10 +63,11 @@ class ContactSerializer(serializers.ModelSerializer):
 class ContactSearchSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
     is_online = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Contact
-        fields = ['id', 'alias', 'image', 'owner', 'contact_user', 'is_online']
+        fields = ['id', 'alias', 'image', 'owner', 'contact_user', 'is_online', 'unread_count']
 
     def get_image(self, obj):
         profile = getattr(obj.contact_user, 'profile')
@@ -75,6 +77,16 @@ class ContactSearchSerializer(serializers.ModelSerializer):
 
     def get_is_online(self, obj):
         return getattr(obj.contact_user, 'is_online', False)
+    
+    def get_unread_count(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return 0
+        return Message.objects.filter(
+            sender=obj.contact_user,  
+            recipient=request.user,   
+            is_read=False
+        ).count()
 
 
 
@@ -92,7 +104,6 @@ class UserProfileUpdateSerializer(serializers.ModelSerializer):
 
 
 class UserUpdateSerializer(serializers.ModelSerializer):
-    # Nested profile serializer
     profile = UserProfileUpdateSerializer(required=False)
 
     class Meta:
@@ -100,15 +111,12 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         fields = ["username", "fullname", "email", "profile", "password"]
 
     def update(self, instance, validated_data):
-        # Profile ma'lumotlarini alohida ajratib olamiz
         profile_data = validated_data.pop("profile", None)
 
-        # User ma'lumotlarini yangilash
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
-        # Agar profile bo'lsa uni ham yangilash
         if profile_data:
             profile = instance.profile.first()
             if profile:
