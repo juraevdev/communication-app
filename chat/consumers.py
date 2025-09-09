@@ -229,30 +229,48 @@ class P2PChatConsumer(BaseChatConsumer):
 
     async def handle_read(self, content):
         message_id = content.get("message_id")
-        if not message_id:
-            await self.send_error("message_id is required", "id_required")
+        file_id = content.get("file_id")
+    
+        if not message_id and not file_id:
+            await self.send_error("message_id or file_id is required", "id_required")
             return
 
-        success = await self.mark_message_as_read(message_id)
+        success = False
+        read_type = None
+    
+        if message_id:
+            success = await self.mark_message_as_read(message_id)
+            read_type = "message"
+        elif file_id:
+            success = await self.mark_file_as_read(file_id)
+            read_type = "file"
 
         if success:
-            await self.send_success("Message marked as read")
-            
+            await self.send_success(f"{read_type} marked as read")
+        
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
                     "type": "read",
                     "message_id": message_id,
+                    "file_id": file_id,
+                    "user_id": self.user.id,
                     "success": success,
                 }
             )
+        
+            recipient = self.room.user2 if self.user == self.room.user1 else self.room.user1
+            unread_count = await self.get_unread_count(self.room.id, recipient.id)
+            await self.send_unread_count_update(recipient.id, unread_count)
         else:
-            await self.send_error("Failed to mark message as read", "mark_error")
+            error_msg = f"Failed to mark {read_type} as read" if read_type else "Failed to mark as read"
+            await self.send_error(error_msg, 'mark_error')
 
     async def read(self, event):
         await self.send_json({
             "type": "read",
             "message_id": event["message_id"],
+            "file_id": event["file_id"],
             "success": event["success"],
         })
 
@@ -484,12 +502,19 @@ class P2PChatConsumer(BaseChatConsumer):
     @database_sync_to_async
     def get_last_messages(self, limit=50):
         try:
-            messages = Message.objects.filter(
+            text_messages = Message.objects.filter(
                 room=self.room
             ).select_related('sender').order_by('-timestamp')[:limit]
-            
-            return [
-                {
+        
+            file_messages = FileUpload.objects.filter(
+                room=self.room
+            ).select_related('user').order_by('-uploaded_at')[:limit]
+        
+            all_messages = []
+        
+            for msg in text_messages:
+                all_messages.append({
+                    "type": "text",
                     "id": str(msg.id),
                     "message": msg.text,
                     'sender': {
@@ -501,9 +526,32 @@ class P2PChatConsumer(BaseChatConsumer):
                     "is_read": msg.is_read,
                     "is_updated": msg.is_updated,
                     "timestamp": str(msg.timestamp),
-                }
-                for msg in messages
-            ]
+                })
+        
+            for file_msg in file_messages:
+                file_name = file_msg.original_filename if hasattr(file_msg, 'original_filename') and file_msg.original_filename else file_msg.file.name.split('/')[-1]
+            
+                all_messages.append({
+                    "type": "file",
+                    "id": str(file_msg.id),
+                    "message": file_name,  # Fayl nomi
+                    'sender': {
+                        "id": str(file_msg.user.id),
+                        "email": file_msg.user.email,
+                        "full_name": file_msg.user.fullname,
+                        "fullname": file_msg.user.fullname  
+                    },
+                    "is_read": file_msg.is_read,
+                    "is_updated": False,
+                    "timestamp": str(file_msg.uploaded_at),
+                    "file_name": file_name,
+                    "file_url": file_msg.file_url if hasattr(file_msg, 'file_url') else None,
+                    "file_type": self.get_file_type(file_name),
+                })
+        
+            all_messages.sort(key=lambda x: x['timestamp'], reverse=True)
+        
+            return all_messages[:limit]
         except Exception as e:
             logger.error(f"Error getting last messages: {e}")
             return []
@@ -591,18 +639,18 @@ class P2PChatConsumer(BaseChatConsumer):
             logger.error(f"File upload error: {e}")
             return None
 
+
     def get_file_data(self, file_upload_id):
         try:
             file_upload = FileUpload.objects.select_related('user').get(id=file_upload_id)
-        
-            from django.urls import reverse
-            file_url = f"http://127.0.0.1:8000{reverse('file_download', kwargs={'file_id': file_upload.id})}"
+    
+            file_url = file_upload.file_url
         
             if hasattr(file_upload, 'original_filename') and file_upload.original_filename:
                 file_name = file_upload.original_filename
             else:
                 file_name = file_upload.file.name.split('/')[-1]
-        
+    
             return {
                 'id': str(file_upload.id),
                 'file_name': file_name,
@@ -651,14 +699,23 @@ class P2PChatConsumer(BaseChatConsumer):
     @database_sync_to_async
     def mark_file_as_read(self, file_id):
         try:
+            try:
+                file_id = int(file_id)
+            except (ValueError, TypeError):
+                logger.error(f"Invalid file ID: {file_id}")
+                return False
+            
             file_upload = FileUpload.objects.get(
                 id=file_id,
                 recipient=self.user
             )
             file_upload.is_read = True
-            file_upload.save()
+            file_upload.save(update_fields=["is_read"])
+        
+            logger.info(f"File {file_id} marked as read by user {self.user.id}")
             return True
         except FileUpload.DoesNotExist:
+            logger.error(f"File upload not found: {file_id}, user: {self.user.id}")
             return False
         except Exception as e:
             logger.error(f"Error marking file as read: {e}")

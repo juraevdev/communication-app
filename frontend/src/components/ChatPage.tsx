@@ -447,6 +447,23 @@ export default function ChatPage() {
             const senderName = msg.sender.fullname || msg.sender.full_name || "";
             const isOwnMessage = senderName === currentUser;
 
+            if (msg.type === "file") {
+              return {
+                id: parseInt(msg.id),
+                sender: msg.sender.fullname || msg.sender.full_name || "",
+                content: msg.file_name || msg.message,
+                timestampISO: iso,
+                timestamp: iso ? new Date(iso).toLocaleTimeString() : new Date().toLocaleTimeString(),
+                isOwn: isOwnMessage,
+                type: "file",
+                fileName: msg.file_name,
+                fileUrl: msg.file_url,
+                fileType: getFileTypeFromName(msg.file_name || msg.message),
+                isRead: msg.is_read || false,
+                isUpdated: msg.is_updated || false,
+              };
+            }
+
             return {
               id: parseInt(msg.id),
               sender: msg.sender.fullname || msg.sender.full_name || "",
@@ -463,11 +480,19 @@ export default function ChatPage() {
         }
 
         if (data.type === "read") {
-          setMessages(prev => prev.map(msg =>
-            msg.id === parseInt(data.message_id)
-              ? { ...msg, isRead: true }
-              : msg
-          ));
+          setMessages(prev => prev.map(msg => {
+            if (data.message_id && msg.id === parseInt(data.message_id)) {
+              return { ...msg, isRead: true };
+            }
+            if (data.file_id && msg.id === parseInt(data.file_id)) {
+              return { ...msg, isRead: true };
+            }
+            return msg;
+          }));
+
+          if (!data.success) {
+            console.error("Failed to mark message as read on server");
+          }
         }
 
         if (data.type === "success") {
@@ -630,21 +655,22 @@ export default function ChatPage() {
     }
   };
 
-  const markMessageAsRead = useCallback((messageId: number) => {
+  const markMessageAsRead = useCallback((messageId: number, isFile: boolean = false) => {
     if (ws) {
-      ws.send(JSON.stringify({
-        action: "read",
-        message_id: messageId
-      }));
+      const payload = isFile
+        ? { action: "read", file_id: messageId }
+        : { action: "read", message_id: messageId };
 
+      ws.send(JSON.stringify(payload));
+
+      // Frontendda holatni yangilash
       setMessages(prev => prev.map(msg =>
         msg.id === messageId ? { ...msg, isRead: true } : msg
       ));
 
-      if (selectedContact) {
-        if (selectedContact.unread > 0) {
-          setSelectedContact(prev => prev ? { ...prev, unread: prev.unread - 1 } : null);
-        }
+      // Unread count ni yangilash
+      if (selectedContact && selectedContact.unread > 0) {
+        setSelectedContact(prev => prev ? { ...prev, unread: prev.unread - 1 } : null);
 
         setContacts(prev =>
           prev.map(c =>

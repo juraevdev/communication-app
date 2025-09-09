@@ -28,9 +28,30 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ msg, onMarkAsRead, onDown
   const messageRef = useRef<HTMLDivElement>(null);
   const [hasBeenRead, setHasBeenRead] = useState(msg.isRead || false);
 
+  // MessageBubble komponentida
+useEffect(() => {
+  if (hasBeenRead || msg.isOwn) return;
+  
+  const observer = new IntersectionObserver(  
+    ([entry]) => {
+      if (entry.isIntersecting && !msg.isOwn && !msg.isRead) {
+        onMarkAsRead(msg.id);
+        setHasBeenRead(true);
+      }
+    },
+    { threshold: 0.7 }
+  );
+
+  if (messageRef.current) {
+    observer.observe(messageRef.current);
+  }
+
+  return () => observer.disconnect();
+}, [msg.id, msg.isOwn, msg.isRead, msg.type, onMarkAsRead, hasBeenRead]);
+
   useEffect(() => {
     if (hasBeenRead || msg.isOwn) return;
-    const observer = new IntersectionObserver(  
+    const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting && !msg.isOwn && !msg.isRead) {
           onMarkAsRead(msg.id);
@@ -48,8 +69,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ msg, onMarkAsRead, onDown
   }, [msg.id, msg.isOwn, msg.isRead, onMarkAsRead]);
 
   useEffect(() => {
-  setHasBeenRead(msg.isRead || false);
-}, [msg.isRead]);
+    setHasBeenRead(msg.isRead || false);
+  }, [msg.isRead]);
 
   const getFileIcon = (fileType: string) => {
     if (fileType?.includes('image')) return <ImageIcon className="w-4 h-4 text-blue-600" />;
@@ -64,14 +85,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ msg, onMarkAsRead, onDown
       <div className={`max-w-xs lg:max-w-md ${msg.isOwn ? "ml-auto" : "mr-auto"}`}>
         {msg.type === "text" ? (
           <div
-            className={`px-4 py-2 rounded-2xl relative ${
-              msg.isOwn
+            className={`px-4 py-2 rounded-2xl relative ${msg.isOwn
                 ? "bg-blue-600 text-white rounded-br-none"
                 : "bg-white text-slate-800 border border-slate-200 rounded-bl-none"
-            }`}
+              }`}
           >
             <p className="text-sm">{msg.content}</p>
-            
+
             {msg.isOwn && (
               <div className="absolute -bottom-1 -right-1 bg-blue-600 rounded-full p-1">
                 {msg.isRead ? (
@@ -96,8 +116,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ msg, onMarkAsRead, onDown
                   </p>
                   <p className="text-xs text-slate-500">
                     {msg.fileType === 'image' ? 'Image' :
-                     msg.fileType === 'video' ? 'Video' :
-                     msg.fileType === 'audio' ? 'Audio' : 'Document'}
+                      msg.fileType === 'video' ? 'Video' :
+                        msg.fileType === 'audio' ? 'Audio' : 'Document'}
                   </p>
                 </div>
                 {msg.fileUrl && (
@@ -110,7 +130,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ msg, onMarkAsRead, onDown
                   </Button>
                 )}
               </div>
-              
+
               {msg.fileType === 'image' && msg.fileUrl && (
                 <div className="mt-2">
                   <img
@@ -121,7 +141,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ msg, onMarkAsRead, onDown
                   />
                 </div>
               )}
-              
+
               {msg.isOwn && (
                 <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 border">
                   {msg.isRead ? (
@@ -137,12 +157,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ msg, onMarkAsRead, onDown
             </CardContent>
           </Card>
         )}
-        
+
         <div className="flex items-center justify-between mt-1">
           <p className={`text-xs text-slate-500 ${msg.isOwn ? "text-right" : "text-left"}`}>
             {msg.timestamp}
           </p>
-          
+
           {msg.isUpdated && (
             <span className="text-xs text-slate-400 italic ml-2">edited</span>
           )}
