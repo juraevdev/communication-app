@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect } from "react"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,47 +8,87 @@ import { MessageCircle, Users, FileText, Plus, Clock, Shield } from "lucide-reac
 import { Link } from "react-router-dom"
 
 interface User {
+  fullname: string
+  username: string
   email: string
-  role: string
-  name: string
+  role?: string
+}
+
+interface Conversation {
+  id: number
+  sender: string
+  last_message: string
+  timestamp: string
+  unread: number
 }
 
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null)
+  const [recentConversations, setRecentConversations] = useState<Conversation[]>([])
+
 
   useEffect(() => {
     try {
-      const userData = localStorage.getItem("user");
+      const userData = localStorage.getItem("user")
       if (userData && userData !== "undefined") {
-        setUser(JSON.parse(userData));
+        setUser(JSON.parse(userData))
       } else {
-        setUser(null);
+        setUser(null)
       }
     } catch (error) {
-      console.error("Failed to parse user data:", error);
-      setUser(null);
+      console.error("Failed to parse user data:", error)
+      setUser(null)
     }
-  }, []);
-  
-  
+  }, [])
 
-  const recentConversations = [
-    { id: 1, name: "John Smith", lastMessage: "Thanks for the update on the project...", time: "2 min ago", unread: 2 },
-    {
-      id: 2,
-      name: "Sarah Johnson",
-      lastMessage: "Can we schedule a meeting for tomorrow?",
-      time: "1 hour ago",
-      unread: 0,
-    },
-    {
-      id: 3,
-      name: "Mike Davis",
-      lastMessage: "The report has been submitted successfully.",
-      time: "3 hours ago",
-      unread: 1,
-    },
-  ]
+  useEffect(() => {
+    const socket = new WebSocket("ws://127.0.0.1:8000/ws/notifications/")
+
+    socket.onopen = () => {
+      console.log("✅ WebSocket connected")
+    }
+
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data)
+
+      if (data.type === "new_message") {
+        setRecentConversations((prev) => {
+          const existing = prev.find((c) => c.id === data.chat_id)
+
+          if (existing) {
+            return [
+              {
+                ...existing,
+                last_message: data.message,
+                timestamp: data.timestamp,
+                unread: existing.unread + 1,
+              },
+              ...prev.filter((c) => c.id !== data.chat_id),
+            ]
+          } else {
+            return [
+              {
+                id: data.chat_id,
+                sender: data.sender_name,
+                last_message: data.message,
+                timestamp: data.timestamp,
+                unread: 1,
+              },
+              ...prev,
+            ].slice(0, 3) 
+          }
+        })
+      }
+    }
+
+    socket.onclose = () => {
+      console.log("❌ WebSocket disconnected")
+    }
+
+    return () => {
+      socket.close()
+    }
+  }, [])
 
   const stats = [
     { title: "Active Conversations", value: "12", icon: MessageCircle, color: "text-blue-600" },
@@ -65,7 +103,9 @@ export default function DashboardPage() {
         <div className="bg-white rounded-lg border border-slate-200 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-semibold text-slate-800">Welcome back, {user?.name || "User"}!</h1>
+              <h1 className="text-2xl font-semibold text-slate-800">
+                Welcome back, {user?.fullname || "User"}!
+              </h1>
               <p className="text-slate-600 mt-1">
                 Here's what's happening in your secure communication platform today.
               </p>
@@ -96,8 +136,8 @@ export default function DashboardPage() {
           ))}
         </div>
 
+        {/* Recent Conversations */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Recent Conversations */}
           <Card className="border-slate-200">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -121,7 +161,7 @@ export default function DashboardPage() {
                 >
                   <Avatar className="w-10 h-10">
                     <AvatarFallback className="bg-blue-100 text-blue-600">
-                      {conversation.name
+                      {conversation.sender
                         .split(" ")
                         .map((n) => n[0])
                         .join("")}
@@ -129,18 +169,20 @@ export default function DashboardPage() {
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-slate-800">{conversation.name}</p>
+                      <p className="text-sm font-medium text-slate-800">{conversation.sender}</p>
                       <div className="flex items-center space-x-2">
                         <span className="text-xs text-slate-500 flex items-center">
                           <Clock className="w-3 h-3 mr-1" />
-                          {conversation.time}
+                          {new Date(conversation.timestamp).toLocaleTimeString()}
                         </span>
                         {conversation.unread > 0 && (
-                          <Badge className="bg-blue-600 text-white text-xs px-2 py-1">{conversation.unread}</Badge>
+                          <Badge className="bg-blue-600 text-white text-xs px-2 py-1">
+                            {conversation.unread}
+                          </Badge>
                         )}
                       </div>
                     </div>
-                    <p className="text-sm text-slate-600 truncate">{conversation.lastMessage}</p>
+                    <p className="text-sm text-slate-600 truncate">{conversation.last_message}</p>
                   </div>
                 </div>
               ))}
@@ -181,7 +223,9 @@ export default function DashboardPage() {
           <Card className="border-slate-200 bg-blue-50">
             <CardHeader>
               <CardTitle className="text-lg text-blue-800">Admin Dashboard</CardTitle>
-              <CardDescription className="text-blue-600">Administrative tools and user management</CardDescription>
+              <CardDescription className="text-blue-600">
+                Administrative tools and user management
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -1,4 +1,6 @@
 from django.db import models
+from django.utils import timezone
+
 from accounts.models import CustomUser
 
 
@@ -23,7 +25,7 @@ class Message(models.Model):
     sender = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='sent_messages')
     recipient = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='received_messages')
     text = models.TextField()
-    timestamp = models.DateTimeField(auto_now_add=True)
+    timestamp = models.DateTimeField(default=timezone.now)
     is_updated = models.BooleanField(default=False)
     is_read = models.BooleanField(default=False)
     read_at = models.DateTimeField(auto_now_add=True, null=True)

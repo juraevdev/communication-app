@@ -2,7 +2,6 @@ import axios from "axios";
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Home, MessageCircle, FileText, LogOut, Shield, Users, UserPlus } from "lucide-react";
-
 import { Input } from "../ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -10,6 +9,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 interface UserInterface {
   fullname: string;
   username: string;
+  image: string;
 }
 
 export function Sidebar() {
@@ -17,20 +17,41 @@ export function Sidebar() {
   const [showModal, setShowModal] = useState(false);
   const [newAlias, setNewAlias] = useState("");
   const [newUsername, setNewUsername] = useState("");
+  const [isLoading, setIsLoading] = useState(true)
+
+  const [profileData, setProfileData] = useState({
+    fullname: "",
+    username: "",
+    image: "",
+  })
+
+  useEffect(() => {
+    fetchUserData()
+  }, [])
 
   const location = useLocation();
   const navigate = useNavigate();
 
-  useEffect(() => {
+  const fetchUserData = async () => {
     try {
-      const userData = localStorage.getItem("user");
-      if (userData && userData !== "undefined") {
-        setUser(JSON.parse(userData));
-      }
+      const token = localStorage.getItem("access_token")
+      const response = await axios.get("http://127.0.0.1:8000/api/v1/accounts/user", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      setUser(response.data)
+      setProfileData({
+        fullname: response.data.fullname,
+        username: response.data.username,
+        image: response.data.profile?.image || "",
+      })
     } catch (error) {
-      console.error("Failed to parse user data:", error);
+      console.error("Failed to fetch user data:", error)
+      alert("Failed to load user data")
+    } finally {
+      setIsLoading(false)
     }
-  }, []);
+  }
 
   const handleLogout = () => {
     localStorage.removeItem("user");
@@ -53,7 +74,7 @@ export function Sidebar() {
         return;
       }
 
-      const userId = userResponse.data[0].id; 
+      const userId = userResponse.data[0].id;
 
       await axios.post(
         "http://127.0.0.1:8000/api/v1/accounts/contact/",
@@ -95,10 +116,18 @@ export function Sidebar() {
 
       {user && (
         <div className="p-4 border-b border-slate-200 flex items-center space-x-3">
-          <Avatar className="w-10 h-10">
-            <AvatarFallback className="bg-blue-100 text-blue-600">
-              {user.username?.charAt(0).toUpperCase()}
-            </AvatarFallback>
+          <Avatar className="w-12 h-12">
+            {profileData.image ? (
+              <img
+                src={profileData.image}
+                alt={profileData.fullname}
+                className="w-full h-full object-cover rounded-full"
+              />
+            ) : (
+              <AvatarFallback className="bg-blue-100 text-blue-600">
+                {profileData.fullname.charAt(0)}
+              </AvatarFallback>
+            )}
           </Avatar>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-slate-800 truncate">{user.username}</p>
@@ -130,7 +159,7 @@ export function Sidebar() {
       </nav>
 
       <div className="p-4">
-        <Button 
+        <Button
           onClick={() => setShowModal(true)}
           className="w-full bg-blue-600 hover:bg-blue-700 text-white"
         >

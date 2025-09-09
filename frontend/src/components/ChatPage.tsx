@@ -54,12 +54,6 @@ interface StatusUpdate {
   timestamp: string;
 }
 
-interface UnreadCountUpdate {
-  type: "unread_count_update";
-  contact_id: number;
-  unread_count: number;
-}
-
 interface FileUploadState {
   file: File | null;
   preview: string | null;
@@ -123,7 +117,6 @@ export default function ChatPage() {
   }, []);
 
 
-  // Status WebSocket
   useEffect(() => {
     const token = localStorage.getItem("access_token");
     if (!token) return;
@@ -165,7 +158,6 @@ export default function ChatPage() {
     };
   }, [handleStatusUpdate]);
 
-  // Kontaktlarni olish
   useEffect(() => {
     const fetchContacts = async () => {
       try {
@@ -233,9 +225,9 @@ export default function ChatPage() {
             id: user.id,
             name: userName,
             image: imageUrl,
-            lastMessage: user.last_message || "",               // 🔹 qo‘shildi
-            timestamp: user.last_message_timestamp || "",       // 🔹 qo‘shildi
-            unread: user.unread_count || 0,                     // 🔹 endi serverdan keladigan qiymat olinadi
+            lastMessage: user.last_message || "",            
+            timestamp: user.last_message_timestamp || "",       
+            unread: user.unread_count || 0,                   
             isOnline: liveStatus ? liveStatus.isOnline : (user.is_online || false),
             lastSeen: liveStatus ? liveStatus.lastSeen : (user.last_seen || ""),
             isContact: false
@@ -273,21 +265,18 @@ export default function ChatPage() {
         if (data.type === "unread_count_update") {
           console.log("🔔 Unread update:", data);
 
-          // 🔹 Contacts ichida yangilash
           setContacts(prev =>
             prev.map(c =>
               c.id === data.contact_id ? { ...c, unread: data.unread_count } : c
             )
           );
 
-          // 🔹 AllUsers ichida yangilash
           setAllUsers(prev =>
             prev.map(u =>
               u.id === data.contact_id ? { ...u, unread: data.unread_count } : u
             )
           );
 
-          // 🔹 Agar ochilgan chat shu user bo‘lsa
           if (selectedContact && selectedContact.id === data.contact_id) {
             setSelectedContact(prev =>
               prev ? { ...prev, unread: data.unread_count } : prev
@@ -316,7 +305,6 @@ export default function ChatPage() {
     };
   }, [selectedContact]);
 
-  // Tanlangan kontakt statusini yangilash
   useEffect(() => {
     if (selectedContact) {
       const liveStatus = userStatuses.get(selectedContact.id);
@@ -330,12 +318,10 @@ export default function ChatPage() {
     }
   }, [userStatuses, selectedContact?.id]);
 
-  // Xabarlarga scroll qilish
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Chat WebSocket
   useEffect(() => {
     if (!roomId) return;
     const token = localStorage.getItem("access_token");
@@ -346,15 +332,13 @@ export default function ChatPage() {
       console.log("👤 Current user:", currentUser);
     };
 
+
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         console.log("📩 Message from server:", data);
 
-        // Unread count yangilanishi
-        // WebSocket onmessage ichidagi unread_count_update qismini o'zgartiring
         if (data.type === "unread_count_update") {
-          // Kontaktlar ro'yxatini yangilash
           setContacts(prev =>
             prev.map(contact =>
               contact.id === data.contact_id
@@ -363,7 +347,6 @@ export default function ChatPage() {
             )
           );
 
-          // AllUsers ro'yxatini ham yangilash (agar mavjud bo'lsa)
           setAllUsers(prev =>
             prev.map(user =>
               user.id === data.contact_id
@@ -372,7 +355,6 @@ export default function ChatPage() {
             )
           );
 
-          // Agar tanlangan kontakt bo'lsa, uni ham yangilash
           if (selectedContact && selectedContact.id === data.contact_id) {
             setSelectedContact(prev => {
               if (!prev) return prev;
@@ -409,6 +391,20 @@ export default function ChatPage() {
               },
             ];
           });
+        }
+
+        if (data.type === "message_updated") {
+          console.log("✏️ Message updated:", data);
+          setMessages(prev => prev.map(msg =>
+            msg.id === parseInt(data.message_id)
+              ? {
+                ...msg,
+                content: data.new_content,
+                isUpdated: true,
+              }
+              : msg
+          ));
+          return;
         }
 
         if (data.type === "file_uploaded") {
@@ -495,6 +491,17 @@ export default function ChatPage() {
           }
         }
 
+        // Message deleted
+        if (data.type === "message_deleted") {
+          setMessages(prev => prev.filter(msg => msg.id !== parseInt(data.message_id)));
+        }
+
+        // File deleted
+        if (data.type === "file_deleted") {
+          setMessages(prev => prev.filter(msg => msg.id !== parseInt(data.file_id)));
+        }
+
+        // Success response
         if (data.type === "success") {
           console.log("Server response:", data.message);
         }
@@ -621,6 +628,33 @@ export default function ChatPage() {
     });
   };
 
+  const handleEditMessage = (messageId: number, newContent: string) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        action: "edit_message",
+        message_id: messageId,
+        new_content: newContent
+      }));
+    }
+  };
+
+  // Xabarni o'chirish funksiyasi
+  const handleDeleteMessage = (messageId: number, isFile = false) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      if (isFile) {
+        ws.send(JSON.stringify({
+          action: "delete_file",
+          file_id: messageId,
+        }));
+      } else {
+        ws.send(JSON.stringify({
+          action: "delete_message",
+          message_id: messageId,
+        }));
+      }
+    }
+  };
+
   const handleFileUpload = async () => {
     if (!fileUpload.file || !ws) return;
 
@@ -663,19 +697,19 @@ export default function ChatPage() {
 
       ws.send(JSON.stringify(payload));
 
-      // Frontendda holatni yangilash
       setMessages(prev => prev.map(msg =>
         msg.id === messageId ? { ...msg, isRead: true } : msg
       ));
 
-      // Unread count ni yangilash
       if (selectedContact && selectedContact.unread > 0) {
-        setSelectedContact(prev => prev ? { ...prev, unread: prev.unread - 1 } : null);
+        const newUnreadCount = Math.max(0, selectedContact.unread - 1);
+
+        setSelectedContact(prev => prev ? { ...prev, unread: newUnreadCount } : null);
 
         setContacts(prev =>
           prev.map(c =>
             c.id === selectedContact.id
-              ? { ...c, unread: Math.max(0, c.unread - 1) }
+              ? { ...c, unread: newUnreadCount }
               : c
           )
         );
@@ -683,7 +717,7 @@ export default function ChatPage() {
         setAllUsers(prev =>
           prev.map(user =>
             user.id === selectedContact.id
-              ? { ...user, unread: Math.max(0, user.unread - 1) }
+              ? { ...user, unread: newUnreadCount }
               : user
           )
         );
@@ -789,6 +823,17 @@ export default function ChatPage() {
     }
     return <span className="text-xs text-gray-500">offline</span>;
   };
+
+  const renderMessageBubble = (msg: Message) => (
+    <MessageBubble
+      key={msg.id}
+      msg={msg}
+      onMarkAsRead={(messageId) => markMessageAsRead(messageId, msg.type === "file")}
+      onDownload={handleDownload}
+      onEditMessage={handleEditMessage}
+      onDeleteMessage={(messageId) => handleDeleteMessage(messageId, msg.type === "file")}
+    />
+  );
 
   return (
     <MainLayout>
@@ -900,14 +945,7 @@ export default function ChatPage() {
                         </span>
                       </div>
 
-                      {msgs.map(msg => (
-                        <MessageBubble
-                          key={msg.id}
-                          msg={msg}
-                          onMarkAsRead={markMessageAsRead}
-                          onDownload={handleDownload}
-                        />
-                      ))}
+                      {msgs.map(renderMessageBubble)}
                     </div>
                   ))}
                   <div ref={messagesEndRef} />

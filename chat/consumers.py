@@ -7,6 +7,7 @@ from django.core.files.base import ContentFile
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.core.cache import cache
+from django.db.models import Q
 
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db import database_sync_to_async
@@ -183,21 +184,32 @@ class P2PChatConsumer(BaseChatConsumer):
         if not action:
             await self.send_error('action is required', 'action_required')
             return
-        
+    
         if not self.user.is_authenticated:
             await self.send_error("Authentication required", 'auth_required')
             return
-        
-        action_handler = getattr(self, f'handle_{action}', None)
-        if action_handler:
-            await action_handler(content)
+    
+        if action == 'send':
+            await self.handle_send(content)
+        elif action == 'read':
+            await self.handle_read(content)
+        elif action == 'edit_message':
+            await self.handle_edit(content)
+        elif action == 'delete_message':
+            await self.handle_delete_message(content)
+        elif action == 'delete_file':
+            await self.handle_delete_file(content)
+        elif action == 'upload_file':
+            await self.handle_upload_file(content)
+        elif action == 'read_file':
+            await self.handle_read_file(content)
+        elif action == 'get_files':
+            await self.handle_get_files(content)
         else:
             await self.send_error(
-                "Invalid action. Choose from: send, read, delete, edit, upload_file, read_file, delete_file", 
+                "Invalid action. Choose from: send, read, delete_message, delete_file, edit_message, upload_file, read_file, get_files", 
                 'invalid_action'
             )
-        if action == 'get_files':
-            await self.handle_get_files(content)
 
     async def handle_send(self, content):
         message_text = content.get('message')
@@ -224,8 +236,9 @@ class P2PChatConsumer(BaseChatConsumer):
         )
 
         recipient = self.room.user2 if self.user == self.room.user1 else self.room.user1
-        unread_count = await self.get_unread_count(self.room.id, recipient.id)
-        await self.send_unread_count_update(recipient.id, unread_count)
+        unread_count = await self.get_unread_count_for_recipient(self.room.id, recipient.id)
+        await self.send_unread_count_update(self.user.id, unread_count)
+
 
     async def handle_read(self, content):
         message_id = content.get("message_id")
@@ -251,17 +264,17 @@ class P2PChatConsumer(BaseChatConsumer):
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
-                    "type": "read",
-                    "message_id": message_id,
-                    "file_id": file_id,
+                    "type": "read_update",
+                    "message_id": message_id if message_id else None,
+                    "file_id": file_id if file_id else None,
                     "user_id": self.user.id,
                     "success": success,
                 }
             )
         
             recipient = self.room.user2 if self.user == self.room.user1 else self.room.user1
-            unread_count = await self.get_unread_count(self.room.id, recipient.id)
-            await self.send_unread_count_update(recipient.id, unread_count)
+            unread_count = await self.get_unread_count_for_recipient(self.room.id, self.user.id)
+            await self.send_unread_count_update(self.user.id, unread_count)
         else:
             error_msg = f"Failed to mark {read_type} as read" if read_type else "Failed to mark as read"
             await self.send_error(error_msg, 'mark_error')
@@ -269,20 +282,29 @@ class P2PChatConsumer(BaseChatConsumer):
     async def read(self, event):
         await self.send_json({
             "type": "read",
-            "message_id": event["message_id"],
-            "file_id": event["file_id"],
+            "message_id": event.get("message_id"),
+            "file_id": event.get("file_id"),
             "success": event["success"],
         })
 
-    async def handle_delete(self, content):
-        message_id = content.get("message_id")
+    async def read_update(self, event):
+        await self.send_json({
+            "type": "read",
+            "message_id": event.get("message_id"),
+            "file_id": event.get("file_id"),
+            "user_id": event["user_id"],
+            "success": event["success"],
+        })
+
+    async def handle_delete_message(self, content):
+        message_id = content.get('message_id')
         if not message_id:
             await self.send_error("message_id required", 'id_required')
             return
         
         success = await self.delete_message(message_id)
         if success:
-            await self.send_success('Message deleted')
+            await self.send_success('Message deleted successfully')
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
@@ -292,28 +314,38 @@ class P2PChatConsumer(BaseChatConsumer):
                 }
             )
         else:
-            await self.send_error("You cannot delete this message", 'permission_error')
+            await self.send_error("You cannot delete this message or message not found", 'permission_error')
+
 
     async def handle_edit(self, content):
         message_id = content.get('message_id')
-        new_message = content.get('new_message')
-        
-        if not message_id or not new_message:
-            await self.send_error('message_id and new_message are required', 'params_required')
+        new_content = content.get('new_content')
+
+        if not message_id or not new_content:
+            await self.send_error('message_id and new_content are required', 'params_required')
             return
-        
-        message = await self.edit_message(message_id, new_message)
-        if message:
-            message_data = await self.get_message_data(message.id)
+
+        success = await self.edit_message(message_id, new_content)
+        if success:
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
-                    "type": "chat_message",
-                    **message_data
+                    "type": "chat_message_updated", 
+                    "message_id": message_id,
+                    "new_content": new_content,
+                    "is_updated": True
                 }
             )
+            await self.send_success('Message updated successfully')
         else:
-            await self.send_error('You cannot edit this message', 'permission_error')
+            await self.send_error('You cannot edit this message or message not found', 'permission_error')
+
+    async def chat_message_updated(self, event):
+        await self.send_json({
+            'type': 'message_updated',
+            'message_id': event['message_id'],
+            'new_content': event['new_content'],
+        })
 
     async def handle_upload_file(self, content):
         file_data = content.get('file_data')
@@ -326,7 +358,7 @@ class P2PChatConsumer(BaseChatConsumer):
     
         file_upload = await self.save_file(file_data, file_name, file_type)
         if file_upload:
-            file_info = await database_sync_to_async(self.get_file_data)(file_upload.id)
+            file_info = await self.get_file_data(file_upload.id)
         
             if file_info is None:
                 await self.send_error("Failed to get file information", 'data_error')
@@ -339,6 +371,9 @@ class P2PChatConsumer(BaseChatConsumer):
                     **file_info
                 }
             )
+            recipient = self.room.user2 if self.user == self.room.user1 else self.room.user1
+            unread_count = await self.get_unread_count_for_recipient(self.room.id, recipient.id)
+            await self.send_unread_count_update(recipient.id, unread_count)
         else:
             await self.send_error("Failed to upload file", 'upload_error')
 
@@ -359,12 +394,38 @@ class P2PChatConsumer(BaseChatConsumer):
         if not file_id:
             await self.send_error("file_id required", 'id_required')
             return
-    
+
         success = await self.delete_file(file_id)
         if success:
             await self.send_success('File deleted')
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    "type": "file_deleted",
+                    "file_id": file_id, 
+                    "user_id": self.user.id
+                }
+            )
         else:
-            await self.send_error("You cannot delete this file", 'permission_error')
+            await self.send_error("You cannot delete this file or file not found", 'permission_error')
+            
+    async def file_deleted(self, event):
+        await self.send_json({
+            'type': 'file_deleted',
+            'file_id': event['file_id'],  
+            'user_id': event['user_id']
+        })
+            
+    async def message_updated(self, event):
+        await self.send_json({
+            'type': 'message_updated',
+            'id': event['id'],
+            'message': event['message'],
+            'sender': event['sender'],
+            'is_updated': event['is_updated'],
+            'is_read': event['is_read'],
+            'timestamp': event['timestamp']
+        })
 
     async def chat_message(self, event):
         await self.send_json({
@@ -446,10 +507,6 @@ class P2PChatConsumer(BaseChatConsumer):
                 id=message_id, 
                 room=self.room
             )
-            unread_count = Message.objects.select_related('sender').filter(
-                room=self.room,
-                is_read=False
-            ).count()
             return {
                 'id': str(message.id),
                 "message": message.text,
@@ -461,8 +518,7 @@ class P2PChatConsumer(BaseChatConsumer):
                 },
                 'is_updated': message.is_updated,
                 'is_read': message.is_read,
-                'unread_count': unread_count,
-                'timestamp': str(message.timestamp),
+                'timestamp': str(message.timestamp),  
             }
         except (Message.DoesNotExist, ValidationError) as e:
             logger.error(f"Error getting message data: {e}")
@@ -505,13 +561,13 @@ class P2PChatConsumer(BaseChatConsumer):
             text_messages = Message.objects.filter(
                 room=self.room
             ).select_related('sender').order_by('-timestamp')[:limit]
-        
+    
             file_messages = FileUpload.objects.filter(
                 room=self.room
             ).select_related('user').order_by('-uploaded_at')[:limit]
-        
+    
             all_messages = []
-        
+    
             for msg in text_messages:
                 all_messages.append({
                     "type": "text",
@@ -527,14 +583,16 @@ class P2PChatConsumer(BaseChatConsumer):
                     "is_updated": msg.is_updated,
                     "timestamp": str(msg.timestamp),
                 })
-        
+    
             for file_msg in file_messages:
-                file_name = file_msg.original_filename if hasattr(file_msg, 'original_filename') and file_msg.original_filename else file_msg.file.name.split('/')[-1]
-            
+                file_name = (file_msg.original_filename 
+                            if hasattr(file_msg, 'original_filename') and file_msg.original_filename 
+                            else file_msg.file.name.split('/')[-1])
+        
                 all_messages.append({
                     "type": "file",
                     "id": str(file_msg.id),
-                    "message": file_name,  # Fayl nomi
+                    "message": file_name,
                     'sender': {
                         "id": str(file_msg.user.id),
                         "email": file_msg.user.email,
@@ -545,12 +603,12 @@ class P2PChatConsumer(BaseChatConsumer):
                     "is_updated": False,
                     "timestamp": str(file_msg.uploaded_at),
                     "file_name": file_name,
-                    "file_url": file_msg.file_url if hasattr(file_msg, 'file_url') else None,
+                    "file_url": getattr(file_msg, 'file_url', None),
                     "file_type": self.get_file_type(file_name),
                 })
-        
+    
             all_messages.sort(key=lambda x: x['timestamp'], reverse=True)
-        
+    
             return all_messages[:limit]
         except Exception as e:
             logger.error(f"Error getting last messages: {e}")
@@ -589,23 +647,32 @@ class P2PChatConsumer(BaseChatConsumer):
             logger.error(f"Error deleting message: {e}")
             return False
 
+    # consumer.py faylida edit_message metodini o'zgartiring:
+
     @database_sync_to_async
-    def edit_message(self, message_id, new_message):
+    def edit_message(self, message_id, new_content):
         try:
             message = Message.objects.get(
                 id=message_id, 
                 room=self.room, 
                 sender=self.user
             )
-            message.text = new_message.strip()
+    
+            if message.text == new_content.strip():
+                return True  
+        
+            message.text = new_content.strip()
             message.is_updated = True
             message.save(update_fields=["text", "is_updated"])
-            return message
+    
+            logger.info(f"Message {message_id} updated by user {self.user.id} (timestamp unchanged)")
+            return True
         except Message.DoesNotExist:
-            return None
+            logger.error(f"Message not found for edit: {message_id}, user: {self.user.id}")
+            return False
         except Exception as e:
             logger.error(f"Error editing message: {e}")
-            return None
+            return False
 
     @database_sync_to_async
     def save_file(self, file_data, file_name, file_type=None):
@@ -639,7 +706,7 @@ class P2PChatConsumer(BaseChatConsumer):
             logger.error(f"File upload error: {e}")
             return None
 
-
+    @database_sync_to_async
     def get_file_data(self, file_upload_id):
         try:
             file_upload = FileUpload.objects.select_related('user').get(id=file_upload_id)
@@ -704,35 +771,63 @@ class P2PChatConsumer(BaseChatConsumer):
             except (ValueError, TypeError):
                 logger.error(f"Invalid file ID: {file_id}")
                 return False
-            
+        
             file_upload = FileUpload.objects.get(
                 id=file_id,
-                recipient=self.user
+                room=self.room,  # Room tekshiruvi qo'shildi
+                recipient=self.user  # Faqat recipient o'qiy oladi
             )
-            file_upload.is_read = True
-            file_upload.save(update_fields=["is_read"])
+        
+            if not file_upload.is_read:  # Faqat o'qilmagan bo'lsa yangilash
+                file_upload.is_read = True
+                file_upload.save(update_fields=["is_read"])
         
             logger.info(f"File {file_id} marked as read by user {self.user.id}")
             return True
         except FileUpload.DoesNotExist:
-            logger.error(f"File upload not found: {file_id}, user: {self.user.id}")
+            logger.error(f"File upload not found or access denied: {file_id}, user: {self.user.id}")
             return False
         except Exception as e:
             logger.error(f"Error marking file as read: {e}")
             return False
 
     @database_sync_to_async
+    def get_unread_count_for_recipient(self, room_id, recipient_id):
+        try:
+            message_count = Message.objects.filter(
+                room_id=room_id,
+                recipient_id=recipient_id,
+                is_read=False
+            ).count()
+        
+            file_count = FileUpload.objects.filter(
+                room_id=room_id,
+                recipient_id=recipient_id,
+                is_read=False
+            ).count()
+        
+            total_unread = message_count + file_count
+            logger.info(f"Unread count for user {recipient_id} in room {room_id}: {total_unread} (messages: {message_count}, files: {file_count})")
+            return total_unread
+        except Exception as e:
+            logger.error(f"Error calculating unread count: {e}")
+            return 0
+
+    @database_sync_to_async
     def delete_file(self, file_id):
         try:
-            file_upload = FileUpload.objects.get(id=file_id)
+            file_upload = FileUpload.objects.get(
+                id=file_id,
+                user=self.user, 
+                room=self.room
+            )
+            if file_upload.file:
+                file_upload.file.delete(save=False)
         
-            if file_upload.user == self.user:
-                file_upload.delete()
-                return True
-        
-            return False
-        
+            file_upload.delete()
+            return True
         except FileUpload.DoesNotExist:
+            logger.error(f"File upload not found: {file_id}, user: {self.user.id}")
             return False
         except Exception as e:
             logger.error(f"Error deleting file: {e}")
@@ -824,3 +919,364 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             "contact_id": event["contact_id"],
             "unread_count": event["unread_count"],
         })
+        
+        
+class FilesConsumer(AsyncJsonWebsocketConsumer):
+    async def connect(self):
+        self.user = self.scope["user"]
+        
+        if isinstance(self.user, AnonymousUser) or not self.user.is_authenticated:
+            await self.close(code=4001)
+            return
+
+        # Create a personal group for the user's files
+        self.user_group_name = f'files_{self.user.id}'
+        
+        await self.channel_layer.group_add(
+            self.user_group_name,
+            self.channel_name
+        )
+
+        await self.accept()
+        logger.info(f"User {self.user.id} connected to files WebSocket")
+
+    async def disconnect(self, close_code):
+        try:
+            await self.channel_layer.group_discard(
+                self.user_group_name,
+                self.channel_name
+            )
+            logger.info(f"User {self.user.id} disconnected from files WebSocket")
+        except Exception as e:
+            logger.error(f"Error disconnecting from files group: {e}")
+
+    async def receive_json(self, content, **kwargs):
+        action = content.get('action')
+
+        if not action:
+            await self.send_error('action is required', 'action_required')
+            return
+    
+        if not self.user.is_authenticated:
+            await self.send_error("Authentication required", 'auth_required')
+            return
+    
+        if action == 'get_files':
+            await self.handle_get_files(content)
+        elif action == 'upload_file':
+            await self.handle_upload_file(content)
+        elif action == 'delete_file':
+            await self.handle_delete_file(content)
+        elif action == 'file_downloaded':
+            await self.handle_file_downloaded(content)
+        else:
+            await self.send_error(
+                "Invalid action. Choose from: get_files, upload_file, delete_file, file_downloaded", 
+                'invalid_action'
+            )
+
+    async def send_error(self, error_message, error_code="error"):
+        await self.send_json({
+            "type": error_code,
+            "message": error_message
+        })
+    
+    async def send_success(self, success_message):
+        await self.send_json({
+            "type": "success",
+            "message": success_message
+        })
+
+    async def handle_get_files(self, content):
+        """Send all user files"""
+        files = await self.get_user_files()
+        await self.send_json({
+            "type": "file_list",
+            "files": files
+        })
+
+    async def handle_upload_file(self, content):
+        """Handle file upload via WebSocket"""
+        file_data = content.get('file_data')
+        file_name = content.get('file_name')
+        file_type = content.get('file_type')
+        room_id = content.get('room_id')
+    
+        if not file_data or not file_name:
+            await self.send_error("file_data and file_name are required", 'params_required')
+            return
+    
+        # Save the file
+        file_upload = await self.save_file(file_data, file_name, file_type, room_id)
+        if file_upload:
+            # Use the async method to get file data
+            file_info = await self.get_file_data(file_upload.id)
+        
+            if file_info is None:
+                await self.send_error("Failed to get file information", 'data_error')
+                return
+            
+            # Send success response to the user who uploaded
+            await self.send_json({
+                "type": "file_uploaded",
+                "file": file_info,
+                "message": "File uploaded successfully"
+            })
+            
+            # If file is associated with a room, notify room participants
+            if room_id:
+                await self.notify_room_participants(room_id, file_info)
+        else:
+            await self.send_error("Failed to upload file", 'upload_error')
+
+    async def handle_delete_file(self, content):
+        """Handle file deletion"""
+        file_id = content.get('file_id')
+        if not file_id:
+            await self.send_error("file_id required", 'id_required')
+            return
+
+        success = await self.delete_file(file_id)
+        if success:
+            await self.send_success('File deleted successfully')
+            await self.send_json({
+                "type": "file_deleted",
+                "file_id": file_id
+            })
+        else:
+            await self.send_error("You cannot delete this file or file not found", 'permission_error')
+
+    async def handle_file_downloaded(self, content):
+        """Handle file download notification"""
+        file_url = content.get('file_url')
+        if file_url:
+            success = await self.increment_download_count(file_url)
+            if success:
+                await self.send_success('Download recorded')
+            else:
+                await self.send_error('Failed to record download', 'download_error')
+
+    async def notify_room_participants(self, room_id, file_info):
+        """Notify all participants in a room about new file"""
+        try:
+            room = await self.get_room(room_id)
+            if room:
+                # Get all participants in the room
+                participants = [room.user1.id, room.user2.id]
+                
+                for participant_id in participants:
+                    if participant_id != self.user.id:  # Don't notify the uploader
+                        await self.channel_layer.group_send(
+                            f'files_{participant_id}',
+                            {
+                                "type": "file_uploaded_notification",
+                                "file": file_info,
+                                "uploaded_by": self.user.fullname,
+                                "room_id": room_id
+                            }
+                        )
+        except Exception as e:
+            logger.error(f"Error notifying room participants: {e}")
+
+    async def file_uploaded_notification(self, event):
+        """Send notification about new file uploaded to a room"""
+        await self.send_json({
+            "type": "room_file_uploaded",
+            "file": event["file"],
+            "uploaded_by": event["uploaded_by"],
+            "room_id": event["room_id"],
+            "message": "New file uploaded to room"
+        })
+
+    @database_sync_to_async
+    def get_user_files(self):
+        """Get all files accessible to the user"""
+        try:
+            # Files where user is the owner or files shared in rooms user participates in
+            user_rooms = Room.objects.filter(
+                Q(user1=self.user) | Q(user2=self.user)
+            )
+            
+            files = FileUpload.objects.filter(
+                Q(user=self.user) | Q(room__in=user_rooms)
+            ).select_related('user', 'room').order_by('-uploaded_at')
+            
+            return [
+                {
+                    'id': file.id,
+                    'name': file.original_filename if hasattr(file, 'original_filename') and file.original_filename else file.file.name.split('/')[-1],
+                    'type': self.get_file_type(file.file.name),
+                    'size': self.format_file_size(file.file.size),
+                    'uploadedBy': file.user.fullname,
+                    'uploadDate': file.uploaded_at.strftime("%Y-%m-%d %H:%M"),
+                    'downloadCount': file.download_count if hasattr(file, 'download_count') else 0,
+                    'isOwner': file.user.id == self.user.id,
+                    'fileUrl': file.file.url if file.file else None,
+                    'fileName': file.original_filename if hasattr(file, 'original_filename') and file.original_filename else file.file.name.split('/')[-1],
+                    'roomId': file.room.id if file.room else None
+                }
+                for file in files
+            ]
+        except Exception as e:
+            logger.error(f"Error getting user files: {e}")
+            return []
+
+    @database_sync_to_async
+    def save_file(self, file_data, file_name, file_type=None, room_id=None):
+        """Save uploaded file"""
+        try:
+            if ';base64,' not in file_data:
+                logger.error("Invalid file data format")
+                return None
+            
+            format, file_str = file_data.split(';base64,')
+            file_bytes = base64.b64decode(file_str)
+        
+            file_content = ContentFile(file_bytes, name=file_name)
+        
+            # Get room if provided
+            room = None
+            if room_id:
+                try:
+                    room = Room.objects.get(id=room_id)
+                    # Verify user is participant in the room
+                    if room.user1 != self.user and room.user2 != self.user:
+                        logger.error(f"User {self.user.id} is not participant in room {room_id}")
+                        return None
+                except Room.DoesNotExist:
+                    logger.error(f"Room not found: {room_id}")
+                    return None
+        
+            file_upload = FileUpload(
+                user=self.user,
+                file=file_content,
+                room=room
+            )
+        
+            if hasattr(FileUpload, 'original_filename'):
+                file_upload.original_filename = file_name
+            
+            file_upload.save()
+        
+            logger.info(f"File uploaded successfully: {file_upload.id}")
+            return file_upload
+        except Exception as e:
+            logger.error(f"File upload error: {e}")
+            return None
+
+    @database_sync_to_async
+    def get_file_data(self, file_upload_id):
+        """Get file data for response"""
+        try:
+            file_upload = FileUpload.objects.select_related('user', 'room').get(id=file_upload_id)
+    
+            file_name = (file_upload.original_filename 
+                        if hasattr(file_upload, 'original_filename') and file_upload.original_filename 
+                        else file_upload.file.name.split('/')[-1])
+    
+            return {
+                'id': file_upload.id,
+                'name': file_name,
+                'type': self.get_file_type(file_name),
+                'size': self.format_file_size(file_upload.file.size),
+                'uploadedBy': file_upload.user.fullname,
+                'uploadDate': file_upload.uploaded_at.strftime("%Y-%m-%d %H:%M"),
+                'downloadCount': file_upload.download_count if hasattr(file_upload, 'download_count') else 0,
+                'isOwner': file_upload.user.id == self.user.id,
+                'fileUrl': file_upload.file.url,
+                'fileName': file_name,
+                'roomId': file_upload.room.id if file_upload.room else None
+            }
+        except FileUpload.DoesNotExist:
+            logger.error(f"File upload not found: {file_upload_id}")
+            return None
+        except Exception as e:
+            logger.error(f"Error getting file data: {e}")
+            return None
+
+    @database_sync_to_async
+    def delete_file(self, file_id):
+        """Delete a file"""
+        try:
+            file_upload = FileUpload.objects.get(id=file_id)
+            
+            # Check permissions: user must be owner or admin
+            if file_upload.user != self.user and self.user.role != 'Admin':
+                return False
+            
+            if file_upload.file:
+                file_upload.file.delete(save=False)
+        
+            file_upload.delete()
+            return True
+        except FileUpload.DoesNotExist:
+            logger.error(f"File upload not found: {file_id}")
+            return False
+        except Exception as e:
+            logger.error(f"Error deleting file: {e}")
+            return False
+
+    @database_sync_to_async
+    def increment_download_count(self, file_url):
+        """Increment download count for a file"""
+        try:
+            # Extract filename from URL to find the file
+            filename = file_url.split('/')[-1]
+            file_upload = FileUpload.objects.get(file__contains=filename)
+            
+            if hasattr(file_upload, 'download_count'):
+                file_upload.download_count += 1
+                file_upload.save(update_fields=["download_count"])
+            
+            return True
+        except FileUpload.DoesNotExist:
+            logger.error(f"File not found for URL: {file_url}")
+            return False
+        except Exception as e:
+            logger.error(f"Error incrementing download count: {e}")
+            return False
+
+    @database_sync_to_async
+    def get_room(self, room_id):
+        """Get room by ID"""
+        try:
+            return Room.objects.get(id=room_id)
+        except Room.DoesNotExist:
+            return None
+
+    def get_file_type(self, file_name):
+        """Determine file type from filename"""
+        if not file_name:
+            return 'file'
+    
+        extension = file_name.split('.')[-1].lower() if '.' in file_name else ''
+    
+        if extension in ['jpg', 'jpeg', 'png', 'gif', 'webp']:
+            return 'image'
+        elif extension in ['mp4', 'avi', 'mov', 'wmv']:
+            return 'video'
+        elif extension in ['mp3', 'wav', 'ogg', 'flac']:
+            return 'audio'
+        elif extension == 'pdf':
+            return 'pdf'
+        elif extension in ['doc', 'docx']:
+            return 'document'
+        elif extension in ['xls', 'xlsx']:
+            return 'spreadsheet'
+        elif extension in ['zip', 'rar']:
+            return 'archive'
+        elif extension in ['txt']:
+            return 'text'
+        else:
+            return 'file'
+
+    def format_file_size(self, size_bytes):
+        """Format file size in human-readable format"""
+        if size_bytes == 0:
+            return "0B"
+        size_names = ["B", "KB", "MB", "GB"]
+        i = 0
+        while size_bytes >= 1024 and i < len(size_names)-1:
+            size_bytes /= 1024.0
+            i += 1
+        return f"{size_bytes:.1f}{size_names[i]}"

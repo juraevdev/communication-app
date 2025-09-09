@@ -33,7 +33,6 @@ export default function LoginPage() {
       localStorage.setItem("access_token", access);
       localStorage.setItem("refresh_token", refresh);
   
-      // ✅ User ma’lumotini olish
       const userResponse = await getCurrentUserInfo(access);
       localStorage.setItem("user", JSON.stringify(userResponse.data));
   
@@ -62,7 +61,6 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email input */}
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-medium text-slate-700">
                 Email Address
@@ -81,7 +79,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Password input */}
             <div className="space-y-2">
               <Label htmlFor="password" className="text-sm font-medium text-slate-700">
                 Password
@@ -100,7 +97,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Remember me */}
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="remember"
