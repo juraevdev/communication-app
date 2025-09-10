@@ -14,7 +14,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   useEffect(() => {
     const user = localStorage.getItem("user");
     if (!user) {
-      navigate("/login"); // ✅ Login sahifasiga yuborish
+      navigate("/login"); 
     } else {
       setIsAuthenticated(true);
     }
@@ -33,7 +33,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   }
 
   if (!isAuthenticated) {
-    return null; // ✅ foydalanuvchi login qilmagan bo‘lsa hech narsa ko‘rsatmaydi
+    return null; 
   }
 
   return (

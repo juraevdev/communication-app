@@ -14,7 +14,6 @@ class Room(models.Model):
             models.UniqueConstraint(fields=['user1', 'user2'], name='unique_room_between_users')
         ]
 
-
     def __str__(self):
         return f'{self.user1} - {self.user2}'
 
@@ -38,7 +37,6 @@ class Message(models.Model):
         ]
         ordering = ['-timestamp']
 
-
     def __str__(self):
         return f'Message from {self.sender} to {self.recipient} at {self.timestamp}'
 
@@ -56,7 +54,6 @@ class Notification(models.Model):
             models.Index(fields=['created_at']),
         ]
         ordering = ['-created_at']
-
 
     def __str__(self):
         if self.message:

@@ -43,7 +43,7 @@ export default function DashboardPage() {
   const [recentConversations, setRecentConversations] = useState<Conversation[]>([])
   const [files, setFiles] = useState<FileItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [notificationSocket, setNotificationSocket] = useState<WebSocket | null>(null)
+  const [, setNotificationSocket] = useState<WebSocket | null>(null)
 
   const refreshAccessToken = async (): Promise<string | null> => {
     try {
@@ -64,10 +64,10 @@ export default function DashboardPage() {
 
       const data = await response.json();
 
-      if (data.access) {
-        localStorage.setItem("access_token", data.access);
+      if (data.access_token) {
+        localStorage.setItem("access_token", data.access_token);
         console.log("✅ Access token yangilandi");
-        return data.access;
+        return data.access_token;
       } else {
         console.log("❌ Refresh token ham tugagan");
         localStorage.clear();
@@ -96,7 +96,6 @@ export default function DashboardPage() {
     }
   }, [])
 
-  // Fayllar uchun alohida WebSocket connection
   useEffect(() => {
     let filesSocket: WebSocket | null = null;
     let reconnectTimeout: NodeJS.Timeout;
@@ -114,7 +113,6 @@ export default function DashboardPage() {
 
         filesSocket.onopen = () => {
           console.log("✅ Files WebSocket connected")
-          // Fayllarni so'rash
           filesSocket?.send(JSON.stringify({
             action: "get_files"
           }))

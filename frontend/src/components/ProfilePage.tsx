@@ -77,7 +77,7 @@ export default function ProfilePage() {
       const token = localStorage.getItem("access_token")
 
       await axios.patch(
-        `http://127.0.0.1:8000/api/v1/accounts/user/${user?.id}/`,
+        `http://127.0.0.1:8000/api/v1/accounts/user/`,
         {
           fullname: profileData.fullname,
           email: profileData.email,
@@ -88,7 +88,7 @@ export default function ProfilePage() {
 
       if (user?.profile) {
         await axios.patch(
-          `http://127.0.0.1:8000/api/v1/accounts/profile/${user.profile.id}/`,
+          `http://127.0.0.1:8000/api/v1/accounts/profile/`,
           {
             phone_number: profileData.phone_number,
           },
@@ -98,7 +98,6 @@ export default function ProfilePage() {
 
       setIsEditing(false)
       fetchUserData() 
-      alert("Profile updated successfully!")
     } catch (error) {
       console.error("Failed to update profile:", error)
       alert("Failed to update profile")
@@ -156,7 +155,7 @@ export default function ProfilePage() {
 
       if (user?.profile) {
         await axios.patch(
-          `http://127.0.0.1:8000/api/v1/accounts/profile/${user.profile.id}/`,
+          `http://127.0.0.1:8000/api/v1/accounts/profile/`,
           formData,
           {
             headers: {

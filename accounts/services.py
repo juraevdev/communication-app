@@ -1,4 +1,3 @@
-# chat/utils.py
 from chat.models import Room
 
 def get_or_create_room(user1, user2):

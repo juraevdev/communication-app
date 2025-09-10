@@ -1,6 +1,9 @@
 from channels.layers import get_channel_layer
+
 from asgiref.sync import async_to_sync
+
 from django.utils.timezone import now
+
 
 def send_notification(user, title, message):
     channel_layer = get_channel_layer()

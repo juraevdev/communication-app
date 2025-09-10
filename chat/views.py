@@ -1,4 +1,4 @@
-from django.http import FileResponse, HttpResponseForbidden
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
 
@@ -10,10 +10,9 @@ from rest_framework.decorators import api_view
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
-from chat.models import Message, Notification, FileUpload, Room
-from chat.serializers import MessageSerializer, NotificationSerializer, FileSerializer
+from chat.models import Message, FileUpload
+from chat.serializers import MessageSerializer, FileSerializer
 from chat.utils import send_notification
-
 
 from accounts.services import get_or_create_room
 from accounts.models import CustomUser, Contact
@@ -76,7 +75,8 @@ class FileUploadApiView(generics.GenericAPIView):
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     
-
+    
+    
 class StartChatApiView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 

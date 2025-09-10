@@ -10,6 +10,44 @@ class UserSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = '__all__'
+
+
+class UserProfileUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = ["id", "phone_number", "image"]
+
+
+class UserUpdateSerializer(serializers.ModelSerializer):
+    profile = UserProfileUpdateSerializer(required=False)
+
+    class Meta:
+        model = CustomUser
+        fields = ["username", "fullname", "email", "profile", "password"]
+
+    def update(self, instance, validated_data):
+        profile_data = validated_data.pop("profile", None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if profile_data:
+            profile = instance.profile.first()
+            if profile:
+                for attr, value in profile_data.items():
+                    setattr(profile, attr, value)
+                profile.save()
+            else:
+                UserProfile.objects.create(user=instance, **profile_data)
+
+        return instance
+
+
 class RegisterSerializer(serializers.Serializer):
     fullname = serializers.CharField()
     email = serializers.EmailField()
@@ -48,11 +86,6 @@ class LoginSerializer(serializers.Serializer):
         return data 
     
 
-class UserProfileSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserProfile
-        fields = '__all__'
-
 
 class ContactSerializer(serializers.ModelSerializer):
     class Meta:
@@ -89,41 +122,7 @@ class ContactSearchSerializer(serializers.ModelSerializer):
         ).count()
 
 
-
-
 class ContactListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contact
         fields = ['id', 'owner', 'contact_user', 'alias']
-
-
-class UserProfileUpdateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserProfile
-        fields = ["phone_number", "image"]
-
-
-class UserUpdateSerializer(serializers.ModelSerializer):
-    profile = UserProfileUpdateSerializer(required=False)
-
-    class Meta:
-        model = CustomUser
-        fields = ["username", "fullname", "email", "profile", "password"]
-
-    def update(self, instance, validated_data):
-        profile_data = validated_data.pop("profile", None)
-
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-
-        if profile_data:
-            profile = instance.profile.first()
-            if profile:
-                for attr, value in profile_data.items():
-                    setattr(profile, attr, value)
-                profile.save()
-            else:
-                UserProfile.objects.create(user=instance, **profile_data)
-
-        return instance

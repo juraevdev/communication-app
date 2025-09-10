@@ -1,4 +1,3 @@
-import json
 import base64
 import logging
 
@@ -40,6 +39,7 @@ def increment_connection(user_id):
     count = cache.get(key, 0) + 1
     cache.set(key, count, timeout=None)
     return count
+
 
 @database_sync_to_async
 def decrement_connection(user_id):
@@ -95,6 +95,7 @@ class StatusConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json(event)
 
 
+
 class BaseChatConsumer(AsyncJsonWebsocketConsumer):
     async def validate_user_and_room(self):
         if isinstance(self.user, AnonymousUser) or not self.user.is_authenticated:
@@ -130,6 +131,7 @@ class BaseChatConsumer(AsyncJsonWebsocketConsumer):
         })
 
 
+
 class P2PChatConsumer(BaseChatConsumer):
     async def connect(self):
         self.user = self.scope['user']
@@ -157,6 +159,7 @@ class P2PChatConsumer(BaseChatConsumer):
             "messages": last_messages
         })
 
+
     async def disconnect(self, close_code):
         try:
             await self.channel_layer.group_discard(
@@ -170,6 +173,7 @@ class P2PChatConsumer(BaseChatConsumer):
         except Exception as e:
             logger.error(f"Error leaving groups: {e}")
 
+
     async def user_status(self, event):
         await self.send_json({
             "type": "status_update",
@@ -177,6 +181,7 @@ class P2PChatConsumer(BaseChatConsumer):
             "status": event["status"],
             "timestamp": event.get("timestamp")
         })
+
 
     async def receive_json(self, content, **kwargs):
         action = content.get('action')
@@ -210,6 +215,7 @@ class P2PChatConsumer(BaseChatConsumer):
                 "Invalid action. Choose from: send, read, delete_message, delete_file, edit_message, upload_file, read_file, get_files", 
                 'invalid_action'
             )
+
 
     async def handle_send(self, content):
         message_text = content.get('message')
@@ -279,6 +285,7 @@ class P2PChatConsumer(BaseChatConsumer):
             error_msg = f"Failed to mark {read_type} as read" if read_type else "Failed to mark as read"
             await self.send_error(error_msg, 'mark_error')
 
+
     async def read(self, event):
         await self.send_json({
             "type": "read",
@@ -286,6 +293,7 @@ class P2PChatConsumer(BaseChatConsumer):
             "file_id": event.get("file_id"),
             "success": event["success"],
         })
+
 
     async def read_update(self, event):
         await self.send_json({
@@ -295,6 +303,7 @@ class P2PChatConsumer(BaseChatConsumer):
             "user_id": event["user_id"],
             "success": event["success"],
         })
+
 
     async def handle_delete_message(self, content):
         message_id = content.get('message_id')
@@ -340,12 +349,14 @@ class P2PChatConsumer(BaseChatConsumer):
         else:
             await self.send_error('You cannot edit this message or message not found', 'permission_error')
 
+
     async def chat_message_updated(self, event):
         await self.send_json({
             'type': 'message_updated',
             'message_id': event['message_id'],
             'new_content': event['new_content'],
         })
+
 
     async def handle_upload_file(self, content):
         file_data = content.get('file_data')
@@ -377,6 +388,7 @@ class P2PChatConsumer(BaseChatConsumer):
         else:
             await self.send_error("Failed to upload file", 'upload_error')
 
+
     async def handle_read_file(self, content):
         file_id = content.get('file_id')
         if not file_id:
@@ -388,6 +400,7 @@ class P2PChatConsumer(BaseChatConsumer):
             await self.send_success('File marked as read')
         else:
             await self.send_error('Failed to mark file as read', 'mark_error')
+
 
     async def handle_delete_file(self, content):
         file_id = content.get('file_id')
@@ -409,12 +422,14 @@ class P2PChatConsumer(BaseChatConsumer):
         else:
             await self.send_error("You cannot delete this file or file not found", 'permission_error')
             
+            
     async def file_deleted(self, event):
         await self.send_json({
             'type': 'file_deleted',
             'file_id': event['file_id'],  
             'user_id': event['user_id']
         })
+            
             
     async def message_updated(self, event):
         await self.send_json({
@@ -426,6 +441,7 @@ class P2PChatConsumer(BaseChatConsumer):
             'is_read': event['is_read'],
             'timestamp': event['timestamp']
         })
+
 
     async def chat_message(self, event):
         message_data = event["message"] 
@@ -443,12 +459,14 @@ class P2PChatConsumer(BaseChatConsumer):
             unread_count = await self.get_unread_count_for_recipient(room_id, recipient_id)
             await self.send_unread_count_update(recipient_id, unread_count)
 
+
     async def message_deleted(self, event):
         await self.send_json({
             'type': 'message_deleted',
             'message_id': event['message_id'],
             'user_id': event['user_id']
         })
+
 
     async def file_uploaded(self, event):
         await self.send_json({
@@ -460,12 +478,14 @@ class P2PChatConsumer(BaseChatConsumer):
             'uploaded_at': event['uploaded_at']
         })
 
+
     async def unread_count_update(self, event):
         await self.send_json({
             "type": "unread_count_update",
             "contact_id": event["contact_id"],
             "unread_count": event["unread_count"],
         })
+
 
     async def send_unread_count_update(self, user_id, unread_count):
         try:
@@ -485,6 +505,7 @@ class P2PChatConsumer(BaseChatConsumer):
         except Exception as e:
             logger.error(f"Error in send_unread_count_update: {e}")
 
+
     @database_sync_to_async
     def get_contact_id_for_user(self, user_id):
         try:
@@ -499,6 +520,7 @@ class P2PChatConsumer(BaseChatConsumer):
             logger.error(f"Error getting contact ID: {e}")
             return current_user_id
         
+        
     @database_sync_to_async
     def get_unread_count(self, room_id, recipient_id):
         return Message.objects.filter(
@@ -506,6 +528,7 @@ class P2PChatConsumer(BaseChatConsumer):
             recipient_id=recipient_id,
             is_read=False
         ).count()
+
 
     @database_sync_to_async
     def get_message_data(self, message_id):
@@ -531,6 +554,7 @@ class P2PChatConsumer(BaseChatConsumer):
             logger.error(f"Error getting message data: {e}")
             return None
 
+
     @database_sync_to_async
     def get_room(self):
         try:
@@ -539,6 +563,7 @@ class P2PChatConsumer(BaseChatConsumer):
             logger.error(f"Room not found: {e}")
             return None
 
+
     @database_sync_to_async
     def user_in_room(self):
         try:
@@ -546,6 +571,7 @@ class P2PChatConsumer(BaseChatConsumer):
         except Exception as e:
             logger.error(f"Error checking user in room: {e}")
             return False
+
 
     @database_sync_to_async
     def save_message(self, message_text):
@@ -561,6 +587,7 @@ class P2PChatConsumer(BaseChatConsumer):
         except Exception as e:
             logger.error(f"Error saving message: {e}")
             return None
+
 
     @database_sync_to_async
     def get_last_messages(self, limit=50):
@@ -621,6 +648,7 @@ class P2PChatConsumer(BaseChatConsumer):
             logger.error(f"Error getting last messages: {e}")
             return []
 
+
     @database_sync_to_async
     def mark_message_as_read(self, message_id):
         try:
@@ -638,6 +666,7 @@ class P2PChatConsumer(BaseChatConsumer):
             logger.error(f"Error marking message as read: {e}")
             return False
 
+
     @database_sync_to_async
     def delete_message(self, message_id):
         try:
@@ -654,7 +683,6 @@ class P2PChatConsumer(BaseChatConsumer):
             logger.error(f"Error deleting message: {e}")
             return False
 
-    # consumer.py faylida edit_message metodini o'zgartiring:
 
     @database_sync_to_async
     def edit_message(self, message_id, new_content):
@@ -680,6 +708,7 @@ class P2PChatConsumer(BaseChatConsumer):
         except Exception as e:
             logger.error(f"Error editing message: {e}")
             return False
+
 
     @database_sync_to_async
     def save_file(self, file_data, file_name, file_type=None):
@@ -713,6 +742,7 @@ class P2PChatConsumer(BaseChatConsumer):
             logger.error(f"File upload error: {e}")
             return None
 
+
     @database_sync_to_async
     def get_file_data(self, file_upload_id):
         try:
@@ -745,6 +775,7 @@ class P2PChatConsumer(BaseChatConsumer):
             logger.error(f"Error getting file data: {e}")
             return None
         
+        
     def get_file_type(self, file_name):
         if not file_name:
             return 'file'
@@ -769,6 +800,7 @@ class P2PChatConsumer(BaseChatConsumer):
             return 'text'
         else:
             return 'file'
+
 
     @database_sync_to_async
     def mark_file_as_read(self, file_id):
@@ -798,6 +830,7 @@ class P2PChatConsumer(BaseChatConsumer):
             logger.error(f"Error marking file as read: {e}")
             return False
 
+
     @database_sync_to_async
     def get_unread_count_for_recipient(self, room_id, recipient_id):
         try:
@@ -819,6 +852,7 @@ class P2PChatConsumer(BaseChatConsumer):
         except Exception as e:
             logger.error(f"Error calculating unread count: {e}")
             return 0
+
 
     @database_sync_to_async
     def delete_file(self, file_id):
@@ -848,6 +882,7 @@ class P2PChatConsumer(BaseChatConsumer):
             "files": files
         })
 
+
     @database_sync_to_async
     def get_room_files(self):
         try:
@@ -867,6 +902,7 @@ class P2PChatConsumer(BaseChatConsumer):
         except Exception as e:
             logger.error(f"Error getting room files: {e}")
             return []
+
 
     def format_file_size(self, size_bytes):
         if size_bytes == 0:
@@ -909,7 +945,7 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             except Exception as e:
                 logger.error(f"Error disconnecting from notifications: {e}")
 
-    # Bu metodlarni qo'shing:
+
     async def receive_json(self, content, **kwargs):
         action = content.get('action')
 
@@ -926,30 +962,30 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         else:
             await self.send_error("Invalid action", 'invalid_action')
 
+
     async def send_error(self, error_message, error_code="error"):
         await self.send_json({
             "type": error_code,
             "message": error_message
         })
 
+
     async def handle_get_recent_conversations(self):
-        """So'nggi 3ta suhbatni olish"""
         conversations = await self.get_recent_conversations()
         await self.send_json({
             "type": "recent_conversations",
             "conversations": conversations
         })
 
+
     @database_sync_to_async
     def get_recent_conversations(self):
-        """Foydalanuvchining so'nggi 3ta suhbatini olish"""
         try:
             from django.db.models import Q, Max
             from chat.models import Room, Message, FileUpload
             
             user = self.user
             
-            # Foydalanuvchi ishtirok etgan barcha roomlarni olish
             user_rooms = Room.objects.filter(
                 Q(user1=user) | Q(user2=user)
             ).select_related('user1', 'user2')
@@ -957,15 +993,11 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             conversations = []
             
             for room in user_rooms:
-                # Suhbatdagi boshqa foydalanuvchini topish
                 other_user = room.user2 if room.user1 == user else room.user1
                 
-                # So'nggi text xabarni topish
                 latest_text_message = Message.objects.filter(room=room).order_by('-timestamp').first()
-                # So'nggi file xabarni topish
                 latest_file_upload = FileUpload.objects.filter(room=room).order_by('-uploaded_at').first()
                 
-                # Qaysi biri yangi ekanligini aniqlash
                 latest_timestamp = None
                 last_message = "No messages yet"
                 message_type = "text"
@@ -994,18 +1026,15 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
                     last_message = file_name
                     message_type = "file"
                 
-                # Xabar yo'q bo'lsa, o'tkazib yuborish
                 if not latest_timestamp:
                     continue
                 
-                # O'qilmagan xabarlar sonini hisoblash
                 unread_messages = Message.objects.filter(
                     room=room,
                     recipient=user,
                     is_read=False
                 ).count()
                 
-                # O'qilmagan fayllar sonini hisoblash
                 unread_files = FileUpload.objects.filter(
                     room=room,
                     recipient=user,
@@ -1024,15 +1053,14 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
                     'unread': total_unread
                 })
             
-            # Vaqt bo'yicha tartiblash (eng yangi birinchi)
             conversations.sort(key=lambda x: x['timestamp'], reverse=True)
             
-            # Faqat 3tasini qaytarish
             return conversations[:3]
             
         except Exception as e:
             logger.error(f"Error getting recent conversations: {e}")
             return []
+
 
     async def notify(self, event):
         try:
@@ -1045,12 +1073,14 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         except Exception as e:
             logger.error(f"Error sending notification: {e}")
             
+            
     async def unread_count_update(self, event):
         await self.send_json({
             "type": "unread_count_update",
             "contact_id": event["contact_id"],
             "unread_count": event["unread_count"],
         })
+        
         
         
 class FilesConsumer(AsyncJsonWebsocketConsumer):
@@ -1061,7 +1091,6 @@ class FilesConsumer(AsyncJsonWebsocketConsumer):
             await self.close(code=4001)
             return
 
-        # Create a personal group for the user's files
         self.user_group_name = f'files_{self.user.id}'
         
         await self.channel_layer.group_add(
@@ -1072,6 +1101,7 @@ class FilesConsumer(AsyncJsonWebsocketConsumer):
         await self.accept()
         logger.info(f"User {self.user.id} connected to files WebSocket")
 
+
     async def disconnect(self, close_code):
         try:
             await self.channel_layer.group_discard(
@@ -1081,6 +1111,7 @@ class FilesConsumer(AsyncJsonWebsocketConsumer):
             logger.info(f"User {self.user.id} disconnected from files WebSocket")
         except Exception as e:
             logger.error(f"Error disconnecting from files group: {e}")
+
 
     async def receive_json(self, content, **kwargs):
         action = content.get('action')
@@ -1107,11 +1138,13 @@ class FilesConsumer(AsyncJsonWebsocketConsumer):
                 'invalid_action'
             )
 
+
     async def send_error(self, error_message, error_code="error"):
         await self.send_json({
             "type": error_code,
             "message": error_message
         })
+    
     
     async def send_success(self, success_message):
         await self.send_json({
@@ -1119,16 +1152,16 @@ class FilesConsumer(AsyncJsonWebsocketConsumer):
             "message": success_message
         })
 
+
     async def handle_get_files(self, content):
-        """Send all user files"""
         files = await self.get_user_files()
         await self.send_json({
             "type": "file_list",
             "files": files
         })
 
+
     async def handle_upload_file(self, content):
-        """Handle file upload via WebSocket"""
         file_data = content.get('file_data')
         file_name = content.get('file_name')
         file_type = content.get('file_type')
@@ -1138,31 +1171,27 @@ class FilesConsumer(AsyncJsonWebsocketConsumer):
             await self.send_error("file_data and file_name are required", 'params_required')
             return
     
-        # Save the file
         file_upload = await self.save_file(file_data, file_name, file_type, room_id)
         if file_upload:
-            # Use the async method to get file data
             file_info = await self.get_file_data(file_upload.id)
         
             if file_info is None:
                 await self.send_error("Failed to get file information", 'data_error')
                 return
             
-            # Send success response to the user who uploaded
             await self.send_json({
                 "type": "file_uploaded",
                 "file": file_info,
                 "message": "File uploaded successfully"
             })
             
-            # If file is associated with a room, notify room participants
             if room_id:
                 await self.notify_room_participants(room_id, file_info)
         else:
             await self.send_error("Failed to upload file", 'upload_error')
 
+
     async def handle_delete_file(self, content):
-        """Handle file deletion"""
         file_id = content.get('file_id')
         if not file_id:
             await self.send_error("file_id required", 'id_required')
@@ -1178,8 +1207,8 @@ class FilesConsumer(AsyncJsonWebsocketConsumer):
         else:
             await self.send_error("You cannot delete this file or file not found", 'permission_error')
 
+
     async def handle_file_downloaded(self, content):
-        """Handle file download notification"""
         file_url = content.get('file_url')
         if file_url:
             success = await self.increment_download_count(file_url)
@@ -1188,16 +1217,15 @@ class FilesConsumer(AsyncJsonWebsocketConsumer):
             else:
                 await self.send_error('Failed to record download', 'download_error')
 
+
     async def notify_room_participants(self, room_id, file_info):
-        """Notify all participants in a room about new file"""
         try:
             room = await self.get_room(room_id)
             if room:
-                # Get all participants in the room
                 participants = [room.user1.id, room.user2.id]
                 
                 for participant_id in participants:
-                    if participant_id != self.user.id:  # Don't notify the uploader
+                    if participant_id != self.user.id:  
                         await self.channel_layer.group_send(
                             f'files_{participant_id}',
                             {
@@ -1210,8 +1238,8 @@ class FilesConsumer(AsyncJsonWebsocketConsumer):
         except Exception as e:
             logger.error(f"Error notifying room participants: {e}")
 
+
     async def file_uploaded_notification(self, event):
-        """Send notification about new file uploaded to a room"""
         await self.send_json({
             "type": "room_file_uploaded",
             "file": event["file"],
@@ -1220,11 +1248,10 @@ class FilesConsumer(AsyncJsonWebsocketConsumer):
             "message": "New file uploaded to room"
         })
 
+
     @database_sync_to_async
     def get_user_files(self):
-        """Get all files accessible to the user"""
         try:
-            # Files where user is the owner or files shared in rooms user participates in
             user_rooms = Room.objects.filter(
                 Q(user1=self.user) | Q(user2=self.user)
             )
@@ -1253,9 +1280,9 @@ class FilesConsumer(AsyncJsonWebsocketConsumer):
             logger.error(f"Error getting user files: {e}")
             return []
 
+
     @database_sync_to_async
     def save_file(self, file_data, file_name, file_type=None, room_id=None):
-        """Save uploaded file"""
         try:
             if ';base64,' not in file_data:
                 logger.error("Invalid file data format")
@@ -1266,12 +1293,10 @@ class FilesConsumer(AsyncJsonWebsocketConsumer):
         
             file_content = ContentFile(file_bytes, name=file_name)
         
-            # Get room if provided
             room = None
             if room_id:
                 try:
                     room = Room.objects.get(id=room_id)
-                    # Verify user is participant in the room
                     if room.user1 != self.user and room.user2 != self.user:
                         logger.error(f"User {self.user.id} is not participant in room {room_id}")
                         return None
@@ -1296,9 +1321,9 @@ class FilesConsumer(AsyncJsonWebsocketConsumer):
             logger.error(f"File upload error: {e}")
             return None
 
+
     @database_sync_to_async
     def get_file_data(self, file_upload_id):
-        """Get file data for response"""
         try:
             file_upload = FileUpload.objects.select_related('user', 'room').get(id=file_upload_id)
     
@@ -1326,13 +1351,12 @@ class FilesConsumer(AsyncJsonWebsocketConsumer):
             logger.error(f"Error getting file data: {e}")
             return None
 
+
     @database_sync_to_async
     def delete_file(self, file_id):
-        """Delete a file"""
         try:
             file_upload = FileUpload.objects.get(id=file_id)
             
-            # Check permissions: user must be owner or admin
             if file_upload.user != self.user and self.user.role != 'Admin':
                 return False
             
@@ -1348,11 +1372,10 @@ class FilesConsumer(AsyncJsonWebsocketConsumer):
             logger.error(f"Error deleting file: {e}")
             return False
 
+
     @database_sync_to_async
     def increment_download_count(self, file_url):
-        """Increment download count for a file"""
         try:
-            # Extract filename from URL to find the file
             filename = file_url.split('/')[-1]
             file_upload = FileUpload.objects.get(file__contains=filename)
             
@@ -1368,16 +1391,16 @@ class FilesConsumer(AsyncJsonWebsocketConsumer):
             logger.error(f"Error incrementing download count: {e}")
             return False
 
+
     @database_sync_to_async
     def get_room(self, room_id):
-        """Get room by ID"""
         try:
             return Room.objects.get(id=room_id)
         except Room.DoesNotExist:
             return None
 
+
     def get_file_type(self, file_name):
-        """Determine file type from filename"""
         if not file_name:
             return 'file'
     
@@ -1402,8 +1425,8 @@ class FilesConsumer(AsyncJsonWebsocketConsumer):
         else:
             return 'file'
 
+
     def format_file_size(self, size_bytes):
-        """Format file size in human-readable format"""
         if size_bytes == 0:
             return "0B"
         size_names = ["B", "KB", "MB", "GB"]

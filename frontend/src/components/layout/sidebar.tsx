@@ -17,7 +17,7 @@ export function Sidebar() {
   const [showModal, setShowModal] = useState(false);
   const [newAlias, setNewAlias] = useState("");
   const [newUsername, setNewUsername] = useState("");
-  const [isLoading, setIsLoading] = useState(true)
+  const [, setIsLoading] = useState(true)
 
   const [profileData, setProfileData] = useState({
     fullname: "",

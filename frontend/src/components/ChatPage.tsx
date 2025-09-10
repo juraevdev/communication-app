@@ -491,17 +491,14 @@ export default function ChatPage() {
           }
         }
 
-        // Message deleted
         if (data.type === "message_deleted") {
           setMessages(prev => prev.filter(msg => msg.id !== parseInt(data.message_id)));
         }
 
-        // File deleted
         if (data.type === "file_deleted") {
           setMessages(prev => prev.filter(msg => msg.id !== parseInt(data.file_id)));
         }
 
-        // Success response
         if (data.type === "success") {
           console.log("Server response:", data.message);
         }
@@ -513,7 +510,7 @@ export default function ChatPage() {
     socket.onclose = () => console.log("❌ Disconnected from room:", roomId);
     setWs(socket);
     return () => socket.close();
-  }, [roomId, currentUser, selectedContact]); // ✅ selectedContact dependency qo'shildi
+  }, [roomId, currentUser, selectedContact]); 
 
   const startChat = async (contact: Contact) => {
     setSelectedContact(contact);
@@ -638,7 +635,6 @@ export default function ChatPage() {
     }
   };
 
-  // Xabarni o'chirish funksiyasi
   const handleDeleteMessage = (messageId: number, isFile = false) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
       if (isFile) {
@@ -952,7 +948,6 @@ export default function ChatPage() {
                 </div>
               </div>
 
-              {/* File preview section */}
               {fileUpload.file && (
                 <div className="bg-white border-t border-slate-200 p-4">
                   <div className="flex items-center space-x-3 bg-slate-50 rounded-lg p-3">
