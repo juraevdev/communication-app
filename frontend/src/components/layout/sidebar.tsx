@@ -5,6 +5,7 @@ import { Home, MessageCircle, FileText, LogOut, Shield, Users, UserPlus } from "
 import { Input } from "../ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { fetchWithAuth } from "@/utils/auth";
 
 interface UserInterface {
   fullname: string;
@@ -34,24 +35,20 @@ export function Sidebar() {
 
   const fetchUserData = async () => {
     try {
-      const token = localStorage.getItem("access_token")
-      const response = await axios.get("http://127.0.0.1:8000/api/v1/accounts/user", {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-
-      setUser(response.data)
+      const response = await fetchWithAuth("http://127.0.0.1:8000/api/v1/accounts/user");
+      setUser(response.data);
       setProfileData({
         fullname: response.data.fullname,
         username: response.data.username,
         image: response.data.profile?.image || "",
-      })
+      });
     } catch (error) {
-      console.error("Failed to fetch user data:", error)
-      alert("Failed to load user data")
+      console.error("Failed to fetch user data:", error);
+      alert("Failed to load user data");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("user");

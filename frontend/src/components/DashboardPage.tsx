@@ -69,10 +69,10 @@ export default function DashboardPage() {
 
       const data = await response.json();
 
-      if (data.access_token) {
-        localStorage.setItem("access_token", data.access_token);
+      if (data.access) {
+        localStorage.setItem("access_token", data.access);
         console.log("✅ Access token yangilandi");
-        return data.access_token;
+        return data.access;
       } else {
         console.log("❌ Refresh token ham tugagan");
         localStorage.clear();
