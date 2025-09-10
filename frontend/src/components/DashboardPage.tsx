@@ -17,15 +17,70 @@ interface User {
 interface Conversation {
   id: number
   sender: string
+  sender_id: number
   last_message: string
   timestamp: string
   unread: number
+  message_type?: string
+}
+
+interface FileItem {
+  id: number
+  name: string
+  type: string
+  size: string
+  uploadedBy: string
+  uploadDate: string
+  downloadCount: number
+  isOwner: boolean
+  roomId?: number
+  fileUrl: string
+  fileName: string
 }
 
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null)
   const [recentConversations, setRecentConversations] = useState<Conversation[]>([])
+  const [files, setFiles] = useState<FileItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [notificationSocket, setNotificationSocket] = useState<WebSocket | null>(null)
 
+  const refreshAccessToken = async (): Promise<string | null> => {
+    try {
+      const refresh = localStorage.getItem("refresh_token");
+
+      if (!refresh) {
+        console.log("❌ Refresh token topilmadi");
+        localStorage.clear();
+        window.location.href = "/login";
+        return null;
+      }
+
+      const response = await fetch("http://127.0.0.1:8000/api/token/refresh/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh }),
+      });
+
+      const data = await response.json();
+
+      if (data.access) {
+        localStorage.setItem("access_token", data.access);
+        console.log("✅ Access token yangilandi");
+        return data.access;
+      } else {
+        console.log("❌ Refresh token ham tugagan");
+        localStorage.clear();
+        window.location.href = "/login";
+        return null;
+      }
+    } catch (error) {
+      console.error("Refresh error:", error);
+      localStorage.clear();
+      window.location.href = "/login";
+      return null;
+    }
+  };
 
   useEffect(() => {
     try {
@@ -41,65 +96,206 @@ export default function DashboardPage() {
     }
   }, [])
 
+  // Fayllar uchun alohida WebSocket connection
   useEffect(() => {
-    const socket = new WebSocket("ws://127.0.0.1:8000/ws/notifications/")
+    let filesSocket: WebSocket | null = null;
+    let reconnectTimeout: NodeJS.Timeout;
 
-    socket.onopen = () => {
-      console.log("✅ WebSocket connected")
-    }
+    const connectToFiles = async () => {
+      let token = localStorage.getItem("access_token");
 
-    socket.onmessage = (event) => {
-      const data = JSON.parse(event.data)
+      if (!token) {
+        token = await refreshAccessToken();
+        if (!token) return;
+      }
 
-      if (data.type === "new_message") {
-        setRecentConversations((prev) => {
-          const existing = prev.find((c) => c.id === data.chat_id)
+      try {
+        filesSocket = new WebSocket(`ws://127.0.0.1:8000/ws/files/?token=${token}`)
 
-          if (existing) {
-            return [
-              {
-                ...existing,
-                last_message: data.message,
-                timestamp: data.timestamp,
-                unread: existing.unread + 1,
-              },
-              ...prev.filter((c) => c.id !== data.chat_id),
-            ]
-          } else {
-            return [
-              {
-                id: data.chat_id,
-                sender: data.sender_name,
-                last_message: data.message,
-                timestamp: data.timestamp,
-                unread: 1,
-              },
-              ...prev,
-            ].slice(0, 3) 
+        filesSocket.onopen = () => {
+          console.log("✅ Files WebSocket connected")
+          // Fayllarni so'rash
+          filesSocket?.send(JSON.stringify({
+            action: "get_files"
+          }))
+        }
+
+        filesSocket.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data)
+
+            if (data.type === "file_list") {
+              setFiles(data.files || [])
+            }
+          } catch (error) {
+            console.error("Files WebSocket message parsing error:", error)
           }
-        })
+        }
+
+        filesSocket.onclose = (event) => {
+          console.log("❌ Files WebSocket disconnected", event.code, event.reason)
+
+          if (event.code !== 1000) {
+            reconnectTimeout = setTimeout(() => {
+              if (document.visibilityState === 'visible') {
+                console.log("🔄 Reconnecting Files WebSocket...")
+                connectToFiles()
+              }
+            }, 5000)
+          }
+        }
+
+        filesSocket.onerror = (error) => {
+          console.error("Files WebSocket error:", error)
+        }
+
+      } catch (error) {
+        console.error("Files WebSocket connection error:", error)
       }
     }
 
-    socket.onclose = () => {
-      console.log("❌ WebSocket disconnected")
-    }
+    connectToFiles()
 
     return () => {
-      socket.close()
+      if (reconnectTimeout) clearTimeout(reconnectTimeout)
+      if (filesSocket) filesSocket.close()
+    }
+  }, [])
+
+  useEffect(() => {
+    let socket: WebSocket | null = null;
+    let reconnectTimeout: NodeJS.Timeout;
+
+    const connectToNotifications = async () => {
+      let token = localStorage.getItem("access_token");
+
+      if (!token) {
+        token = await refreshAccessToken();
+        if (!token) return;
+      }
+
+      try {
+        socket = new WebSocket(`ws://127.0.0.1:8000/ws/notifications/?token=${token}`)
+
+        socket.onopen = () => {
+          console.log("✅ Notification WebSocket connected")
+          setLoading(false)
+
+          socket?.send(JSON.stringify({
+            action: "get_recent_conversations"
+          }))
+        }
+
+        socket.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data)
+
+            if (data.type === "recent_conversations") {
+              setRecentConversations(data.conversations || [])
+            }
+
+            if (data.type === "new_message") {
+              setRecentConversations((prev) => {
+                const existing = prev.find((c) => c.id === data.chat_id)
+
+                if (existing) {
+                  return [
+                    {
+                      ...existing,
+                      last_message: data.message,
+                      timestamp: data.timestamp,
+                      unread: existing.unread + 1,
+                    },
+                    ...prev.filter((c) => c.id !== data.chat_id),
+                  ]
+                } else {
+                  return [
+                    {
+                      id: data.chat_id,
+                      sender: data.sender_name,
+                      sender_id: data.sender_id,
+                      last_message: data.message,
+                      timestamp: data.timestamp,
+                      unread: 1,
+                      message_type: "text"
+                    },
+                    ...prev,
+                  ].slice(0, 3)
+                }
+              })
+            }
+
+            if (data.type === "unread_count_update") {
+              setRecentConversations((prev) =>
+                prev.map((conv) =>
+                  conv.sender_id === data.contact_id
+                    ? { ...conv, unread: data.unread_count }
+                    : conv
+                )
+              )
+            }
+          } catch (error) {
+            console.error("WebSocket message parsing error:", error)
+          }
+        }
+
+        socket.onclose = (event) => {
+          console.log("❌ Notification WebSocket disconnected", event.code, event.reason)
+
+          if (event.code !== 1000) {
+            reconnectTimeout = setTimeout(() => {
+              if (document.visibilityState === 'visible') {
+                console.log("🔄 Reconnecting WebSocket...")
+                connectToNotifications()
+              }
+            }, 5000)
+          }
+        }
+
+        socket.onerror = (error) => {
+          console.error("WebSocket error:", error)
+          setLoading(false)
+        }
+
+        setNotificationSocket(socket)
+      } catch (error) {
+        console.error("WebSocket connection error:", error)
+        setLoading(false)
+      }
+    }
+
+    connectToNotifications()
+
+    return () => {
+      if (reconnectTimeout) clearTimeout(reconnectTimeout)
+      if (socket) socket.close()
     }
   }, [])
 
   const stats = [
-    { title: "Active Conversations", value: "12", icon: MessageCircle, color: "text-blue-600" },
-    { title: "Team Members", value: "48", icon: Users, color: "text-green-600" },
-    { title: "Shared Files", value: "156", icon: FileText, color: "text-purple-600" },
+    { title: "Active Conversations", value: recentConversations.length.toString(), icon: MessageCircle, color: "text-blue-600" },
+    { title: "Unread Messages", value: recentConversations.reduce((sum, conv) => sum + conv.unread, 0).toString(), icon: Users, color: "text-green-600" },
+    { title: "Total Files", value: files.length.toString(), icon: FileText, color: "text-purple-600" },
   ]
+
+  const formatTimestamp = (timestamp: string) => {
+    try {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+
+      if (diffInMinutes < 1) return "Now";
+      if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+      if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+      return date.toLocaleDateString();
+    } catch {
+      return "Recently";
+    }
+  };
 
   return (
     <MainLayout>
       <div className="p-6 space-y-6">
-        {/* Welcome Header */}
         <div className="bg-white rounded-lg border border-slate-200 p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -119,7 +315,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {stats.map((stat, index) => (
             <Card key={index} className="border-slate-200">
@@ -136,7 +331,6 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* Recent Conversations */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="border-slate-200">
             <CardHeader>
@@ -154,42 +348,62 @@ export default function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {recentConversations.map((conversation) => (
-                <div
-                  key={conversation.id}
-                  className="flex items-center space-x-3 p-3 rounded-lg hover:bg-slate-50 cursor-pointer"
-                >
-                  <Avatar className="w-10 h-10">
-                    <AvatarFallback className="bg-blue-100 text-blue-600">
-                      {conversation.sender
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-slate-800">{conversation.sender}</p>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-xs text-slate-500 flex items-center">
-                          <Clock className="w-3 h-3 mr-1" />
-                          {new Date(conversation.timestamp).toLocaleTimeString()}
-                        </span>
-                        {conversation.unread > 0 && (
-                          <Badge className="bg-blue-600 text-white text-xs px-2 py-1">
-                            {conversation.unread}
-                          </Badge>
-                        )}
+              {loading ? (
+                <div className="text-center py-8 text-slate-500">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-3"></div>
+                  Loading conversations...
+                </div>
+              ) : recentConversations.length > 0 ? (
+                recentConversations.map((conversation) => (
+                  <Link
+                    key={conversation.id}
+                    to={`/chat/`}
+                    className="block"
+                  >
+                    <div className="flex items-center space-x-3 p-3 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
+                      <Avatar className="w-10 h-10">
+                        <AvatarFallback className="bg-blue-100 text-blue-600">
+                          {conversation.sender
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")
+                            .toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium text-slate-800">
+                            {conversation.sender}
+                          </p>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xs text-slate-500 flex items-center">
+                              <Clock className="w-3 h-3 mr-1" />
+                              {formatTimestamp(conversation.timestamp)}
+                            </span>
+                            {conversation.unread > 0 && (
+                              <Badge className="bg-blue-600 text-white text-xs px-2 py-1">
+                                {conversation.unread}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-sm text-slate-600 truncate">
+                          {conversation.message_type === "file" ? "📎 " : ""}{conversation.last_message}
+                        </p>
                       </div>
                     </div>
-                    <p className="text-sm text-slate-600 truncate">{conversation.last_message}</p>
-                  </div>
+                  </Link>
+                ))
+              ) : (
+                <div className="text-center py-8 text-slate-500">
+                  <MessageCircle className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+                  <p className="text-sm">No recent conversations</p>
+                  <p className="text-xs mt-1">Start a new chat to see conversations here</p>
                 </div>
-              ))}
+              )}
             </CardContent>
           </Card>
 
-          {/* Quick Actions */}
           <Card className="border-slate-200">
             <CardHeader>
               <CardTitle className="text-lg">Quick Actions</CardTitle>
@@ -218,7 +432,6 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Admin Section */}
         {user?.role === "Admin" && (
           <Card className="border-slate-200 bg-blue-50">
             <CardHeader>

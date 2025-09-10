@@ -366,7 +366,7 @@ export default function ChatPage() {
           }
         }
 
-        if (data.type === "new_message") {
+        if (data.type === "chat_message") {
           setMessages((prev) => {
             const messageExists = prev.some(msg => msg.id === parseInt(data.id));
             if (messageExists) return prev;

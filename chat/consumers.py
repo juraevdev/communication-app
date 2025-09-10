@@ -231,13 +231,13 @@ class P2PChatConsumer(BaseChatConsumer):
             self.room_group_name,
             {
                 "type": "chat_message",
-                **message_data
+                "message": message_data  
             }
         )
 
         recipient = self.room.user2 if self.user == self.room.user1 else self.room.user1
         unread_count = await self.get_unread_count_for_recipient(self.room.id, recipient.id)
-        await self.send_unread_count_update(self.user.id, unread_count)
+        await self.send_unread_count_update(recipient.id, unread_count) 
 
 
     async def handle_read(self, content):
@@ -428,16 +428,20 @@ class P2PChatConsumer(BaseChatConsumer):
         })
 
     async def chat_message(self, event):
+        message_data = event["message"] 
+    
+        sender_id = message_data.get("sender_id")
+        recipient_id = message_data.get("recipient_id")
+        room_id = message_data.get("room_id")
+
         await self.send_json({
-            'type': 'new_message',
-            'id': event['id'],
-            "message": event['message'],
-            'sender': event['sender'],
-            'unread_count': event['unread_count'], 
-            'is_updated': event['is_updated'],
-            'is_read': event['is_read'],
-            'timestamp': event['timestamp']
+            "type": "chat_message",
+            **message_data,
         })
+
+        if self.user.id == recipient_id: 
+            unread_count = await self.get_unread_count_for_recipient(room_id, recipient_id)
+            await self.send_unread_count_update(recipient_id, unread_count)
 
     async def message_deleted(self, event):
         await self.send_json({
@@ -465,8 +469,11 @@ class P2PChatConsumer(BaseChatConsumer):
 
     async def send_unread_count_update(self, user_id, unread_count):
         try:
-            contact_id = await self.get_contact_id_for_user(user_id)
+            if user_id == self.user.id:
+                return
             
+            contact_id = await self.get_contact_id_for_user(user_id)
+        
             await self.channel_layer.group_send(
                 f"notifications_{user_id}",
                 {
@@ -474,7 +481,7 @@ class P2PChatConsumer(BaseChatConsumer):
                     "contact_id": contact_id,
                     "unread_count": unread_count,
                 }
-            )
+        )
         except Exception as e:
             logger.error(f"Error in send_unread_count_update: {e}")
 
@@ -774,11 +781,11 @@ class P2PChatConsumer(BaseChatConsumer):
         
             file_upload = FileUpload.objects.get(
                 id=file_id,
-                room=self.room,  # Room tekshiruvi qo'shildi
-                recipient=self.user  # Faqat recipient o'qiy oladi
+                room=self.room,  
+                recipient=self.user  
             )
         
-            if not file_upload.is_read:  # Faqat o'qilmagan bo'lsa yangilash
+            if not file_upload.is_read:  
                 file_upload.is_read = True
                 file_upload.save(update_fields=["is_read"])
         
@@ -901,6 +908,131 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
                 logger.info(f"User {self.user.id} disconnected from notifications")
             except Exception as e:
                 logger.error(f"Error disconnecting from notifications: {e}")
+
+    # Bu metodlarni qo'shing:
+    async def receive_json(self, content, **kwargs):
+        action = content.get('action')
+
+        if not action:
+            await self.send_error('action is required', 'action_required')
+            return
+    
+        if not self.user.is_authenticated:
+            await self.send_error("Authentication required", 'auth_required')
+            return
+    
+        if action == 'get_recent_conversations':
+            await self.handle_get_recent_conversations()
+        else:
+            await self.send_error("Invalid action", 'invalid_action')
+
+    async def send_error(self, error_message, error_code="error"):
+        await self.send_json({
+            "type": error_code,
+            "message": error_message
+        })
+
+    async def handle_get_recent_conversations(self):
+        """So'nggi 3ta suhbatni olish"""
+        conversations = await self.get_recent_conversations()
+        await self.send_json({
+            "type": "recent_conversations",
+            "conversations": conversations
+        })
+
+    @database_sync_to_async
+    def get_recent_conversations(self):
+        """Foydalanuvchining so'nggi 3ta suhbatini olish"""
+        try:
+            from django.db.models import Q, Max
+            from chat.models import Room, Message, FileUpload
+            
+            user = self.user
+            
+            # Foydalanuvchi ishtirok etgan barcha roomlarni olish
+            user_rooms = Room.objects.filter(
+                Q(user1=user) | Q(user2=user)
+            ).select_related('user1', 'user2')
+            
+            conversations = []
+            
+            for room in user_rooms:
+                # Suhbatdagi boshqa foydalanuvchini topish
+                other_user = room.user2 if room.user1 == user else room.user1
+                
+                # So'nggi text xabarni topish
+                latest_text_message = Message.objects.filter(room=room).order_by('-timestamp').first()
+                # So'nggi file xabarni topish
+                latest_file_upload = FileUpload.objects.filter(room=room).order_by('-uploaded_at').first()
+                
+                # Qaysi biri yangi ekanligini aniqlash
+                latest_timestamp = None
+                last_message = "No messages yet"
+                message_type = "text"
+                
+                if latest_text_message and latest_file_upload:
+                    if latest_text_message.timestamp > latest_file_upload.uploaded_at:
+                        latest_timestamp = latest_text_message.timestamp
+                        last_message = latest_text_message.text
+                        message_type = "text"
+                    else:
+                        latest_timestamp = latest_file_upload.uploaded_at
+                        file_name = (latest_file_upload.original_filename 
+                                   if hasattr(latest_file_upload, 'original_filename') and latest_file_upload.original_filename
+                                   else latest_file_upload.file.name.split('/')[-1])
+                        last_message = file_name
+                        message_type = "file"
+                elif latest_text_message:
+                    latest_timestamp = latest_text_message.timestamp
+                    last_message = latest_text_message.text
+                    message_type = "text"
+                elif latest_file_upload:
+                    latest_timestamp = latest_file_upload.uploaded_at
+                    file_name = (latest_file_upload.original_filename 
+                               if hasattr(latest_file_upload, 'original_filename') and latest_file_upload.original_filename
+                               else latest_file_upload.file.name.split('/')[-1])
+                    last_message = file_name
+                    message_type = "file"
+                
+                # Xabar yo'q bo'lsa, o'tkazib yuborish
+                if not latest_timestamp:
+                    continue
+                
+                # O'qilmagan xabarlar sonini hisoblash
+                unread_messages = Message.objects.filter(
+                    room=room,
+                    recipient=user,
+                    is_read=False
+                ).count()
+                
+                # O'qilmagan fayllar sonini hisoblash
+                unread_files = FileUpload.objects.filter(
+                    room=room,
+                    recipient=user,
+                    is_read=False
+                ).count()
+                
+                total_unread = unread_messages + unread_files
+                
+                conversations.append({
+                    'id': room.id,
+                    'sender': other_user.fullname,
+                    'sender_id': other_user.id,
+                    'last_message': last_message,
+                    'message_type': message_type,
+                    'timestamp': latest_timestamp.isoformat(),
+                    'unread': total_unread
+                })
+            
+            # Vaqt bo'yicha tartiblash (eng yangi birinchi)
+            conversations.sort(key=lambda x: x['timestamp'], reverse=True)
+            
+            # Faqat 3tasini qaytarish
+            return conversations[:3]
+            
+        except Exception as e:
+            logger.error(f"Error getting recent conversations: {e}")
+            return []
 
     async def notify(self, event):
         try:
