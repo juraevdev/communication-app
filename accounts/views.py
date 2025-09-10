@@ -135,13 +135,24 @@ class UserFilterApiView(generics.ListAPIView):
 
 
 
-class UserProfileApiView(generics.RetrieveUpdateAPIView):
-    serializer_class = UserProfileSerializer
+class UserProfileApiView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-
-    def get_object(self):
-        profile, created = UserProfile.objects.get_or_create(user=self.request.user)
-        return profile
+    
+    def get(self, request):
+        profile, created = UserProfile.objects.get_or_create(user=request.user)
+        serializer = UserProfileSerializer(profile)
+        return Response(serializer.data)
+    
+    def patch(self, request):
+        profile, created = UserProfile.objects.get_or_create(user=request.user)
+        serializer = UserProfileSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    def post(self, request):
+        return self.patch(request)
 
 
 

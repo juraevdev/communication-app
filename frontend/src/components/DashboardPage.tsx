@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -11,7 +11,6 @@ interface User {
   fullname: string
   username: string
   email: string
-  role?: string
 }
 
 interface Conversation {
@@ -43,12 +42,13 @@ export default function DashboardPage() {
   const [recentConversations, setRecentConversations] = useState<Conversation[]>([])
   const [files, setFiles] = useState<FileItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [, setNotificationSocket] = useState<WebSocket | null>(null)
+  const [notificationSocket, setNotificationSocket] = useState<WebSocket | null>(null)
+  const [filesSocket, setFilesSocket] = useState<WebSocket | null>(null)
+  const reconnectAttempts = useRef({ notifications: 0, files: 0 })
 
   const refreshAccessToken = async (): Promise<string | null> => {
     try {
       const refresh = localStorage.getItem("refresh_token");
-
       if (!refresh) {
         console.log("❌ Refresh token topilmadi");
         localStorage.clear();
@@ -61,6 +61,11 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh }),
       });
+
+      // Handle non-200 responses
+      if (!response.ok) {
+        throw new Error(`Token refresh failed with status: ${response.status}`);
+      }
 
       const data = await response.json();
 
@@ -82,6 +87,206 @@ export default function DashboardPage() {
     }
   };
 
+  const connectToFiles = async () => {
+    let token = localStorage.getItem("access_token");
+
+    if (!token) {
+      token = await refreshAccessToken();
+      if (!token) return;
+    }
+
+    try {
+      // Close existing connection if any
+      if (filesSocket) {
+        filesSocket.close();
+      }
+
+      const newFilesSocket = new WebSocket(`ws://127.0.0.1:8000/ws/files/?token=${token}`)
+
+      newFilesSocket.onopen = () => {
+        console.log("✅ Files WebSocket connected")
+        reconnectAttempts.current.files = 0;
+        newFilesSocket.send(JSON.stringify({
+          action: "get_files"
+        }))
+      }
+
+      newFilesSocket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+
+          if (data.type === "file_list") {
+            setFiles(data.files || [])
+          }
+          
+          // Handle 401 errors from server
+          if (data.error && data.code === 401) {
+            console.log("❌ 401 error received from files WebSocket");
+            handleUnauthorizedError('files');
+          }
+        } catch (error) {
+          console.error("Files WebSocket message parsing error:", error)
+        }
+      }
+
+      newFilesSocket.onclose = (event) => {
+        console.log("❌ Files WebSocket disconnected", event.code, event.reason)
+
+        // Don't reconnect if closed normally
+        if (event.code !== 1000 && event.code !== 1001) {
+          const delay = Math.min(30000, (2 ** reconnectAttempts.current.files) * 1000);
+          console.log(`🔄 Reconnecting Files WebSocket in ${delay/1000} seconds...`)
+          
+          setTimeout(() => {
+            if (document.visibilityState === 'visible') {
+              reconnectAttempts.current.files++;
+              connectToFiles();
+            }
+          }, delay);
+        }
+      }
+
+      newFilesSocket.onerror = (error) => {
+        console.error("Files WebSocket error:", error)
+      }
+
+      setFilesSocket(newFilesSocket);
+    } catch (error) {
+      console.error("Files WebSocket connection error:", error)
+    }
+  }
+
+  const connectToNotifications = async () => {
+    let token = localStorage.getItem("access_token");
+
+    if (!token) {
+      token = await refreshAccessToken();
+      if (!token) return;
+    }
+
+    try {
+      // Close existing connection if any
+      if (notificationSocket) {
+        notificationSocket.close();
+      }
+
+      const newNotificationSocket = new WebSocket(`ws://127.0.0.1:8000/ws/notifications/?token=${token}`)
+
+      newNotificationSocket.onopen = () => {
+        console.log("✅ Notification WebSocket connected")
+        reconnectAttempts.current.notifications = 0;
+        setLoading(false)
+
+        newNotificationSocket.send(JSON.stringify({
+          action: "get_recent_conversations"
+        }))
+      }
+
+      newNotificationSocket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+
+          if (data.type === "recent_conversations") {
+            setRecentConversations(data.conversations || [])
+          }
+
+          if (data.type === "new_message") {
+            setRecentConversations((prev) => {
+              const existing = prev.find((c) => c.id === data.chat_id)
+
+              if (existing) {
+                return [
+                  {
+                    ...existing,
+                    last_message: data.message,
+                    timestamp: data.timestamp,
+                    unread: existing.unread + 1,
+                  },
+                  ...prev.filter((c) => c.id !== data.chat_id),
+                ]
+              } else {
+                return [
+                  {
+                    id: data.chat_id,
+                    sender: data.sender_name,
+                    sender_id: data.sender_id,
+                    last_message: data.message,
+                    timestamp: data.timestamp,
+                    unread: 1,
+                    message_type: "text"
+                  },
+                  ...prev,
+                ].slice(0, 3)
+              }
+            })
+          }
+
+          if (data.type === "unread_count_update") {
+            setRecentConversations((prev) =>
+              prev.map((conv) =>
+                conv.sender_id === data.contact_id
+                  ? { ...conv, unread: data.unread_count }
+                  : conv
+              )
+            )
+          }
+          
+          // Handle 401 errors from server
+          if (data.error && data.code === 401) {
+            console.log("❌ 401 error received from notifications WebSocket");
+            handleUnauthorizedError('notifications');
+          }
+        } catch (error) {
+          console.error("WebSocket message parsing error:", error)
+        }
+      }
+
+      newNotificationSocket.onclose = (event) => {
+        console.log("❌ Notification WebSocket disconnected", event.code, event.reason)
+
+        // Don't reconnect if closed normally
+        if (event.code !== 1000 && event.code !== 1001) {
+          const delay = Math.min(30000, (2 ** reconnectAttempts.current.notifications) * 1000);
+          console.log(`🔄 Reconnecting Notification WebSocket in ${delay/1000} seconds...`)
+          
+          setTimeout(() => {
+            if (document.visibilityState === 'visible') {
+              reconnectAttempts.current.notifications++;
+              connectToNotifications();
+            }
+          }, delay);
+        }
+      }
+
+      newNotificationSocket.onerror = (error) => {
+        console.error("WebSocket error:", error)
+        setLoading(false)
+      }
+
+      setNotificationSocket(newNotificationSocket);
+    } catch (error) {
+      console.error("WebSocket connection error:", error)
+      setLoading(false)
+    }
+  }
+
+  const handleUnauthorizedError = async (socketType: 'notifications' | 'files') => {
+    console.log(`🔄 Handling 401 error for ${socketType} WebSocket`);
+    
+    // Try to refresh the token
+    const newToken = await refreshAccessToken();
+    
+    if (newToken) {
+      // Token refreshed successfully, reconnect the WebSocket
+      if (socketType === 'notifications') {
+        connectToNotifications();
+      } else {
+        connectToFiles();
+      }
+    }
+    // If refreshAccessToken fails, it will redirect to login
+  }
+
   useEffect(() => {
     try {
       const userData = localStorage.getItem("user")
@@ -97,176 +302,22 @@ export default function DashboardPage() {
   }, [])
 
   useEffect(() => {
-    let filesSocket: WebSocket | null = null;
-    let reconnectTimeout: NodeJS.Timeout;
-
-    const connectToFiles = async () => {
-      let token = localStorage.getItem("access_token");
-
-      if (!token) {
-        token = await refreshAccessToken();
-        if (!token) return;
-      }
-
-      try {
-        filesSocket = new WebSocket(`ws://127.0.0.1:8000/ws/files/?token=${token}`)
-
-        filesSocket.onopen = () => {
-          console.log("✅ Files WebSocket connected")
-          filesSocket?.send(JSON.stringify({
-            action: "get_files"
-          }))
-        }
-
-        filesSocket.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data)
-
-            if (data.type === "file_list") {
-              setFiles(data.files || [])
-            }
-          } catch (error) {
-            console.error("Files WebSocket message parsing error:", error)
-          }
-        }
-
-        filesSocket.onclose = (event) => {
-          console.log("❌ Files WebSocket disconnected", event.code, event.reason)
-
-          if (event.code !== 1000) {
-            reconnectTimeout = setTimeout(() => {
-              if (document.visibilityState === 'visible') {
-                console.log("🔄 Reconnecting Files WebSocket...")
-                connectToFiles()
-              }
-            }, 5000)
-          }
-        }
-
-        filesSocket.onerror = (error) => {
-          console.error("Files WebSocket error:", error)
-        }
-
-      } catch (error) {
-        console.error("Files WebSocket connection error:", error)
-      }
-    }
-
-    connectToFiles()
-
+    connectToFiles();
+    
     return () => {
-      if (reconnectTimeout) clearTimeout(reconnectTimeout)
-      if (filesSocket) filesSocket.close()
+      if (filesSocket) {
+        filesSocket.close();
+      }
     }
   }, [])
 
   useEffect(() => {
-    let socket: WebSocket | null = null;
-    let reconnectTimeout: NodeJS.Timeout;
-
-    const connectToNotifications = async () => {
-      let token = localStorage.getItem("access_token");
-
-      if (!token) {
-        token = await refreshAccessToken();
-        if (!token) return;
-      }
-
-      try {
-        socket = new WebSocket(`ws://127.0.0.1:8000/ws/notifications/?token=${token}`)
-
-        socket.onopen = () => {
-          console.log("✅ Notification WebSocket connected")
-          setLoading(false)
-
-          socket?.send(JSON.stringify({
-            action: "get_recent_conversations"
-          }))
-        }
-
-        socket.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data)
-
-            if (data.type === "recent_conversations") {
-              setRecentConversations(data.conversations || [])
-            }
-
-            if (data.type === "new_message") {
-              setRecentConversations((prev) => {
-                const existing = prev.find((c) => c.id === data.chat_id)
-
-                if (existing) {
-                  return [
-                    {
-                      ...existing,
-                      last_message: data.message,
-                      timestamp: data.timestamp,
-                      unread: existing.unread + 1,
-                    },
-                    ...prev.filter((c) => c.id !== data.chat_id),
-                  ]
-                } else {
-                  return [
-                    {
-                      id: data.chat_id,
-                      sender: data.sender_name,
-                      sender_id: data.sender_id,
-                      last_message: data.message,
-                      timestamp: data.timestamp,
-                      unread: 1,
-                      message_type: "text"
-                    },
-                    ...prev,
-                  ].slice(0, 3)
-                }
-              })
-            }
-
-            if (data.type === "unread_count_update") {
-              setRecentConversations((prev) =>
-                prev.map((conv) =>
-                  conv.sender_id === data.contact_id
-                    ? { ...conv, unread: data.unread_count }
-                    : conv
-                )
-              )
-            }
-          } catch (error) {
-            console.error("WebSocket message parsing error:", error)
-          }
-        }
-
-        socket.onclose = (event) => {
-          console.log("❌ Notification WebSocket disconnected", event.code, event.reason)
-
-          if (event.code !== 1000) {
-            reconnectTimeout = setTimeout(() => {
-              if (document.visibilityState === 'visible') {
-                console.log("🔄 Reconnecting WebSocket...")
-                connectToNotifications()
-              }
-            }, 5000)
-          }
-        }
-
-        socket.onerror = (error) => {
-          console.error("WebSocket error:", error)
-          setLoading(false)
-        }
-
-        setNotificationSocket(socket)
-      } catch (error) {
-        console.error("WebSocket connection error:", error)
-        setLoading(false)
-      }
-    }
-
-    connectToNotifications()
-
+    connectToNotifications();
+    
     return () => {
-      if (reconnectTimeout) clearTimeout(reconnectTimeout)
-      if (socket) socket.close()
+      if (notificationSocket) {
+        notificationSocket.close();
+      }
     }
   }, [])
 
@@ -429,37 +480,6 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
-
-        {user?.role === "Admin" && (
-          <Card className="border-slate-200 bg-blue-50">
-            <CardHeader>
-              <CardTitle className="text-lg text-blue-800">Admin Dashboard</CardTitle>
-              <CardDescription className="text-blue-600">
-                Administrative tools and user management
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white p-4 rounded-lg border border-blue-200">
-                  <h3 className="font-medium text-slate-800 mb-2">User Management</h3>
-                  <p className="text-sm text-slate-600 mb-3">Manage user accounts and permissions</p>
-                  <Link to="/users">
-                    <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
-                      View Users
-                    </Button>
-                  </Link>
-                </div>
-                <div className="bg-white p-4 rounded-lg border border-blue-200">
-                  <h3 className="font-medium text-slate-800 mb-2">System Status</h3>
-                  <p className="text-sm text-slate-600 mb-3">Monitor platform health and security</p>
-                  <Button size="sm" variant="outline">
-                    View Status
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
     </MainLayout>
   )
