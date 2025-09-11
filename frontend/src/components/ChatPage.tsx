@@ -122,7 +122,7 @@ export default function ChatPage() {
     if (!token) return;
 
     console.log("🔌 Connecting to status WebSocket...");
-    const statusSocket = new WebSocket(`ws://127.0.0.1:8000/ws/status/?token=${token}`);
+    const statusSocket = new WebSocket(`ws://172.16.8.92:8000/ws/status/?token=${token}`);
 
     statusSocket.onopen = () => {
       console.log("✅ Status WebSocket connected - READY FOR REAL-TIME");
@@ -162,7 +162,7 @@ export default function ChatPage() {
     const fetchContacts = async () => {
       try {
         const response = await axios.get(
-          "http://127.0.0.1:8000/api/v1/accounts/contact/filter/",
+          "http://172.16.8.92:8000/api/v1/accounts/contact/filter/",
           {
             params: { search: searchTerm },
             headers: {
@@ -203,7 +203,7 @@ export default function ChatPage() {
     const fetchAllUsers = async () => {
       try {
         const response = await axios.get(
-          "http://127.0.0.1:8000/api/v1/accounts/users/search/",
+          "http://172.16.8.92:8000/api/v1/accounts/users/search/",
           {
             params: { search: searchTerm },
             headers: {
@@ -216,7 +216,7 @@ export default function ChatPage() {
           const liveStatus = userStatuses.get(user.id);
 
           const imageUrl = user.image
-            ? `http://127.0.0.1:8000${user.image}`
+            ? `http://172.16.8.92:8000/${user.image}`
             : "";
 
           const userName = user.username || user.full_name || user.email;
@@ -253,7 +253,7 @@ export default function ChatPage() {
     if (!token) return;
 
     console.log("🔔 Connecting to notifications WebSocket...");
-    const notifSocket = new WebSocket(`ws://127.0.0.1:8000/ws/notifications/?token=${token}`);
+    const notifSocket = new WebSocket(`ws://172.16.8.92:8000/ws/notifications/?token=${token}`);
 
     notifSocket.onopen = () => {
       console.log("✅ Notifications WebSocket connected");
@@ -325,7 +325,7 @@ export default function ChatPage() {
   useEffect(() => {
     if (!roomId) return;
     const token = localStorage.getItem("access_token");
-    const socket = new WebSocket(`ws://127.0.0.1:8000/ws/chat/room/${roomId}/?token=${token}`);
+    const socket = new WebSocket(`ws://172.16.8.92:8000/ws/chat/room/${roomId}/?token=${token}`);
 
     socket.onopen = () => {
       console.log("✅ Connected to room:", roomId);
@@ -516,7 +516,7 @@ export default function ChatPage() {
     setSelectedContact(contact);
     try {
       const response = await axios.post(
-        "http://127.0.0.1:8000/api/v1/chat/start/",
+        "http://172.16.8.92:8000/api/v1/chat/start/",
         { contact_user: contact.id, alias: contact.name },
         { headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` } }
       );

@@ -1,6 +1,6 @@
 import axios from "axios";
 
-export const API_BASE_URL = "http://127.0.0.1:8000";
+export const API_BASE_URL = "http://172.16.8.92:8000/";
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -31,7 +31,7 @@ export const registerUser = (data: RegisterData) =>
 
 
 export const getCurrentUserInfo = async (token: string) => {
-  return axios.get("http://localhost:8000/api/v1/accounts/me/", {
+  return axios.get("http://172.16.8.92:8000/api/v1/accounts/me/", {
     headers: {
       Authorization: `Bearer ${token}`,
     },

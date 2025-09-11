@@ -25,7 +25,7 @@ export const fetchWithAuth = async <T = any>(
 
       try {
         const refreshResponse = await axios.post<{ access: string }>(
-          "http://127.0.0.1:8000/api/token/refresh/",
+          "http://172.16.8.92:8000/api/token/refresh/",
           { refresh }
         );
 

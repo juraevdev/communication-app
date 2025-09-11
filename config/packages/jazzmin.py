@@ -16,7 +16,6 @@ JAZZMIN_SETTINGS = {
         {"name": "Support", "url": "https://github.com/farridav/django-jazzmin/issues",
             "new_window": True},
         {"model": "auth.User"},
-        {"app": "books"},
     ],
     "usermenu_links": [
         {"name": "Support", "url": "https://github.com/farridav/django-jazzmin/issues",
@@ -27,14 +26,8 @@ JAZZMIN_SETTINGS = {
     "navigation_expanded": True,
     "hide_apps": [],
     "hide_models": [],
-    "order_with_respect_to": ["auth", "books", "books.author", "books.book"],
+    "order_with_respect_to": ["auth"],
     "custom_links": {
-        "books": [{
-            "name": "Make Messages",
-            "url": "make_messages",
-            "icon": "fas fa-comments",
-            "permissions": ["books.view_book"]
-        }]
     },
     "icons": {
         "auth": "fas fa-users-cog",
