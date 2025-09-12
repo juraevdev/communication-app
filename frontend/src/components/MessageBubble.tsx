@@ -42,6 +42,16 @@ interface MessageBubbleProps {
   onDeleteMessage: (messageId: number) => void
 }
 
+const normalizeFileUrl = (url: string): string => {
+  if (!url) return url;
+  
+  return url
+    .replace('http://127.0.0.1:8000', 'http://172.16.8.92:8008')
+    .replace('http://localhost:8000', 'http://172.16.8.92:8008')
+    .replace('127.0.0.1:8000', '172.16.8.92:8008')
+    .replace('localhost:8000', '172.16.8.92:8008');
+};
+
 const MessageBubble: React.FC<MessageBubbleProps> = ({
   msg,
   onMarkAsRead,
@@ -94,12 +104,25 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     onDeleteMessage(msg.id)
   }
 
+  const handleDownloadClick = () => {
+    if (msg.fileUrl && msg.fileName) {
+      const normalizedUrl = normalizeFileUrl(msg.fileUrl);
+      console.log('Downloading file:', { original: msg.fileUrl, normalized: normalizedUrl }); 
+      onDownload(normalizedUrl, msg.fileName);
+    }
+  }
+
   const getFileIcon = (fileType: string) => {
     if (fileType?.includes("image")) return <ImageIcon className="w-4 h-4 text-blue-600" />
     if (fileType?.includes("video")) return <Video className="w-4 h-4 text-purple-600" />
     if (fileType?.includes("audio")) return <Music className="w-4 h-4 text-green-600" />
     if (fileType?.includes("pdf")) return <FileText className="w-4 h-4 text-red-600" />
     return <File className="w-4 h-4 text-slate-600" />
+  }
+
+  const getImageSrc = (): string => {
+    if (!msg.fileUrl) return "/placeholder.svg";
+    return normalizeFileUrl(msg.fileUrl);
   }
 
   return (
@@ -235,7 +258,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => onDownload(msg.fileUrl!, msg.fileName!)}
+                    onClick={handleDownloadClick}
                     className="h-8 w-8 p-0 rounded-full hover:bg-slate-100"
                   >
                     <Download className="w-4 h-4" />
@@ -246,10 +269,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
               {msg.fileType === "image" && msg.fileUrl && (
                 <div className="mt-2">
                   <img
-                    src={msg.fileUrl || "/placeholder.svg"}
+                    src={getImageSrc()}
                     alt={msg.fileName}
                     className="max-w-full h-auto rounded-lg"
                     style={{ maxHeight: "200px" }}
+                    onError={(e) => {
+                      console.error('Image failed to load:', msg.fileUrl);
+                      (e.target as HTMLImageElement).src = "/placeholder.svg";
+                    }}
                   />
                 </div>
               )}

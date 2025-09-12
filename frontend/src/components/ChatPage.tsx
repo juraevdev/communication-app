@@ -216,7 +216,7 @@ export default function ChatPage() {
           const liveStatus = userStatuses.get(user.id);
 
           const imageUrl = user.image
-            ? `http://172.16.8.92:8000/${user.image}`
+            ? `http://172.16.8.92:8008${user.image}`
             : "";
 
           const userName = user.username || user.full_name || user.email;
@@ -225,9 +225,9 @@ export default function ChatPage() {
             id: user.id,
             name: userName,
             image: imageUrl,
-            lastMessage: user.last_message || "",            
-            timestamp: user.last_message_timestamp || "",       
-            unread: user.unread_count || 0,                   
+            lastMessage: user.last_message || "",
+            timestamp: user.last_message_timestamp || "",
+            unread: user.unread_count || 0,
             isOnline: liveStatus ? liveStatus.isOnline : (user.is_online || false),
             lastSeen: liveStatus ? liveStatus.lastSeen : (user.last_seen || ""),
             isContact: false
@@ -408,6 +408,11 @@ export default function ChatPage() {
         }
 
         if (data.type === "file_uploaded") {
+          let correctedFileUrl = data.file_url;
+          if (correctedFileUrl && correctedFileUrl.includes('127.0.0.1:8000')) {
+            correctedFileUrl = correctedFileUrl.replace('127.0.0.1:8000', '172.16.8.92:8008');
+          }
+
           setMessages((prev) => {
             const senderName = data.user?.full_name || "";
             const isOwnMessage = senderName === currentUser;
@@ -422,7 +427,7 @@ export default function ChatPage() {
                 isOwn: isOwnMessage,
                 type: "file",
                 fileName: data.file_name,
-                fileUrl: data.file_url,
+                fileUrl: correctedFileUrl,
                 fileType: getFileTypeFromName(data.file_name),
                 isRead: false,
                 isUpdated: false,
@@ -510,7 +515,7 @@ export default function ChatPage() {
     socket.onclose = () => console.log("❌ Disconnected from room:", roomId);
     setWs(socket);
     return () => socket.close();
-  }, [roomId, currentUser, selectedContact]); 
+  }, [roomId, currentUser, selectedContact]);
 
   const startChat = async (contact: Contact) => {
     setSelectedContact(contact);
@@ -725,7 +730,16 @@ export default function ChatPage() {
     try {
       const token = localStorage.getItem("access_token");
 
-      const response = await fetch(fileUrl, {
+      let correctedUrl = fileUrl;
+      if (fileUrl.includes('127.0.0.1:8000')) {
+        correctedUrl = fileUrl.replace('127.0.0.1:8000', '172.16.8.92:8000');
+      } else if (fileUrl.includes('localhost:8000')) {
+        correctedUrl = fileUrl.replace('localhost:8000', '172.16.8.92:8000');
+      }
+
+      console.log('Downloading from:', correctedUrl);
+
+      const response = await fetch(correctedUrl, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
