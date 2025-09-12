@@ -3,7 +3,7 @@ from rest_framework.response import Response
 
 from groups.models import Group, GroupMember, GroupMessage
 from groups.permissions import IsOwner, IsAdmin
-from groups.serializers import GroupSerializer, GroupMemberSerialzer, GroupMessageSerializer
+from groups.serializers import GroupSerializer, GroupMemberSerialzer, GroupMessageSerializer, GroupMembersSerializer
 
 from accounts.models import CustomUser
 
@@ -100,3 +100,21 @@ class GroupMemberDeleteApiView(generics.GenericAPIView):
         except GroupMember.DoesNotExist:
             return Response({'User not found'}, status=status.HTTP_404_NOT_FOUND)
         
+        
+class GroupMembersApiView(generics.GenericAPIView):
+    serializer_class = GroupMembersSerializer
+
+    def get(self, request, group_id):
+        members = GroupMember.objects.filter(group_id=group_id)
+        serializer = self.get_serializer(members, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+        
+
+class GroupMessageListApiView(generics.GenericAPIView):
+    serializer_class = GroupMessageSerializer
+    
+    def get(self, request, group_id):
+        messages = GroupMessage.objects.filter(group_id=group_id)
+        serializer = self.get_serializer(messages, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

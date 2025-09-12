@@ -4,7 +4,8 @@ from groups.views import (
     GroupApiView, GroupListApiView,
     GroupDetailApiView, GroupDeleteApiView,
     GroupUpdateApiView, GroupMemberAddApiView,
-    GroupMemberDeleteApiView,
+    GroupMemberDeleteApiView, GroupMembersApiView,
+    GroupMessageListApiView,
 )
 
 urlpatterns = [
@@ -15,4 +16,6 @@ urlpatterns = [
     path('delete/<int:id>/', GroupDeleteApiView.as_view()),
     path('add-member/', GroupMemberAddApiView.as_view()),
     path('remove-member/<int:id>/', GroupMemberDeleteApiView.as_view()),
+    path('members/<int:group_id>/', GroupMembersApiView.as_view()),
+    path('group-messages/<int:group_id>/', GroupMessageListApiView.as_view()),
 ]
