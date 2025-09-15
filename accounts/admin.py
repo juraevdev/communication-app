@@ -9,7 +9,7 @@ from accounts.models import CustomUser, UserProfile, Contact
 class CustomUserAdmin(UserAdmin):
     fieldsets = (
         (None, {"fields": ("username", "fullname", "password")}),
-        (_("Personal info"), {"fields": ("email", "image",)}),
+        (_("Personal info"), {"fields": ("email",)}),
         (
             _("Permissions"),
             {

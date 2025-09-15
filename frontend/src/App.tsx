@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import DashboardPage from "./components/DashboardPage";
+// import DashboardPage from "./components/DashboardPage";
 import ChatPage from "./components/ChatPage";
 import LoginPage from "./components/Login";
 import RegisterPage from "./components/Register";
@@ -11,8 +11,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<DashboardPage/>}/>
-        <Route path="/chat" element={<ChatPage/>}/>
+        {/* <Route path="/" element={<DashboardPage/>}/> */}
+        <Route path="/" element={<ChatPage/>}/>
         <Route path="/login" element={<LoginPage/>}/>
         <Route path="/register" element={<RegisterPage/>}/>
         <Route path="/profile" element={<ProfilePage/>}/>

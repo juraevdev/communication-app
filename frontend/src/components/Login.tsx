@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { loginUser } from "@/utils/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { apiClient } from "@/lib/api";
 import {
   Card,
   CardContent,
@@ -27,13 +27,15 @@ export default function LoginPage() {
     setIsLoading(true);
   
     try {
-      const response = await loginUser({ email, password });
-      const { access, refresh } = response.data;
+      await apiClient.login(email, password);
   
-      localStorage.setItem("access_token", access);
-      localStorage.setItem("refresh_token", refresh);
+      const accessToken = localStorage.getItem('access_token');
+
+      if (!accessToken) {
+        throw new Error("No access token received");
+      }
   
-      const userResponse = await getCurrentUserInfo(access);
+      const userResponse = await getCurrentUserInfo(accessToken);
       localStorage.setItem("user", JSON.stringify(userResponse.data));
   
       navigate("/");
