@@ -46,9 +46,24 @@ import { MessageStatus } from "./message-status"
 import { TypingIndicator } from "./typing-indicator"
 import { useChat } from "@/hooks/use-chat"
 
-
 export default function ChatPage() {
-  const { messages, chats, isConnected, currentUser, sendMessage, markAsRead, connectToChatRoom, chatWsRef } = useChat();
+  const { 
+    messages, 
+    chats, 
+    groups,
+    isConnected, 
+    currentUser, 
+    sendMessage, 
+    sendGroupMessage,
+    markAsRead, 
+    connectToChatRoom, 
+    connectToGroup,
+    chatWsRef,
+    groupWsRef,
+    createGroup,
+    getGroupMembers
+  } = useChat();
+  
   const [selectedChat, setSelectedChat] = useState<any>(null)
   const [message, setMessage] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
@@ -60,6 +75,8 @@ export default function ChatPage() {
   const [showChannelInfo, setShowChannelInfo] = useState(false)
   const [isTyping,] = useState(false)
   const [loadingMessages, setLoadingMessages] = useState(false)
+  const [activeTab, setActiveTab] = useState<"private" | "groups" | "channels">("private")
+  const [groupMembers, setGroupMembers] = useState<any[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [fileUpload, setFileUpload] = useState<{
     file: File | null;
@@ -75,31 +92,39 @@ export default function ChatPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Combine chats and groups for display
+  const allChats = [...chats, ...groups]
+
   useEffect(() => {
-    if (chats && chats.length > 0 && !selectedChat) {
-      const firstChat = chats[0]
+    if (allChats && allChats.length > 0 && !selectedChat) {
+      const firstChat = allChats[0]
       setSelectedChat(firstChat)
-      const roomId = firstChat.room_id || firstChat.id?.toString()
-      if (roomId) {
-        connectToChatRoom(roomId)
-      }
+      handleChatSelect(firstChat)
     }
-  }, [chats, selectedChat, connectToChatRoom])
+  }, [allChats, selectedChat])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, selectedChat?.id])
 
+  // Auto-mark messages as read when viewing chat
   useEffect(() => {
-    if (selectedChat && selectedChat.unread > 0) {
+    if (selectedChat && selectedChat.unread > 0 && selectedChat.type !== "group") {
       const roomId = selectedChat.room_id || selectedChat.id?.toString()
       if (roomId) {
         const currentMessages = messages[roomId] || []
-        currentMessages.forEach(msg => {
-          if (!msg.is_read && !msg.isOwn) {
-            markAsRead(roomId, msg.id)
-          }
-        })
+
+        const unreadMessages = currentMessages.filter(msg => !msg.is_read && !msg.isOwn)
+
+        if (unreadMessages.length > 0) {
+          unreadMessages.forEach(msg => {
+            if (msg.type === "file") {
+              markAsRead(roomId, undefined, msg.id)
+            } else {
+              markAsRead(roomId, msg.id)
+            }
+          })
+        }
       }
     }
   }, [selectedChat, messages, markAsRead])
@@ -108,16 +133,28 @@ export default function ChatPage() {
     e.preventDefault()
     if (!message.trim() || !selectedChat || !isConnected) return
 
-    const roomId = selectedChat.room_id || selectedChat.id?.toString()
-    if (roomId) {
-      sendMessage(roomId, message)
-      setMessage("")
+    if (selectedChat.type === "group") {
+      const groupId = selectedChat.id.toString()
+      sendGroupMessage(groupId, message)
+    } else {
+      const roomId = selectedChat.room_id || selectedChat.id?.toString()
+      if (roomId) {
+        sendMessage(roomId, message)
+      }
     }
+    setMessage("")
   }
 
-  const handleChatHeaderClick = () => {
+  const handleChatHeaderClick = async () => {
     if (selectedChat?.type === "group") {
-      setShowGroupInfo(true)
+      try {
+        const members = await getGroupMembers(selectedChat.id)
+        setGroupMembers(members)
+        setShowGroupInfo(true)
+      } catch (error) {
+        console.error("Failed to load group members:", error)
+        setShowGroupInfo(true)
+      }
     } else if (selectedChat?.type === "channel") {
       setShowChannelInfo(true)
     }
@@ -127,23 +164,37 @@ export default function ChatPage() {
     setSelectedChat(chat)
     setLoadingMessages(true)
 
-    const roomId = chat.room_id || chat.id?.toString()
-    if (roomId) {
-      connectToChatRoom(roomId)
-    } else if (chat.sender_id) {
-      try {
-        const response = await apiClient.startChat(chat.sender_id)
-        if (response.room_id) {
-          const updatedChat = { ...chat, room_id: response.room_id.toString() }
-          setSelectedChat(updatedChat)
-          connectToChatRoom(response.room_id.toString())
+    if (chat.type === "group") {
+      const groupId = chat.id.toString()
+      connectToGroup(groupId)
+    } else {
+      const roomId = chat.room_id || chat.id?.toString()
+      if (roomId) {
+        connectToChatRoom(roomId)
+      } else if (chat.sender_id) {
+        try {
+          const response = await apiClient.startChat(chat.sender_id)
+          if (response.room_id) {
+            const updatedChat = { ...chat, room_id: response.room_id.toString() }
+            setSelectedChat(updatedChat)
+            connectToChatRoom(response.room_id.toString())
+          }
+        } catch (error) {
+          console.error("Failed to start chat:", error)
         }
-      } catch (error) {
-        console.error("Failed to start chat:", error)
       }
     }
 
     setLoadingMessages(false)
+  }
+
+  const handleCreateGroup = async (groupData: { name: string; description?: string }) => {
+    try {
+      await createGroup(groupData.name, groupData.description)
+      setShowCreateGroup(false)
+    } catch (error) {
+      console.error("Failed to create group:", error)
+    }
   }
 
   const handleLogout = () => {
@@ -194,24 +245,19 @@ export default function ChatPage() {
     if (!msg) return "read"
 
     if (!msg.isOwn) {
-      return "read" // Messages from others are always considered read
+      return "read"
     }
 
-    // Handle file messages
     if (msg.type === "file") {
       return msg.is_read ? "read_file" : "sent"
     }
 
-    // Removed block referencing undefined 'data'
-
-
-    // Handle text messages
     return msg.is_read ? "read" : "sent"
   }
 
   const getChatName = (chat: any): string => {
     if (!chat) return "Unknown Chat"
-    return chat.sender || chat.name || "Unknown User"
+    return chat.name || chat.sender || "Unknown User"
   }
 
   const getSenderName = (sender: any): string => {
@@ -228,11 +274,32 @@ export default function ChatPage() {
     return name.charAt(0).toUpperCase()
   }
 
-  const filteredChats = (chats || []).filter((chat) => {
-    const chatName = getChatName(chat).toLowerCase()
-    const searchTerm = searchQuery.toLowerCase()
-    return chatName.includes(searchTerm)
-  })
+  // Filter chats based on active tab
+  const getFilteredChats = () => {
+    let chatsToFilter: any[] = []
+    
+    switch (activeTab) {
+      case "private":
+        chatsToFilter = chats
+        break
+      case "groups":
+        chatsToFilter = groups
+        break
+      case "channels":
+        chatsToFilter = [] // Add channels when implemented
+        break
+      default:
+        chatsToFilter = chats
+    }
+
+    return chatsToFilter.filter((chat) => {
+      const chatName = getChatName(chat).toLowerCase()
+      const searchTerm = searchQuery.toLowerCase()
+      return chatName.includes(searchTerm)
+    })
+  }
+
+  const filteredChats = getFilteredChats()
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -262,25 +329,34 @@ export default function ChatPage() {
     setFileUpload(prev => ({ ...prev, uploading: true, progress: 0 }));
 
     try {
-      const roomId = selectedChat.room_id || selectedChat.id?.toString();
-      if (!roomId) return;
+      const isGroup = selectedChat.type === "group"
+      const wsRef = isGroup ? groupWsRef : chatWsRef
 
-      if (chatWsRef.current && chatWsRef.current.readyState === WebSocket.OPEN) {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         const reader = new FileReader();
 
         reader.onload = (e) => {
           const base64Data = e.target?.result as string;
-
-          // Faqat base64 qismini olish (data:image/png;base64, prefixini olib tashlash)
           const base64Content = base64Data.split(';base64,')[1];
 
-          if (chatWsRef.current) {
-            chatWsRef.current.send(JSON.stringify({
+          if (wsRef.current) {
+            wsRef.current.send(JSON.stringify({
               action: "upload_file",
-              file_data: base64Content,  // Faqat base64 content
+              file_data: base64Content,
               file_name: fileUpload.file!.name,
               file_type: fileUpload.file!.type
             }));
+          }
+
+          setFileUpload({
+            file: null,
+            preview: null,
+            uploading: false,
+            progress: 0
+          });
+
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
           }
         };
 
@@ -354,13 +430,36 @@ export default function ChatPage() {
 
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+
+      if (selectedChat && selectedChat.type !== "group") {
+        const roomId = selectedChat.room_id || selectedChat.id?.toString()
+        if (roomId) {
+          const currentMessages = messages[roomId] || []
+          const fileMessage = currentMessages.find(msg =>
+            msg.type === "file" && msg.file_url === fileUrl && !msg.is_read && !msg.isOwn
+          )
+          if (fileMessage) {
+            markAsRead(roomId, undefined, fileMessage.id)
+          }
+        }
+      }
     } catch (error) {
       console.error('Download error:', error);
       alert('Failed to download file. Please try again.');
     }
   };
 
-  const currentMessages = selectedChat ? (messages[selectedChat.room_id || selectedChat.id?.toString()] || []) : []
+  const getCurrentMessages = () => {
+    if (!selectedChat) return []
+    
+    if (selectedChat.type === "group") {
+      return messages[`group_${selectedChat.id}`] || []
+    } else {
+      return messages[selectedChat.room_id || selectedChat.id?.toString()] || []
+    }
+  }
+
+  const currentMessages = getCurrentMessages()
 
   return (
     <div className="flex h-screen bg-gray-950">
@@ -420,15 +519,30 @@ export default function ChatPage() {
 
         <div className="px-4 py-2 border-b border-gray-500">
           <div className="flex gap-1">
-            <Button variant="ghost" size="sm" className="text-white">
+            <Button 
+              variant={activeTab === "private" ? "default" : "ghost"} 
+              size="sm" 
+              className="text-white"
+              onClick={() => setActiveTab("private")}
+            >
               <MessageSquare className="mr-1 h-3 w-3" />
               Private
             </Button>
-            <Button variant="ghost" size="sm" className="text-white">
+            <Button 
+              variant={activeTab === "groups" ? "default" : "ghost"} 
+              size="sm" 
+              className="text-white"
+              onClick={() => setActiveTab("groups")}
+            >
               <Users className="mr-1 h-3 w-3" />
               Groups
             </Button>
-            <Button variant="ghost" size="sm" className="text-white">
+            <Button 
+              variant={activeTab === "channels" ? "default" : "ghost"} 
+              size="sm" 
+              className="text-white"
+              onClick={() => setActiveTab("channels")}
+            >
               <Hash className="mr-1 h-3 w-3" />
               Channels
             </Button>
@@ -441,24 +555,36 @@ export default function ChatPage() {
               <div className="text-center py-8">
                 <MessageSquare className="h-8 w-8 text-gray-400 mx-auto mb-2" />
                 <p className="text-gray-400">
-                  {(chats || []).length === 0 ? "No chats" : "Nothing found"}
+                  {activeTab === "private" && chats.length === 0 && "No chats"}
+                  {activeTab === "groups" && groups.length === 0 && "No groups"}
+                  {activeTab === "channels" && "No channels"}
+                  {(
+                    (activeTab === "private" && chats.length > 0) ||
+                    (activeTab === "groups" && groups.length > 0)
+                  ) && "Nothing found"}
                 </p>
               </div>
             ) : (
               filteredChats.map((chat) => (
                 <div
-                  key={chat.id || Math.random()}
-                  className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-gray-800 transition-colors ${selectedChat?.id === chat.id ? "bg-gray-800" : ""
-                    }`}
+                  key={`${chat.type}-${chat.id}` || Math.random()}
+                  className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-gray-800 transition-colors ${
+                    selectedChat?.id === chat.id && selectedChat?.type === chat.type ? "bg-gray-800" : ""
+                  }`}
                   onClick={() => handleChatSelect(chat)}
                 >
                   <div className="relative">
                     <Avatar className="h-10 w-10">
-                      <AvatarImage src="/diverse-group.png" />
+                      <AvatarImage src={chat.type === "group" ? "/group-avatar.png" : "/diverse-group.png"} />
                       <AvatarFallback className="bg-gray-600 text-white">
                         {getAvatarLetter(getChatName(chat))}
                       </AvatarFallback>
                     </Avatar>
+                    {chat.type === "group" && (
+                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
+                        <Users className="h-2 w-2 text-white" />
+                      </div>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
@@ -497,7 +623,7 @@ export default function ChatPage() {
                   onClick={handleChatHeaderClick}
                 >
                   <Avatar className="h-10 w-10">
-                    <AvatarImage src="/diverse-group.png" />
+                    <AvatarImage src={selectedChat.type === "group" ? "/group-avatar.png" : "/diverse-group.png"} />
                     <AvatarFallback className="bg-gray-600 text-white">
                       {getAvatarLetter(getChatName(selectedChat))}
                     </AvatarFallback>
@@ -506,15 +632,24 @@ export default function ChatPage() {
                     <h2 className="font-semibold text-white">
                       {getChatName(selectedChat)}
                     </h2>
+                    {selectedChat.type === "group" && (
+                      <p className="text-xs text-gray-400">
+                        {selectedChat.memberCount || 0} members
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" className="text-white hover:bg-gray-800">
-                    <Phone className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" className="text-white hover:bg-gray-800">
-                    <Video className="h-4 w-4" />
-                  </Button>
+                  {selectedChat.type !== "group" && (
+                    <>
+                      <Button variant="ghost" size="sm" className="text-white hover:bg-gray-800">
+                        <Phone className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="text-white hover:bg-gray-800">
+                        <Video className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
                   <Button variant="ghost" size="sm" className="text-white hover:bg-gray-800" onClick={handleChatHeaderClick}>
                     <Info className="h-4 w-4" />
                   </Button>
@@ -563,7 +698,7 @@ export default function ChatPage() {
                           >
                             {msg.type === "file" ? (
                               <div
-                                className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:opacity-80 ${msg.isOwn ? "bg-blue-700" : "bg-gray-700"
+                                className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:opacity-80 ${msg.isOwn ? "bg-blue-700" : "bg-gray-600"
                                   }`}
                                 onClick={() => handleDownload(msg.file_url || "", msg.file_name || "file")}
                               >
@@ -579,12 +714,19 @@ export default function ChatPage() {
                             {msg.is_updated && (
                               <p className="text-xs opacity-70 mt-1">edited</p>
                             )}
+                            {msg.reply_to && (
+                              <div className="text-xs opacity-70 mt-1 p-2 bg-gray-600 rounded">
+                                Replying to: {msg.reply_to.content}
+                              </div>
+                            )}
                           </div>
                           <div className="flex items-center gap-1 mt-1">
                             <p className="text-xs text-gray-400">
                               {formatMessageTime(msg.timestamp)}
                             </p>
-                            <MessageStatus status={getMessageStatus(msg)} isOwn={msg.isOwn} />
+                            {selectedChat.type !== "group" && (
+                              <MessageStatus status={getMessageStatus(msg)} isOwn={msg.isOwn} />
+                            )}
                           </div>
                         </div>
                       </div>
@@ -650,45 +792,48 @@ export default function ChatPage() {
                 </div>
               </div>
             )}
-            <form onSubmit={handleSendMessage} className="flex items-center gap-2">
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileSelect}
-                accept="*/*"
-                className="hidden"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="text-white hover:bg-gray-800"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={!isConnected}
-              >
-                <Paperclip className="h-4 w-4" />
-              </Button>
-              <div className="flex-1 relative">
-                <Input
-                  placeholder="Type a message..."
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  className="pr-10 bg-gray-800 border-gray-600 text-white"
-                  disabled={!isConnected}
+
+            <div className="p-4 border-t border-gray-500 bg-gray-900">
+              <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                  accept="*/*"
+                  className="hidden"
                 />
-                <Button type="button" variant="ghost" size="sm" className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:bg-gray-700">
-                  <Smile className="h-4 w-4" />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-white hover:bg-gray-800"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={!isConnected}
+                >
+                  <Paperclip className="h-4 w-4" />
                 </Button>
-              </div>
-              <Button type="submit" size="sm" disabled={!isConnected || !message.trim()} className="bg-blue-600 hover:bg-blue-700">
-                <Send className="h-4 w-4" />
-              </Button>
-            </form>
-            {!isConnected && (
-              <p className="text-xs text-gray-400 mt-2 text-center">
-                No connection to server. Trying to reconnect...
-              </p>
-            )}
+                <div className="flex-1 relative">
+                  <Input
+                    placeholder="Type a message..."
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    className="pr-10 bg-gray-800 border-gray-600 text-white"
+                    disabled={!isConnected}
+                  />
+                  <Button type="button" variant="ghost" size="sm" className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:bg-gray-700">
+                    <Smile className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Button type="submit" size="sm" disabled={!isConnected || !message.trim()} className="bg-blue-600 hover:bg-blue-700">
+                  <Send className="h-4 w-4" />
+                </Button>
+              </form>
+              {!isConnected && (
+                <p className="text-xs text-gray-400 mt-2 text-center">
+                  No connection to server. Trying to reconnect...
+                </p>
+              )}
+            </div>
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center bg-gray-950">
@@ -713,7 +858,12 @@ export default function ChatPage() {
       />
 
       <ContactsModal isOpen={showContacts} onClose={() => setShowContacts(false)} />
-      <CreateGroupModal isOpen={showCreateGroup} onClose={() => setShowCreateGroup(false)} />
+      
+      <CreateGroupModal 
+        isOpen={showCreateGroup} 
+        onClose={() => setShowCreateGroup(false)}
+      />
+      
       <CreateChannelModal isOpen={showCreateChannel} onClose={() => setShowCreateChannel(false)} />
 
       {selectedChat?.type === "group" && (

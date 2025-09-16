@@ -57,6 +57,8 @@ api.interceptors.response.use(
 );
 
 export const apiClient = {
+  baseUrl: `${BASE_URL}/api/v1`,
+
   async login(email: string, password: string) {
     const response = await api.post('/accounts/login/', { email, password });
     const { access, refresh } = response.data;
@@ -152,4 +154,105 @@ export const apiClient = {
     const token = localStorage.getItem('access_token');
     return `${WS_BASE_URL}/ws/files/?token=${token}`;
   },
+
+  getHeaders(): HeadersInit {
+    const token = localStorage.getItem('access_token');
+    return {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  },
+
+  async createGroup(data: { name: string; description?: string; created_by: number }) {
+    const response = await fetch(`${BASE_URL}/api/v1/groups/create/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(data),
+    });
+    return this.handleResponse(response);
+  },
+
+  async getGroups() {
+    const response = await fetch(`${BASE_URL}/api/v1/group/all/`, {
+      method: 'GET',
+      headers: this.getHeaders(),
+    });
+    return this.handleResponse(response);
+  },
+
+  async getGroupDetail(groupId: number) {
+    const response = await fetch(`${BASE_URL}/api/v1/groups/${groupId}/`, {
+      method: 'GET',
+      headers: this.getHeaders(),
+    });
+    return this.handleResponse(response);
+  },
+
+  async updateGroup(groupId: number, data: { name?: string; description?: string }) {
+    const response = await fetch(`${BASE_URL}/api/v1/groups/edit/${groupId}/`, {
+      method: 'PUT',
+      headers: this.getHeaders(),
+      body: JSON.stringify(data),
+    });
+    return this.handleResponse(response);
+  },
+
+  async deleteGroup(groupId: number) {
+    const response = await fetch(`${BASE_URL}/api/v1/groups/delete/${groupId}/`, {
+      method: 'DELETE',
+      headers: this.getHeaders(),
+    });
+    return this.handleResponse(response);
+  },
+
+  // Group Member Management APIs
+  async addGroupMember(data: { group: number; user: number; role: 'owner' | 'admin' | 'member' }) {
+    const response = await fetch(`${BASE_URL}/api/v1/groups/add-member/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(data),
+    });
+    return this.handleResponse(response);
+  },
+
+  async removeGroupMember(memberId: number) {
+    const response = await fetch(`${BASE_URL}/api/v1/groups/remove-member/${memberId}/`, {
+      method: 'DELETE',
+      headers: this.getHeaders(),
+    });
+    return this.handleResponse(response);
+  },
+
+  async getGroupMembers(groupId: number) {
+    const response = await fetch(`${BASE_URL}/api/v1/groups/members/${groupId}/`, {
+      method: 'GET',
+      headers: this.getHeaders(),
+    });
+    return this.handleResponse(response);
+  },
+
+  async getGroupMessages(groupId: number) {
+    const response = await fetch(`${BASE_URL}/api/v1/groups/group-messages/${groupId}/`, {
+      method: 'GET',
+      headers: this.getHeaders(),
+    });
+    return this.handleResponse(response);
+  },
+
+  // WebSocket URLs
+  getGroupWebSocketUrl(groupId: string): string {
+    const token = localStorage.getItem('access_token');
+  
+    return `${WS_BASE_URL}/ws/groups/${groupId}/?token=${token}`;
+  },
+
+  async handleResponse(response: Response) {
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData?.detail || 'API request failed');
+    }
+    return response.json();
+  },
 };
+
+

@@ -4,6 +4,7 @@ import { apiClient } from "@/lib/api"
 export interface Message {
   id: string
   room_id?: number
+  group_id?: number
   sender: {
     id: string
     email: string
@@ -20,6 +21,7 @@ export interface Message {
   file_url?: string
   file_type?: string
   file_size?: string
+  reply_to?: any
 }
 
 export interface Chat {
@@ -33,18 +35,34 @@ export interface Chat {
   avatar: string
   message_type: "text" | "file"
   room_id?: string
+  type?: "private" | "group" | "channel"
+  description?: string
+  memberCount?: number
+  isAdmin?: boolean
+}
+
+export interface GroupMember {
+  id: number
+  user: number
+  user_fullname: string
+  user_username: string
+  role: "owner" | "admin" | "member"
+  joined_at: string
 }
 
 export function useChat() {
   const [messages, setMessages] = useState<{ [roomId: string]: Message[] }>({})
   const [chats, setChats] = useState<Chat[]>([])
+  const [groups, setGroups] = useState<Chat[]>([])
   const [isConnected, setIsConnected] = useState(false)
   const [currentUser, setCurrentUser] = useState<any>(null)
 
   const statusWsRef = useRef<WebSocket | null>(null)
   const chatWsRef = useRef<WebSocket | null>(null)
+  const groupWsRef = useRef<WebSocket | null>(null)
   const notificationsWsRef = useRef<WebSocket | null>(null)
   const currentRoomRef = useRef<string | null>(null)
+  const currentGroupRef = useRef<string | null>(null)
 
   useEffect(() => {
     const initializeUser = async () => {
@@ -55,6 +73,7 @@ export function useChat() {
 
         initializeStatusWebSocket()
         initializeNotificationsWebSocket()
+        await loadGroups()
       } catch (error) {
         console.error("[Chat] Failed to load user:", error)
         window.location.href = "/login"
@@ -70,11 +89,39 @@ export function useChat() {
       if (chatWsRef.current) {
         chatWsRef.current.close()
       }
+      if (groupWsRef.current) {
+        groupWsRef.current.close()
+      }
       if (notificationsWsRef.current) {
         notificationsWsRef.current.close()
       }
     }
   }, [])
+
+  const loadGroups = useCallback(async () => {
+    try {
+      const groupsData = await apiClient.getGroups()
+      const formattedGroups: Chat[] = groupsData.map((group: any) => ({
+        id: group.id,
+        name: group.name,
+        sender: group.name,
+        sender_id: group.created_by,
+        last_message: "",
+        timestamp: group.updated_at,
+        unread: 0,
+        avatar: "/group-avatar.png",
+        message_type: "text",
+        room_id: `group_${group.id}`,
+        type: "group",
+        description: group.description,
+        memberCount: 0, // Will be loaded separately if needed
+        isAdmin: group.created_by === currentUser?.id,
+      }))
+      setGroups(formattedGroups)
+    } catch (error) {
+      console.error("[Chat] Failed to load groups:", error)
+    }
+  }, [currentUser])
 
   const initializeStatusWebSocket = useCallback(() => {
     try {
@@ -145,6 +192,7 @@ export function useChat() {
                 avatar: "/diverse-group.png",
                 message_type: conv.message_type || "text",
                 room_id: conv.id?.toString(),
+                type: "private",
               }))
               setChats(formattedChats)
             }
@@ -216,6 +264,7 @@ export function useChat() {
                   file_name: msg.file_name,
                   file_url: msg.file_url,
                   file_type: msg.file_type,
+                  file_size: msg.file_size,
                 })).reverse()
 
                 setMessages((prev) => ({
@@ -240,9 +289,20 @@ export function useChat() {
                   file_name: data.file_name,
                   file_url: data.file_url,
                   file_type: data.file_type,
+                  file_size: data.file_size,
                 }
 
                 addMessage(roomId, newMessage)
+
+                if (!newMessage.isOwn && currentRoomRef.current === roomId) {
+                  setTimeout(() => {
+                    if (newMessage.type === "file") {
+                      markAsRead(roomId, undefined, newMessage.id)
+                    } else {
+                      markAsRead(roomId, newMessage.id)
+                    }
+                  }, 500)
+                }
               }
               break
 
@@ -261,22 +321,17 @@ export function useChat() {
                   file_name: data.file_name,
                   file_url: data.file_url,
                   file_type: data.file_type || "file",
+                  file_size: data.file_size,
                 }
 
                 addMessage(roomId, fileMessage)
+
+                if (!fileMessage.isOwn && currentRoomRef.current === roomId) {
+                  setTimeout(() => {
+                    markAsRead(roomId, undefined, fileMessage.id)
+                  }, 500)
+                }
               }
-              break
-
-            case "message_updated":
-              updateMessage(roomId, data.message_id, data.new_content)
-              break
-
-            case "message_deleted":
-              removeMessage(roomId, data.message_id)
-              break
-
-            case "file_deleted":
-              removeMessage(roomId, data.file_id)
               break
 
             case "read":
@@ -300,8 +355,18 @@ export function useChat() {
                 };
               });
 
-              if (!data.success) {
-                console.error("Failed to mark message as read on server");
+              if (data.room_id) {
+                setChats(prev => prev.map(chat => {
+                  const chatRoomId = chat.room_id || chat.id?.toString();
+                  if (chatRoomId === data.room_id.toString()) {
+                    if (data.unread_count !== undefined) {
+                      return { ...chat, unread: data.unread_count };
+                    } else {
+                      return { ...chat, unread: Math.max(0, chat.unread - 1) };
+                    }
+                  }
+                  return chat;
+                }));
               }
               break;
           }
@@ -324,17 +389,145 @@ export function useChat() {
     [currentUser],
   )
 
-  const sendMessage = useCallback(
-    (roomId: string, content: string) => {
-      if (!chatWsRef.current || chatWsRef.current.readyState !== WebSocket.OPEN || !content.trim()) {
-        console.log("[Chat] Cannot send message: WebSocket not ready or empty content")
+  const connectToGroup = useCallback(
+    (groupId: string) => {
+      if (currentGroupRef.current === groupId && groupWsRef.current?.readyState === WebSocket.OPEN) {
         return
       }
 
-      chatWsRef.current.send(
+      if (groupWsRef.current) {
+        groupWsRef.current.close()
+      }
+
+      try {
+        const groupWs = new WebSocket(apiClient.getGroupWebSocketUrl(groupId))
+
+        groupWs.onopen = () => {
+          console.log(`[Chat] Group WebSocket connected to group ${groupId}`)
+          currentGroupRef.current = groupId
+          
+          // Request message history
+          groupWs.send(JSON.stringify({
+            type: "get_history"
+          }))
+        }
+
+        groupWs.onmessage = (event) => {
+          const data = JSON.parse(event.data)
+          console.log("[Chat] Group message received:", data)
+
+          switch (data.type) {
+            case "message":
+              const newMessage: Message = {
+                id: data.message.id,
+                group_id: parseInt(groupId),
+                sender: {
+                  id: data.sender_id.toString(),
+                  email: "",
+                  fullname: data.sender_name,
+                },
+                message: data.message.content || "",
+                timestamp: data.timestamp,
+                isOwn: data.sender_id === currentUser?.id,
+                is_read: true, // Group messages are considered read immediately
+                is_updated: false,
+                type: "text",
+                reply_to: data.reply_to,
+              }
+
+              addMessage(`group_${groupId}`, newMessage)
+              break
+
+            case "typing":
+              // Handle typing indicator
+              console.log(`${data.user_name} is typing...`)
+              break
+
+            case "stop_typing":
+              // Handle stop typing
+              console.log(`${data.user_name} stopped typing`)
+              break
+
+            case "member_joined":
+              // Handle member joined
+              console.log("Member joined:", data.user)
+              break
+
+            case "member_left":
+              // Handle member left
+              console.log("Member left:", data.user_name)
+              break
+
+            case "role_updated":
+              // Handle role update
+              console.log("Role updated:", data)
+              break
+          }
+        }
+
+        groupWs.onclose = () => {
+          console.log(`[Chat] Group WebSocket disconnected from group ${groupId}`)
+          currentGroupRef.current = null
+        }
+
+        groupWs.onerror = (error) => {
+          console.error("[Chat] Group WebSocket error:", error)
+        }
+
+        groupWsRef.current = groupWs
+      } catch (error) {
+        console.error("[Chat] Failed to connect to group:", error)
+      }
+    },
+    [currentUser],
+  )
+
+  const sendMessage = useCallback(
+    (roomId: string, content: string) => {
+      if (!content.trim()) return
+
+      const isGroup = roomId.startsWith('group_')
+      
+      if (isGroup) {
+        if (!groupWsRef.current || groupWsRef.current.readyState !== WebSocket.OPEN) {
+          console.log("[Chat] Cannot send group message: WebSocket not ready")
+          return
+        }
+
+        groupWsRef.current.send(
+          JSON.stringify({
+            type: "chat_message",
+            message: content.trim(),
+          }),
+        )
+      } else {
+        if (!chatWsRef.current || chatWsRef.current.readyState !== WebSocket.OPEN) {
+          console.log("[Chat] Cannot send message: WebSocket not ready")
+          return
+        }
+
+        chatWsRef.current.send(
+          JSON.stringify({
+            action: "send",
+            message: content.trim(),
+          }),
+        )
+      }
+    },
+    [],
+  )
+
+  const sendGroupMessage = useCallback(
+    (groupId: string, content: string, replyToId?: string) => {
+      if (!groupWsRef.current || groupWsRef.current.readyState !== WebSocket.OPEN || !content.trim()) {
+        return
+      }
+
+      groupWsRef.current.send(
         JSON.stringify({
-          action: "send",
+          type: "chat_message",
           message: content.trim(),
+          reply_to: replyToId || null,
         }),
       )
     },
@@ -342,29 +535,49 @@ export function useChat() {
   )
 
   const markAsRead = useCallback(
-  (roomId: string, messageId?: string, fileId?: string) => {
-    if (chatWsRef.current && chatWsRef.current.readyState === WebSocket.OPEN) {
-      console.log("[Chat] Marking as read:", { messageId, fileId });
-      
-      const payload: any = {
-        action: "read",
-      };
-      
-      if (messageId) {
-        payload.message_id = messageId;
-      }
-      
-      if (fileId) {
-        payload.file_id = fileId;
-      }
-      
-      chatWsRef.current.send(JSON.stringify(payload));
-    }
-  },
-  [],
-);
+    (roomId: string, messageId?: string, fileId?: string) => {
+      if (chatWsRef.current && chatWsRef.current.readyState === WebSocket.OPEN) {
+        console.log("[Chat] Marking as read:", { messageId, fileId });
 
+        const payload: any = {
+          action: "read",
+        };
 
+        if (messageId) {
+          payload.message_id = messageId;
+        }
+
+        if (fileId) {
+          payload.file_id = fileId;
+        }
+
+        chatWsRef.current.send(JSON.stringify(payload));
+
+        setMessages(prev => {
+          const updatedRoomMessages = (prev[roomId] || []).map(msg => {
+            if ((messageId && msg.id === messageId) || (fileId && msg.id === fileId)) {
+              return { ...msg, is_read: true };
+            }
+            return msg;
+          });
+
+          return {
+            ...prev,
+            [roomId]: updatedRoomMessages,
+          };
+        });
+
+        setChats(prev => prev.map(chat => {
+          const chatRoomId = chat.room_id || chat.id?.toString();
+          if (chatRoomId === roomId && chat.unread > 0) {
+            return { ...chat, unread: Math.max(0, chat.unread - 1) };
+          }
+          return chat;
+        }));
+      }
+    },
+    [],
+  );
 
   const addMessage = useCallback((roomId: string, message: Message) => {
     setMessages((prev) => ({
@@ -389,15 +602,6 @@ export function useChat() {
     }))
   }, [])
 
-  const markMessageAsRead = useCallback((roomId: string, messageId: string) => {
-    setMessages((prev) => ({
-      ...prev,
-      [roomId]: (prev[roomId] || []).map((msg) =>
-        msg.id === messageId ? { ...msg, is_read: true } : msg
-      ),
-    }))
-  }, [])
-
   const updateChatUnreadCount = useCallback((contactId: number, unreadCount: number) => {
     setChats((prev) =>
       prev.map((chat) =>
@@ -410,15 +614,63 @@ export function useChat() {
     console.log(`[Chat] User ${userId} is now ${isOnline ? 'online' : 'offline'}`)
   }, [])
 
+  // Group-specific functions
+  const createGroup = useCallback(async (name: string, description?: string) => {
+    try {
+      const response = await apiClient.createGroup({
+        name,
+        description,
+        created_by: currentUser.id
+      })
+      await loadGroups() // Reload groups
+      return response
+    } catch (error) {
+      console.error("[Chat] Failed to create group:", error)
+      throw error
+    }
+  }, [currentUser, loadGroups])
+
+  const addGroupMember = useCallback(async (groupId: number, userId: number, role: 'member' | 'admin' = 'member') => {
+    try {
+      const response = await apiClient.addGroupMember({
+        group: groupId,
+        user: userId,
+        role
+      })
+      return response
+    } catch (error) {
+      console.error("[Chat] Failed to add group member:", error)
+      throw error
+    }
+  }, [])
+
+  const getGroupMembers = useCallback(async (groupId: number): Promise<GroupMember[]> => {
+    try {
+      const response = await apiClient.getGroupMembers(groupId)
+      return response
+    } catch (error) {
+      console.error("[Chat] Failed to get group members:", error)
+      return []
+    }
+  }, [])
+
   return {
     messages,
     chats,
+    groups,
     isConnected,
     currentUser,
     sendMessage,
+    sendGroupMessage,
     markAsRead,
     connectToChatRoom,
+    connectToGroup,
+    createGroup,
+    addGroupMember,
+    getGroupMembers,
+    loadGroups,
     apiClient,
     chatWsRef,
+    groupWsRef,
   }
 }
