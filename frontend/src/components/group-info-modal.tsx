@@ -1,7 +1,5 @@
-"use client"
-
-import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useState, useEffect } from "react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectTrigger, SelectValue, SelectItem } from "./ui/select"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +29,7 @@ import {
   MessageSquare,
   LogOut,
 } from "lucide-react"
+import { apiClient } from "@/lib/api"
 
 interface GroupInfoModalProps {
   isOpen: boolean
@@ -40,90 +40,240 @@ interface GroupInfoModalProps {
     description: string
     avatar: string
     memberCount: number
-    isAdmin: boolean
+    // isAdmin: boolean
   }
 }
 
-// Mock group members data
-const mockMembers = [
-  {
-    id: 1,
-    name: "Akmal Karimov",
-    username: "akmal_k",
-    avatar: "/diverse-group.png",
-    role: "Developer",
-    isOnline: true,
-    isAdmin: true,
-    isOwner: true,
-    joinedDate: "2024-01-15",
-  },
-  {
-    id: 2,
-    name: "Malika Tosheva",
-    username: "malika_t",
-    avatar: "/diverse-group-meeting.png",
-    role: "Manager",
-    isOnline: false,
-    isAdmin: true,
-    isOwner: false,
-    joinedDate: "2024-01-16",
-  },
-  {
-    id: 3,
-    name: "Bobur Aliyev",
-    username: "bobur_a",
-    avatar: "/news-collage.png",
-    role: "Designer",
-    isOnline: true,
-    isAdmin: false,
-    isOwner: false,
-    joinedDate: "2024-01-17",
-  },
-  {
-    id: 4,
-    name: "Dilshod Rahimov",
-    username: "dilshod_r",
-    avatar: "/abstract-self.png",
-    role: "Accountant",
-    isOnline: false,
-    isAdmin: false,
-    isOwner: false,
-    joinedDate: "2024-01-18",
-  },
-]
+interface GroupMember {
+  id: number
+  group: number
+  user: number
+  user_fullname: string
+  user_username: string
+  role: "owner" | "admin" | "member"
+  joined_at: string
+  is_online?: boolean
+}
 
 export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) {
+  const [userRole, setUserRole] = useState<"owner" | "admin" | "member">("member");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isEditing, setIsEditing] = useState(false)
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [availableUsers, setAvailableUsers] = useState<any[]>([]);
+  const [selectedUser, setSelectedUser] = useState<number | null>(null);
+  const [selectedRole, setSelectedRole] = useState<'member' | 'admin'>('member');
+  const [userExists, setUserExists] = useState<boolean | null>(null);
+  const [foundUser, setFoundUser] = useState<any>(null);
+  const [username, setUsername] = useState<any>(null);
   const [editData, setEditData] = useState({
     name: group.name,
     description: group.description,
   })
+  const [members, setMembers] = useState<GroupMember[]>([])
+  const [loading, setLoading] = useState(false)
 
-  const handleSave = () => {
-    // TODO: Implement save group info logic
-    console.log("Saving group info:", editData)
-    setIsEditing(false)
+  useEffect(() => {
+    if (isOpen) {
+      loadGroupMembers()
+    }
+  }, [isOpen, group.id])
+
+  const loadGroupMembers = async () => {
+    try {
+      setLoading(true)
+      const membersData = await apiClient.getGroupMembers(group.id)
+      setMembers(membersData)
+      const currentUser = await apiClient.getMe();
+      const currentUserId = currentUser.id;
+      const currentUserMember = membersData.find((member: GroupMember) =>
+        member.user === currentUserId
+      );
+
+      if (currentUserMember) {
+        setUserRole(currentUserMember.role);
+        setIsAdmin(currentUserMember.role === "owner" || currentUserMember.role === "admin");
+      }
+    } catch (error) {
+      console.error("Failed to load group members:", error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleMakeAdmin = (userId: number) => {
-    // TODO: Implement make admin logic
-    console.log("Making admin:", userId)
+  const checkUsername = async () => {
+    if (!username.trim()) {
+      setUserExists(null);
+      setFoundUser(null);
+      return;
+    }
+
+    try {
+      const users = await apiClient.searchUser(username);
+
+      const user = users.find((u: any) =>
+        u.username.toLowerCase() === username.toLowerCase().trim()
+      );
+
+      if (user) {
+        const isAlreadyMember = members.some((member: GroupMember) => member.user === user.id);
+
+        if (isAlreadyMember) {
+          setUserExists(false);
+          setFoundUser(null);
+          alert("Bu foydalanuvchi allaqachon guruhda mavjud");
+        } else {
+          setUserExists(true);
+          setFoundUser(user);
+        }
+      } else {
+        setUserExists(false);
+        setFoundUser(null);
+      }
+    } catch (error) {
+      console.error("Failed to check username:", error);
+      setUserExists(false);
+      setFoundUser(null);
+    }
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      checkUsername();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [username]);
+
+  const handleSave = async () => {
+    try {
+      await apiClient.updateGroup(group.id, editData)
+      setIsEditing(false)
+    } catch (error) {
+      console.error("Failed to update group:", error)
+    }
   }
 
-  const handleRemoveAdmin = (userId: number) => {
-    // TODO: Implement remove admin logic
-    console.log("Removing admin:", userId)
+  const handleMakeAdmin = async (userId: number) => {
+    try {
+      await apiClient.updateGroupMemberRole(group.id, userId, 'admin');
+      await loadGroupMembers();
+      alert("Foydalanuvchi admin qilindi");
+    } catch (error: any) {
+      console.error("Failed to make admin:", error);
+      alert(error.message || "Admin qilishda xatolik yuz berdi");
+    }
+  };
+
+  const handleRemoveAdmin = async (userId: number) => {
+    try {
+      await apiClient.updateGroupMemberRole(group.id, userId, 'member');
+      await loadGroupMembers();
+      alert("Foydalanuvchi adminlikdan olindi");
+    } catch (error: any) {
+      console.error("Failed to remove admin:", error);
+      alert(error.message || "Adminlikdan olishda xatolik yuz berdi");
+    }
+  };
+
+  const handleRemoveMember = async (groupId: number, userId: number) => {
+    try {
+      await apiClient.removeGroupMember(groupId, userId);
+      await loadGroupMembers();
+    } catch (error) {
+      console.error("Failed to remove member:", error);
+      alert("Failed to remove member. Please try again.");
+    }
+  };
+
+  const handleLeaveGroup = async () => {
+    try {
+      await apiClient.leaveGroup(group.id)
+      onClose()
+    } catch (error) {
+      console.error("Failed to leave group:", error)
+    }
   }
 
-  const handleRemoveMember = (userId: number) => {
-    // TODO: Implement remove member logic
-    console.log("Removing member:", userId)
+  const loadAvailableUsers = async () => {
+    try {
+      const users = await apiClient.searchUsers("");
+      const nonMembers = users.filter((user: any) =>
+        !members.some((member: GroupMember) => member.user === user.id)
+      );
+      setAvailableUsers(nonMembers);
+    } catch (error) {
+      console.error("Failed to load available users:", error);
+    }
+  };
+
+  const handleAddMember = async () => {
+    if (!foundUser) {
+      alert("Iltimos, avval foydalanuvchini toping");
+      return;
+    }
+
+    try {
+      const addData = {
+        group: group.id,
+        user: foundUser.id,
+        role: selectedRole
+      };
+
+      await apiClient.addGroupMember(addData);
+
+      // Tozalash
+      setUsername("");
+      setSelectedRole('member');
+      setUserExists(null);
+      setFoundUser(null);
+
+      // A'zolar ro'yxatini yangilash
+      await loadGroupMembers();
+
+      alert(`${foundUser.username} guruhga muvaffaqiyatli qo'shildi`);
+
+    } catch (error: any) {
+      console.error("Failed to add member:", error);
+      alert(error.message || "Foydalanuvchi qo'shishda xatolik yuz berdi");
+    }
+  };
+
+  const getRoleBadge = (role: string, isOwner: boolean) => {
+    if (isOwner) {
+      return (
+        <Badge variant="default" className="bg-yellow-500">
+          <Crown className="mr-1 h-3 w-3" />
+          Owner
+        </Badge>
+      )
+    }
+
+    switch (role) {
+      case "admin":
+        return (
+          <Badge variant="default" className="bg-blue-500">
+            <Shield className="mr-1 h-3 w-3" />
+            Admin
+          </Badge>
+        )
+      case "member":
+        return (
+          <Badge variant="outline">
+            Member
+          </Badge>
+        )
+      default:
+        return null
+    }
   }
 
-  const handleLeaveGroup = () => {
-    // TODO: Implement leave group logic
-    console.log("Leaving group:", group.id)
-    onClose()
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("uz-UZ", {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
   }
 
   return (
@@ -132,7 +282,7 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle>Guruh ma'lumotlari</DialogTitle>
-            {group.isAdmin && (
+            {isAdmin && (
               <Button variant="ghost" size="sm" onClick={() => setIsEditing(!isEditing)}>
                 {isEditing ? <X className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
               </Button>
@@ -141,10 +291,9 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Group Header */}
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16">
-              <AvatarImage src={group.avatar || "/placeholder.svg"} />
+              <AvatarImage src={group.avatar || "/group-avatar.png"} />
               <AvatarFallback className="text-lg">{group.name.charAt(0)}</AvatarFallback>
             </Avatar>
             <div className="flex-1">
@@ -167,24 +316,29 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
                       rows={2}
                     />
                   </div>
-                  <Button onClick={handleSave} size="sm">
-                    <Save className="mr-2 h-4 w-4" />
-                    Saqlash
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button onClick={handleSave} size="sm">
+                      <Save className="mr-2 h-4 w-4" />
+                      Saqlash
+                    </Button>
+                    <Button variant="outline" onClick={() => setIsEditing(false)} size="sm">
+                      Bekor qilish
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div>
                   <h3 className="text-xl font-semibold">{group.name}</h3>
-                  <p className="text-muted-foreground">{group.description}</p>
+                  <p className="text-muted-foreground">{group.description || "Tavsif mavjud emas"}</p>
                   <div className="flex items-center gap-2 mt-2">
                     <Badge variant="secondary">
                       <Users className="mr-1 h-3 w-3" />
-                      {group.memberCount} a'zo
+                      {members.length} a'zo
                     </Badge>
-                    {group.isAdmin && (
+                    {isAdmin && (
                       <Badge variant="default">
                         <Shield className="mr-1 h-3 w-3" />
-                        Admin
+                        {userRole}
                       </Badge>
                     )}
                   </div>
@@ -202,9 +356,16 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
 
               <TabsContent value="members" className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="font-medium">Guruh a'zolari ({mockMembers.length})</h4>
-                  {group.isAdmin && (
-                    <Button size="sm" variant="outline">
+                  <h4 className="font-medium">Guruh a'zolari ({members.length})</h4>
+                  {isAdmin && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setShowAddMemberModal(true);
+                        loadAvailableUsers();
+                      }}
+                    >
                       <UserPlus className="mr-2 h-4 w-4" />
                       A'zo qo'shish
                     </Button>
@@ -212,72 +373,130 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
                 </div>
 
                 <ScrollArea className="h-64">
-                  <div className="space-y-2">
-                    {mockMembers.map((member) => (
-                      <div key={member.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent">
-                        <div className="relative">
-                          <Avatar className="h-10 w-10">
-                            <AvatarImage src={member.avatar || "/placeholder.svg"} />
-                            <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          {member.isOnline && (
-                            <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 bg-green-500 border-2 border-background rounded-full" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-medium text-sm truncate">{member.name}</h3>
-                            {member.isOwner && <Crown className="h-4 w-4 text-yellow-500" />}
-                            {member.isAdmin && !member.isOwner && <Shield className="h-4 w-4 text-blue-500" />}
-                            <Badge variant="outline" className="text-xs">
-                              {member.role}
-                            </Badge>
+                  {loading ? (
+                    <div className="text-center py-8">
+                      <p>Yuklanmoqda...</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {members.map((member) => (
+                        <div key={member.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent">
+                          <div className="relative">
+                            <Avatar className="h-10 w-10">
+                              <AvatarImage src="/diverse-group.png" />
+                              <AvatarFallback>{member.user_fullname?.charAt(0) || "U"}</AvatarFallback>
+                            </Avatar>
+                            {member.is_online && (
+                              <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 bg-green-500 border-2 border-background rounded-full" />
+                            )}
                           </div>
-                          <p className="text-xs text-muted-foreground">@{member.username}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Qo'shildi: {new Date(member.joinedDate).toLocaleDateString("uz-UZ")}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="sm">
-                            <MessageSquare className="h-4 w-4" />
-                          </Button>
-                          {group.isAdmin && !member.isOwner && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                {member.isAdmin ? (
-                                  <DropdownMenuItem onClick={() => handleRemoveAdmin(member.id)}>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-medium text-sm truncate">{member.user_fullname}</h3>
+                              {getRoleBadge(member.role, member.role === "owner")}
+                            </div>
+                            <p className="text-xs text-muted-foreground">@{member.user_username}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Qo'shildi: {formatDate(member.joined_at)}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="sm">
+                              <MessageSquare className="h-4 w-4" />
+                            </Button>
+                            {isAdmin && member.role !== "owner" && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  {member.role === "admin" ? (
+                                    <DropdownMenuItem onClick={() => handleRemoveAdmin(member.user)}>
+                                      <UserMinus className="mr-2 h-4 w-4" />
+                                      Adminlikdan olish
+                                    </DropdownMenuItem>
+                                  ) : (
+                                    <DropdownMenuItem onClick={() => handleMakeAdmin(member.user)}>
+                                      <Shield className="mr-2 h-4 w-4" />
+                                      Admin qilish
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={() => handleRemoveMember(group.id, member.user)}
+                                  >
                                     <UserMinus className="mr-2 h-4 w-4" />
-                                    Adminlikdan olish
+                                    Guruhdan chiqarish
                                   </DropdownMenuItem>
-                                ) : (
-                                  <DropdownMenuItem onClick={() => handleMakeAdmin(member.id)}>
-                                    <Shield className="mr-2 h-4 w-4" />
-                                    Admin qilish
-                                  </DropdownMenuItem>
-                                )}
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  className="text-destructive"
-                                  onClick={() => handleRemoveMember(member.id)}
-                                >
-                                  <UserMinus className="mr-2 h-4 w-4" />
-                                  Guruhdan chiqarish
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </ScrollArea>
               </TabsContent>
+
+              <Dialog open={showAddMemberModal} onOpenChange={setShowAddMemberModal}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Guruhga a'zo qo'shish</DialogTitle>
+                    <DialogDescription>
+                      Foydalanuvchi username ni kiriting va rolini tanlang
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="username">Username</Label>
+                      <Input
+                        id="username"
+                        placeholder="username kiriting..."
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="role-select">Rol</Label>
+                      <Select value={selectedRole} onValueChange={(value: 'member' | 'admin') => setSelectedRole(value)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Rol tanlang" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="member">A'zo</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex gap-2 justify-end">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setShowAddMemberModal(false);
+                          setUsername("");
+                          setSelectedRole('member');
+                          setUserExists(null);
+                          setFoundUser(null);
+                        }}
+                      >
+                        Bekor qilish
+                      </Button>
+                      <Button
+                        onClick={handleAddMember}
+                        disabled={!foundUser || !selectedRole}
+                      >
+                        Qo'shish
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
 
               <TabsContent value="settings" className="space-y-4">
                 <div className="space-y-4">
@@ -289,7 +508,7 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
                           <p className="font-medium text-sm">Xabar yuborish huquqi</p>
                           <p className="text-xs text-muted-foreground">Faqat adminlar xabar yuborishi mumkin</p>
                         </div>
-                        <Button variant="outline" size="sm" disabled={!group.isAdmin}>
+                        <Button variant="outline" size="sm" disabled={!isAdmin}>
                           O'zgartirish
                         </Button>
                       </div>
@@ -298,7 +517,7 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
                           <p className="font-medium text-sm">A'zo qo'shish huquqi</p>
                           <p className="text-xs text-muted-foreground">Barcha a'zolar yangi a'zo qo'sha oladi</p>
                         </div>
-                        <Button variant="outline" size="sm" disabled={!group.isAdmin}>
+                        <Button variant="outline" size="sm" disabled={!isAdmin}>
                           O'zgartirish
                         </Button>
                       </div>

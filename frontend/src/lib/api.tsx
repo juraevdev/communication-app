@@ -27,20 +27,20 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-      
+
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
         try {
           const response = await axios.post(`${BASE_URL}/api/token/refresh/`, {
             refresh: refreshToken,
           });
-          
+
           const { access } = response.data;
           localStorage.setItem('access_token', access);
-          
+
           originalRequest.headers.Authorization = `Bearer ${access}`;
           return api(originalRequest);
         } catch (refreshError) {
@@ -51,7 +51,7 @@ api.interceptors.response.use(
         }
       }
     }
-    
+
     return Promise.reject(error);
   }
 );
@@ -62,10 +62,10 @@ export const apiClient = {
   async login(email: string, password: string) {
     const response = await api.post('/accounts/login/', { email, password });
     const { access, refresh } = response.data;
-    
+
     localStorage.setItem('access_token', access);
     localStorage.setItem('refresh_token', refresh);
-    
+
     return response.data;
   },
 
@@ -114,7 +114,7 @@ export const apiClient = {
     if (messageId) {
       formData.append('message_id', messageId.toString());
     }
-    
+
     const response = await api.post('/chat/file-upload/', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
@@ -164,7 +164,7 @@ export const apiClient = {
   },
 
   async createGroup(data: { name: string; description?: string; created_by: number }) {
-    const response = await fetch(`${BASE_URL}/api/v1/groups/create/`, {
+    const response = await fetch(`${BASE_URL}/api/v1/group/create/`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(data),
@@ -181,7 +181,7 @@ export const apiClient = {
   },
 
   async getGroupDetail(groupId: number) {
-    const response = await fetch(`${BASE_URL}/api/v1/groups/${groupId}/`, {
+    const response = await fetch(`${BASE_URL}/api/v1/group/${groupId}/`, {
       method: 'GET',
       headers: this.getHeaders(),
     });
@@ -189,7 +189,7 @@ export const apiClient = {
   },
 
   async updateGroup(groupId: number, data: { name?: string; description?: string }) {
-    const response = await fetch(`${BASE_URL}/api/v1/groups/edit/${groupId}/`, {
+    const response = await fetch(`${BASE_URL}/api/v1/group/edit/${groupId}/`, {
       method: 'PUT',
       headers: this.getHeaders(),
       body: JSON.stringify(data),
@@ -198,16 +198,15 @@ export const apiClient = {
   },
 
   async deleteGroup(groupId: number) {
-    const response = await fetch(`${BASE_URL}/api/v1/groups/delete/${groupId}/`, {
+    const response = await fetch(`${BASE_URL}/api/v1/group/delete/${groupId}/`, {
       method: 'DELETE',
       headers: this.getHeaders(),
     });
     return this.handleResponse(response);
   },
 
-  // Group Member Management APIs
   async addGroupMember(data: { group: number; user: number; role: 'owner' | 'admin' | 'member' }) {
-    const response = await fetch(`${BASE_URL}/api/v1/groups/add-member/`, {
+    const response = await fetch(`${BASE_URL}/api/v1/group/add-member/`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(data),
@@ -215,8 +214,8 @@ export const apiClient = {
     return this.handleResponse(response);
   },
 
-  async removeGroupMember(memberId: number) {
-    const response = await fetch(`${BASE_URL}/api/v1/groups/remove-member/${memberId}/`, {
+  async removeGroupMember(groupId: number, memberId: number) {
+    const response = await fetch(`${BASE_URL}/api/v1/group/remove-member/${groupId}/${memberId}/`, {
       method: 'DELETE',
       headers: this.getHeaders(),
     });
@@ -224,7 +223,7 @@ export const apiClient = {
   },
 
   async getGroupMembers(groupId: number) {
-    const response = await fetch(`${BASE_URL}/api/v1/groups/members/${groupId}/`, {
+    const response = await fetch(`${BASE_URL}/api/v1/group/members/${groupId}/`, {
       method: 'GET',
       headers: this.getHeaders(),
     });
@@ -232,17 +231,25 @@ export const apiClient = {
   },
 
   async getGroupMessages(groupId: number) {
-    const response = await fetch(`${BASE_URL}/api/v1/groups/group-messages/${groupId}/`, {
+    const response = await fetch(`${BASE_URL}/api/v1/group/group-messages/${groupId}/`, {
       method: 'GET',
       headers: this.getHeaders(),
     });
     return this.handleResponse(response);
   },
 
-  // WebSocket URLs
+  async markGroupMessageAsRead(groupId: number, messageId: number) {
+    const response = await fetch(`${BASE_URL}/api/v1/group/messages/${messageId}/read/`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ group_id: groupId })
+    });
+    return this.handleResponse(response);
+},
+
   getGroupWebSocketUrl(groupId: string): string {
     const token = localStorage.getItem('access_token');
-  
+
     return `${WS_BASE_URL}/ws/groups/${groupId}/?token=${token}`;
   },
 
@@ -253,6 +260,29 @@ export const apiClient = {
     }
     return response.json();
   },
+
+  async updateGroupMemberRole(groupId: number, userId: number, role: string): Promise<any> {
+    const response = await fetch(`${BASE_URL}/api/v1/group/update-member-role/${groupId}/${userId}/`, {
+      method: 'PUT',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ role })
+    });
+    return this.handleResponse(response);
+  },
+
+  async leaveGroup(groupId: number): Promise<any> {
+    const response = await fetch(`/groups/${groupId}/leave/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+    })
+    return response
+  },
+
+  async searchUser(searchTerm: string = "") {
+    const response = await fetch(`${BASE_URL}/api/v1/accounts/filter/?search=${encodeURIComponent(searchTerm)}`, {
+      method: 'GET',
+      headers: this.getHeaders(),
+    });
+    return this.handleResponse(response);
+  },
 };
-
-

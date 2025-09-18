@@ -5,6 +5,7 @@ import { useState, useEffect } from "react"
 interface TypingIndicatorProps {
   isVisible: boolean
   userName?: string
+  multiple?: boolean
 }
 
 export function TypingIndicator({ isVisible, userName = "Kimdir" }: TypingIndicatorProps) {

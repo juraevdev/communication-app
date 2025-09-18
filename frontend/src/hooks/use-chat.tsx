@@ -63,6 +63,7 @@ export function useChat() {
   const notificationsWsRef = useRef<WebSocket | null>(null)
   const currentRoomRef = useRef<string | null>(null)
   const currentGroupRef = useRef<string | null>(null)
+  const [typingUsers, setTypingUsers] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     const initializeUser = async () => {
@@ -114,7 +115,7 @@ export function useChat() {
         room_id: `group_${group.id}`,
         type: "group",
         description: group.description,
-        memberCount: 0, // Will be loaded separately if needed
+        memberCount: 0,
         isAdmin: group.created_by === currentUser?.id,
       }))
       setGroups(formattedGroups)
@@ -405,8 +406,7 @@ export function useChat() {
         groupWs.onopen = () => {
           console.log(`[Chat] Group WebSocket connected to group ${groupId}`)
           currentGroupRef.current = groupId
-          
-          // Request message history
+
           groupWs.send(JSON.stringify({
             type: "get_history"
           }))
@@ -417,49 +417,85 @@ export function useChat() {
           console.log("[Chat] Group message received:", data)
 
           switch (data.type) {
-            case "message":
+            case "message_history":
+              if (data.messages && Array.isArray(data.messages)) {
+                const formattedMessages: Message[] = data.messages.map((msg: any) => ({
+                  id: msg.id.toString(),
+                  group_id: parseInt(groupId),
+                  sender: {
+                    id: msg.sender?.toString() || msg.sender_id?.toString(),
+                    email: "",
+                    fullname: msg.sender_fullname || "Unknown",
+                    full_name: msg.sender_fullname || "Unknown",
+                  },
+                  message: msg.content || msg.message || "",
+                  timestamp: msg.created_at || msg.timestamp || new Date().toISOString(),
+                  isOwn: (msg.sender?.toString() === currentUser?.id?.toString()) ||
+                    (msg.sender_id?.toString() === currentUser?.id?.toString()),
+                  is_read: true,
+                  is_updated: msg.is_updated || false,
+                  type: "text",
+                  reply_to: msg.reply_to,
+                }))
+
+                formattedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+
+                setMessages((prev) => ({
+                  ...prev,
+                  [`group_${groupId}`]: formattedMessages,
+                }))
+              }
+              break
+
+            case "chat_message":
               const newMessage: Message = {
-                id: data.message.id,
+                id: data.message?.id?.toString() || `temp-${Date.now()}`,
                 group_id: parseInt(groupId),
                 sender: {
                   id: data.sender_id.toString(),
                   email: "",
-                  fullname: data.sender_name,
+                  fullname: data.sender_name || data.sender_fullname || "Unknown",
+                  full_name: data.sender_name || data.sender_fullname || "Unknown",
                 },
-                message: data.message.content || "",
-                timestamp: data.timestamp,
+                message: data.message?.content || data.message || "",
+                timestamp: data.timestamp || new Date().toISOString(),
                 isOwn: data.sender_id === currentUser?.id,
-                is_read: true, // Group messages are considered read immediately
+                is_read: true,
                 is_updated: false,
                 type: "text",
                 reply_to: data.reply_to,
               }
 
+              console.log("[Chat] New group message received:", newMessage)
               addMessage(`group_${groupId}`, newMessage)
               break
 
             case "typing":
-              // Handle typing indicator
-              console.log(`${data.user_name} is typing...`)
+              setTypingUsers(prev => {
+                const newTypingUsers = new Set(prev)
+                newTypingUsers.add(data.user_id)
+                return newTypingUsers
+              })
               break
 
+
             case "stop_typing":
-              // Handle stop typing
-              console.log(`${data.user_name} stopped typing`)
+              setTypingUsers(prev => {
+                const newTypingUsers = new Set(prev)
+                newTypingUsers.delete(data.user_id)
+                return newTypingUsers
+              })
               break
 
             case "member_joined":
-              // Handle member joined
               console.log("Member joined:", data.user)
               break
 
             case "member_left":
-              // Handle member left
               console.log("Member left:", data.user_name)
               break
 
             case "role_updated":
-              // Handle role update
               console.log("Role updated:", data)
               break
           }
@@ -487,7 +523,7 @@ export function useChat() {
       if (!content.trim()) return
 
       const isGroup = roomId.startsWith('group_')
-      
+
       if (isGroup) {
         if (!groupWsRef.current || groupWsRef.current.readyState !== WebSocket.OPEN) {
           console.log("[Chat] Cannot send group message: WebSocket not ready")
@@ -580,10 +616,17 @@ export function useChat() {
   );
 
   const addMessage = useCallback((roomId: string, message: Message) => {
-    setMessages((prev) => ({
-      ...prev,
-      [roomId]: [...(prev[roomId] || []), message],
-    }))
+    setMessages((prev) => {
+      const currentMessages = prev[roomId] || []
+
+      const newMessages = [...currentMessages, message]
+      newMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+
+      return {
+        ...prev,
+        [roomId]: newMessages,
+      }
+    })
   }, [])
 
   const updateMessage = useCallback((roomId: string, messageId: string, newContent: string) => {

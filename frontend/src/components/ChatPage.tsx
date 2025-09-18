@@ -47,23 +47,23 @@ import { TypingIndicator } from "./typing-indicator"
 import { useChat } from "@/hooks/use-chat"
 
 export default function ChatPage() {
-  const { 
-    messages, 
-    chats, 
+  const {
+    messages,
+    chats,
     groups,
-    isConnected, 
-    currentUser, 
-    sendMessage, 
+    isConnected,
+    currentUser,
+    sendMessage,
     sendGroupMessage,
-    markAsRead, 
-    connectToChatRoom, 
+    markAsRead,
+    connectToChatRoom,
     connectToGroup,
     chatWsRef,
     groupWsRef,
     createGroup,
     getGroupMembers
   } = useChat();
-  
+
   const [selectedChat, setSelectedChat] = useState<any>(null)
   const [message, setMessage] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
@@ -73,7 +73,7 @@ export default function ChatPage() {
   const [showGroupInfo, setShowGroupInfo] = useState(false)
   const [showCreateChannel, setShowCreateChannel] = useState(false)
   const [showChannelInfo, setShowChannelInfo] = useState(false)
-  const [isTyping,] = useState(false)
+  const [typingUsers, setTypingUsers] = useState<Set<number>>(new Set())
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [activeTab, setActiveTab] = useState<"private" | "groups" | "channels">("private")
   const [groupMembers, setGroupMembers] = useState<any[]>([])
@@ -91,23 +91,14 @@ export default function ChatPage() {
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Combine chats and groups for display
-  const allChats = [...chats, ...groups]
 
-  useEffect(() => {
-    if (allChats && allChats.length > 0 && !selectedChat) {
-      const firstChat = allChats[0]
-      setSelectedChat(firstChat)
-      handleChatSelect(firstChat)
-    }
-  }, [allChats, selectedChat])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, selectedChat?.id])
 
-  // Auto-mark messages as read when viewing chat
   useEffect(() => {
     if (selectedChat && selectedChat.unread > 0 && selectedChat.type !== "group") {
       const roomId = selectedChat.room_id || selectedChat.id?.toString()
@@ -144,6 +135,43 @@ export default function ChatPage() {
     }
     setMessage("")
   }
+
+  const handleMessageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setMessage(value)
+    if (selectedChat?.type === "group" && groupWsRef.current?.readyState === WebSocket.OPEN) {
+      if (value.trim() && !isTypingTimeoutRef.current) {
+        groupWsRef.current.send(JSON.stringify({
+          type: "typing"
+        }))
+
+        isTypingTimeoutRef.current = setTimeout(() => {
+          if (groupWsRef.current?.readyState === WebSocket.OPEN) {
+            groupWsRef.current.send(JSON.stringify({
+              type: "stop_typing"
+            }))
+          }
+          isTypingTimeoutRef.current = null
+        }, 3000)
+      } else if (!value.trim() && isTypingTimeoutRef.current) {
+        clearTimeout(isTypingTimeoutRef.current)
+        isTypingTimeoutRef.current = null
+        if (groupWsRef.current?.readyState === WebSocket.OPEN) {
+          groupWsRef.current.send(JSON.stringify({
+            type: "stop_typing"
+          }))
+        }
+      }
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (isTypingTimeoutRef.current) {
+        clearTimeout(isTypingTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const handleChatHeaderClick = async () => {
     if (selectedChat?.type === "group") {
@@ -187,6 +215,7 @@ export default function ChatPage() {
 
     setLoadingMessages(false)
   }
+
 
   const handleCreateGroup = async (groupData: { name: string; description?: string }) => {
     try {
@@ -274,10 +303,9 @@ export default function ChatPage() {
     return name.charAt(0).toUpperCase()
   }
 
-  // Filter chats based on active tab
   const getFilteredChats = () => {
     let chatsToFilter: any[] = []
-    
+
     switch (activeTab) {
       case "private":
         chatsToFilter = chats
@@ -286,7 +314,7 @@ export default function ChatPage() {
         chatsToFilter = groups
         break
       case "channels":
-        chatsToFilter = [] // Add channels when implemented
+        chatsToFilter = []
         break
       default:
         chatsToFilter = chats
@@ -449,9 +477,15 @@ export default function ChatPage() {
     }
   };
 
+  const isTyping = typingUsers.size > 0
+  const typingUserNames = Array.from(typingUsers).map(userId => {
+
+    return "Someone"
+  }).join(', ')
+
   const getCurrentMessages = () => {
     if (!selectedChat) return []
-    
+
     if (selectedChat.type === "group") {
       return messages[`group_${selectedChat.id}`] || []
     } else {
@@ -460,6 +494,7 @@ export default function ChatPage() {
   }
 
   const currentMessages = getCurrentMessages()
+
 
   return (
     <div className="flex h-screen bg-gray-950">
@@ -519,27 +554,27 @@ export default function ChatPage() {
 
         <div className="px-4 py-2 border-b border-gray-500">
           <div className="flex gap-1">
-            <Button 
-              variant={activeTab === "private" ? "default" : "ghost"} 
-              size="sm" 
+            <Button
+              variant={activeTab === "private" ? "default" : "ghost"}
+              size="sm"
               className="text-white"
               onClick={() => setActiveTab("private")}
             >
               <MessageSquare className="mr-1 h-3 w-3" />
               Private
             </Button>
-            <Button 
-              variant={activeTab === "groups" ? "default" : "ghost"} 
-              size="sm" 
+            <Button
+              variant={activeTab === "groups" ? "default" : "ghost"}
+              size="sm"
               className="text-white"
               onClick={() => setActiveTab("groups")}
             >
               <Users className="mr-1 h-3 w-3" />
               Groups
             </Button>
-            <Button 
-              variant={activeTab === "channels" ? "default" : "ghost"} 
-              size="sm" 
+            <Button
+              variant={activeTab === "channels" ? "default" : "ghost"}
+              size="sm"
               className="text-white"
               onClick={() => setActiveTab("channels")}
             >
@@ -568,9 +603,8 @@ export default function ChatPage() {
               filteredChats.map((chat) => (
                 <div
                   key={`${chat.type}-${chat.id}` || Math.random()}
-                  className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-gray-800 transition-colors ${
-                    selectedChat?.id === chat.id && selectedChat?.type === chat.type ? "bg-gray-800" : ""
-                  }`}
+                  className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-gray-800 transition-colors ${selectedChat?.id === chat.id && selectedChat?.type === chat.type ? "bg-gray-800" : ""
+                    }`}
                   onClick={() => handleChatSelect(chat)}
                 >
                   <div className="relative">
@@ -684,6 +718,14 @@ export default function ChatPage() {
                             </AvatarFallback>
                           </Avatar>
                         )}
+                        {isTyping && typingUsers.size > 0 && (
+                          <TypingIndicator
+                            isVisible={true}
+                            userName={Array.from(typingUsers).map(id => `User ${id}`).join(', ')}
+                            multiple={typingUsers.size > 1}
+                          />
+                        )}
+                        <div ref={messagesEndRef} />
                         <div className={`max-w-xs lg:max-w-md ${msg.isOwn ? "text-right" : ""}`}>
                           {!msg.isOwn && (
                             <p className="text-sm font-medium text-white mb-1">
@@ -709,7 +751,9 @@ export default function ChatPage() {
                                 </span>
                               </div>
                             ) : (
-                              <p className="text-sm">{msg.message || ""}</p>
+                              <p className="text-sm break-words whitespace-pre-wrap overflow-wrap-anywhere max-w-full">
+                                {msg.message || ""}
+                              </p>
                             )}
                             {msg.is_updated && (
                               <p className="text-xs opacity-70 mt-1">edited</p>
@@ -816,7 +860,7 @@ export default function ChatPage() {
                   <Input
                     placeholder="Type a message..."
                     value={message}
-                    onChange={(e) => setMessage(e.target.value)}
+                    onChange={handleMessageChange} // Yangi handler
                     className="pr-10 bg-gray-800 border-gray-600 text-white"
                     disabled={!isConnected}
                   />
@@ -828,11 +872,6 @@ export default function ChatPage() {
                   <Send className="h-4 w-4" />
                 </Button>
               </form>
-              {!isConnected && (
-                <p className="text-xs text-gray-400 mt-2 text-center">
-                  No connection to server. Trying to reconnect...
-                </p>
-              )}
             </div>
           </>
         ) : (
@@ -858,12 +897,12 @@ export default function ChatPage() {
       />
 
       <ContactsModal isOpen={showContacts} onClose={() => setShowContacts(false)} />
-      
-      <CreateGroupModal 
-        isOpen={showCreateGroup} 
+
+      <CreateGroupModal
+        isOpen={showCreateGroup}
         onClose={() => setShowCreateGroup(false)}
       />
-      
+
       <CreateChannelModal isOpen={showCreateChannel} onClose={() => setShowCreateChannel(false)} />
 
       {selectedChat?.type === "group" && (
@@ -876,7 +915,6 @@ export default function ChatPage() {
             description: selectedChat.description || "No group description",
             avatar: selectedChat.avatar || "",
             memberCount: selectedChat.memberCount || 0,
-            isAdmin: selectedChat.isAdmin || false,
           }}
         />
       )}

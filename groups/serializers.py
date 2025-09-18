@@ -36,3 +36,9 @@ class GroupMembersSerializer(serializers.ModelSerializer):
         model = GroupMember
         fields = ["id", "user", "user_fullname", "user_username", "role", "joined_at"]
         
+        
+
+class GroupUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Group
+        fields = ['name', 'description']

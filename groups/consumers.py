@@ -46,14 +46,18 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
         try:
             text_data_json = json.loads(text_data)
             message_type = text_data_json.get('type', 'chat_message')
-            
+        
             if message_type == 'chat_message':
                 await self.handle_chat_message(text_data_json)
             elif message_type == 'typing':
                 await self.handle_typing(text_data_json)
             elif message_type == 'stop_typing':
                 await self.handle_stop_typing(text_data_json)
-                
+            elif message_type == 'get_history':
+                await self.send_message_history()
+            elif message_type == 'file_upload':  # Yangi qo'shildi
+                await self.handle_file_upload(text_data_json)
+            
         except json.JSONDecodeError:
             await self.send(text_data=json.dumps({
                 'error': 'Invalid JSON format'
@@ -103,7 +107,7 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
 
     async def chat_message(self, event):
         await self.send(text_data=json.dumps({
-            'type': 'message',
+            'type': 'chat_message',
             'message': event['message'],
             'sender_id': event['sender_id'],
             'sender_name': event['sender_name'],
@@ -150,6 +154,79 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
             'new_role': event['new_role'],
             'message': f"{event['user_name']} roli {event['new_role']} ga o'zgartirildi"
         }))
+        
+    async def send_message_history(self):
+        messages = await self.get_group_messages()
+        await self.send(text_data=json.dumps({
+            'type': 'message_history',
+            'messages': messages
+        }))
+        
+    async def handle_file_upload(self, data):
+        file_data = data.get('file_data')
+        file_name = data.get('file_name')
+        file_type = data.get('file_type')
+    
+        if not file_data or not file_name:
+            return
+
+        file_message = await self.save_file_message(file_name, file_type, file_data)
+    
+        if file_message:
+            await self.channel_layer.group_send(
+                self.group_room_name,
+                {
+                    'type': 'file_message',
+                    'file_id': file_message.id,
+                    'file_name': file_message.file_name,
+                    'file_url': file_message.file.url if file_message.file else '',
+                    'file_type': file_message.file_type,
+                    'file_size': file_message.file.size if file_message.file else 0,
+                    'sender_id': self.user.id,
+                    'sender_name': self.user.fullname,
+                    'timestamp': file_message.created_at.isoformat(),
+                }
+            )
+
+    async def file_message(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'file_uploaded',
+            'id': event['file_id'],
+            'file_name': event['file_name'],
+            'file_url': event['file_url'],
+            'file_type': event['file_type'],
+            'file_size': event['file_size'],
+            'user': {
+                'id': event['sender_id'],
+                'fullname': event['sender_name']
+            },
+            'uploaded_at': event['timestamp']
+        }))
+        
+        
+    @database_sync_to_async
+    def save_file_message(self, file_name, file_type, base64_data):
+        try:
+            from django.core.files.base import ContentFile
+            import base64
+        
+            format, file_str = base64_data.split(';base64,')
+            file_data = base64.b64decode(file_str)
+        
+            file_content = ContentFile(file_data, name=file_name)
+        
+            file_message = GroupMessage.objects.create(
+                group_id=self.group_id,
+                sender=self.user,
+                content=f"File: {file_name}",
+                file_type=file_type,
+                file=file_content
+            )
+            return file_message
+        except Exception as e:
+            print(f"Error saving file: {e}")
+            return None
+    
 
     @database_sync_to_async
     def check_group_membership(self):
@@ -198,3 +275,10 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
             if not is_online:
                 self.user.last_seen = timezone.now()
             self.user.save()
+            
+    
+    @database_sync_to_async
+    def get_group_messages(self):
+        messages = GroupMessage.objects.filter(group_id=self.group_id).select_related('sender', 'reply_to').order_by('created_at')[:50]
+        serializer = GroupMessageSerializer(messages, many=True)
+        return serializer.data
