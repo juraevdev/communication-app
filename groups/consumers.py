@@ -23,12 +23,18 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
 
+        await self.accept()
+
+        unread_count = await self.get_unread_count()
+        await self.send(text_data=json.dumps({
+            'type': 'initial_unread_count',
+            'count': unread_count
+        }))
+
         await self.channel_layer.group_add(
             self.group_room_name,
             self.channel_name
         )
-
-        await self.accept()
 
         await self.set_user_online(True)
 
@@ -46,7 +52,7 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
         try:
             text_data_json = json.loads(text_data)
             message_type = text_data_json.get('type', 'chat_message')
-        
+    
             if message_type == 'chat_message':
                 await self.handle_chat_message(text_data_json)
             elif message_type == 'typing':
@@ -55,13 +61,61 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                 await self.handle_stop_typing(text_data_json)
             elif message_type == 'get_history':
                 await self.send_message_history()
-            elif message_type == 'file_upload':  # Yangi qo'shildi
+            elif message_type == 'file_upload':
                 await self.handle_file_upload(text_data_json)
+            elif message_type == 'mark_as_read':  
+                await self.handle_mark_as_read(text_data_json)
+            elif message_type == 'get_unread_count': 
+                await self.send_unread_count()
+            elif message_type == 'mark_all_as_read':
+                await self.handle_mark_all_as_read()
             
         except json.JSONDecodeError:
             await self.send(text_data=json.dumps({
                 'error': 'Invalid JSON format'
             }))
+            
+    async def handle_mark_all_as_read(self):
+        await self.mark_all_messages_as_read()
+        await self.send_unread_count()
+            
+    async def handle_mark_as_read(self, data):
+        message_id = data.get('message_id')
+        await self.mark_message_as_read(message_id)
+
+    async def mark_message_as_read(self, message_id):
+        if message_id:
+            await self.set_message_read_status(message_id, True)
+            await self.channel_layer.group_send(
+                self.group_room_name,
+                {
+                    'type': 'message_read',
+                    'message_id': message_id,
+                    'user_id': self.user.id,
+                    'user_name': self.user.fullname,
+                }
+            )
+
+    async def message_read(self, event):
+        if event['user_id'] == self.user.id:
+            await self.send(text_data=json.dumps({
+                'type': 'unread_count_decrement',
+                'count': 1
+            }))
+    
+        await self.send(text_data=json.dumps({
+            'type': 'read',
+            'message_id': event['message_id'],
+            'user_id': event['user_id'],
+            'user_name': event['user_name'],
+        }))
+
+    async def send_unread_count(self):
+        unread_count = await self.get_unread_count()
+        await self.send(text_data=json.dumps({
+            'type': 'unread_count',
+            'count': unread_count
+        }))
 
     async def handle_chat_message(self, data):
         content = data.get('message', '')
@@ -106,6 +160,12 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
         )
 
     async def chat_message(self, event):
+        if event['sender_id'] != self.user.id:
+            await self.send(text_data=json.dumps({
+                'type': 'unread_count_increment',
+                'count': 1
+            }))
+    
         await self.send(text_data=json.dumps({
             'type': 'chat_message',
             'message': event['message'],
@@ -166,22 +226,22 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
         file_data = data.get('file_data')
         file_name = data.get('file_name')
         file_type = data.get('file_type')
-    
+
         if not file_data or not file_name:
             return
 
         file_message = await self.save_file_message(file_name, file_type, file_data)
-    
+
         if file_message:
             await self.channel_layer.group_send(
                 self.group_room_name,
                 {
                     'type': 'file_message',
                     'file_id': file_message.id,
-                    'file_name': file_message.file_name,
-                    'file_url': file_message.file.url if file_message.file else '',
-                    'file_type': file_message.file_type,
-                    'file_size': file_message.file.size if file_message.file else 0,
+                    'file_name': file_message.file.original_filename if file_message.file else file_name,
+                    'file_url': file_message.file.file.url if file_message.file else '',
+                    'file_type': file_type,
+                    'file_size': file_message.file.file.size if file_message.file else 0,
                     'sender_id': self.user.id,
                     'sender_name': self.user.fullname,
                     'timestamp': file_message.created_at.isoformat(),
@@ -189,6 +249,12 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
             )
 
     async def file_message(self, event):
+        if event['sender_id'] != self.user.id:
+            await self.send(text_data=json.dumps({
+                'type': 'unread_count_increment',
+                'count': 1
+            }))
+    
         await self.send(text_data=json.dumps({
             'type': 'file_uploaded',
             'id': event['file_id'],
@@ -200,7 +266,11 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                 'id': event['sender_id'],
                 'fullname': event['sender_name']
             },
-            'uploaded_at': event['timestamp']
+            'sender_id': event['sender_id'],
+            'sender_name': event['sender_name'],
+            'timestamp': event['timestamp'],
+            'uploaded_at': event['timestamp'],
+            'message_type': 'file'
         }))
         
         
@@ -209,19 +279,42 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
         try:
             from django.core.files.base import ContentFile
             import base64
-        
-            format, file_str = base64_data.split(';base64,')
+            from groups.models import FileUpload
+            import uuid
+            import os
+
+            if ';base64,' in base64_data:
+                format, file_str = base64_data.split(';base64,')
+            else:
+                file_str = base64_data
+
             file_data = base64.b64decode(file_str)
-        
-            file_content = ContentFile(file_data, name=file_name)
-        
+
+            file_extension = os.path.splitext(file_name)[1]
+            unique_filename = f"{uuid.uuid4()}{file_extension}"
+
+            file_content = ContentFile(file_data, name=unique_filename)
+
+            file_upload = FileUpload.objects.create(
+                user=self.user,
+                group_id=self.group_id,
+                file=file_content,
+                original_filename=file_name
+            )
+
             file_message = GroupMessage.objects.create(
                 group_id=self.group_id,
                 sender=self.user,
                 content=f"File: {file_name}",
-                file_type=file_type,
-                file=file_content
+                file=file_upload,
+                message_type='file'
             )
+        
+            file_url = file_upload.file.url
+            if not file_url.startswith('http'):
+                from django.conf import settings
+                file_url = f"{settings.BASE_URL}{file_url}"
+
             return file_message
         except Exception as e:
             print(f"Error saving file: {e}")
@@ -279,6 +372,57 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
     
     @database_sync_to_async
     def get_group_messages(self):
-        messages = GroupMessage.objects.filter(group_id=self.group_id).select_related('sender', 'reply_to').order_by('created_at')[:50]
-        serializer = GroupMessageSerializer(messages, many=True)
-        return serializer.data
+        messages = GroupMessage.objects.filter(group_id=self.group_id).select_related('sender', 'reply_to', 'file').order_by('created_at')[:50]
+    
+        result = []
+        for msg in messages:
+            message_data = {
+                'id': msg.id,
+                'content': msg.content,
+                'sender_id': msg.sender.id,
+                'sender_fullname': msg.sender.fullname,
+                'created_at': msg.created_at.isoformat(),
+                'message_type': msg.message_type,
+                'is_updated': False,
+            }
+        
+            if msg.file:
+                message_data.update({
+                    'file_name': msg.file.original_filename,
+                    'file_url': msg.file.file.url if msg.file.file else '',
+                    'file_type': 'file',  
+                    'file_size': msg.file.file.size if msg.file.file else 0,
+                })
+        
+            result.append(message_data)
+    
+        return result
+
+
+    @database_sync_to_async
+    def set_message_read_status(self, message_id, is_read):
+        try:
+            message = GroupMessage.objects.get(id=message_id, group_id=self.group_id)
+            if message.sender != self.user:  
+                message.is_read = is_read
+                message.save()
+                return True
+        except GroupMessage.DoesNotExist:
+            pass
+        return False
+
+
+    @database_sync_to_async
+    def get_unread_count(self):
+        return GroupMessage.objects.filter(
+            group_id=self.group_id,
+            is_read=False
+        ).exclude(sender=self.user).count()
+        
+    
+    @database_sync_to_async
+    def mark_all_messages_as_read(self):
+        GroupMessage.objects.filter(
+            group_id=self.group_id,
+            is_read=False
+        ).exclude(sender=self.user).update(is_read=True)

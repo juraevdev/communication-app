@@ -1,6 +1,5 @@
 import type React from "react"
 import { apiClient } from "@/lib/api"
-
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -36,6 +35,7 @@ import {
   X
 } from "lucide-react"
 
+import { ProfileModal } from "./profile-modal"
 import { UserProfileModal } from "./user-profile-modal"
 import { ContactsModal } from "./contacts-modal"
 import { CreateGroupModal } from "./create-group-modal"
@@ -48,25 +48,28 @@ import { useChat } from "@/hooks/use-chat"
 
 export default function ChatPage() {
   const {
-    messages,
     chats,
     groups,
-    isConnected,
-    currentUser,
-    sendMessage,
-    sendGroupMessage,
-    markAsRead,
-    connectToChatRoom,
-    connectToGroup,
+    messages,
     chatWsRef,
     groupWsRef,
+    currentUser,
+    isConnected,
+    markAsRead,
+    sendMessage,
     createGroup,
-    getGroupMembers
+    connectToGroup,
+    getGroupMembers,
+    sendGroupMessage,
+    connectToChatRoom,
+    getGroupUnreadCount,
+    markGroupMessageAsRead,
   } = useChat();
 
   const [selectedChat, setSelectedChat] = useState<any>(null)
   const [message, setMessage] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
+  const [showProfile, setShowProfile] = useState(false)
   const [showUserProfile, setShowUserProfile] = useState(false)
   const [showContacts, setShowContacts] = useState(false)
   const [showCreateGroup, setShowCreateGroup] = useState(false)
@@ -77,6 +80,7 @@ export default function ChatPage() {
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [activeTab, setActiveTab] = useState<"private" | "groups" | "channels">("private")
   const [groupMembers, setGroupMembers] = useState<any[]>([])
+  const [group, setGroups] = useState<any[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [fileUpload, setFileUpload] = useState<{
     file: File | null;
@@ -173,6 +177,25 @@ export default function ChatPage() {
     }
   }, [])
 
+
+  useEffect(() => {
+    if (selectedChat && selectedChat.unread > 0 && selectedChat.type === "group") {
+      const groupId = selectedChat.id.toString();
+
+      // Guruhdagi o'qilmagan xabarlarni o'qilgan deb belgilash
+      const currentMessages = messages[`group_${groupId}`] || [];
+      const unreadMessages = currentMessages.filter(msg => !msg.is_read && !msg.isOwn);
+
+      if (unreadMessages.length > 0) {
+        unreadMessages.forEach(msg => {
+          markGroupMessageAsRead(groupId, msg.id);
+        });
+
+        getGroupUnreadCount(groupId);
+      }
+    }
+  }, [selectedChat, messages, markGroupMessageAsRead, getGroupUnreadCount]);
+
   const handleChatHeaderClick = async () => {
     if (selectedChat?.type === "group") {
       try {
@@ -185,6 +208,8 @@ export default function ChatPage() {
       }
     } else if (selectedChat?.type === "channel") {
       setShowChannelInfo(true)
+    } else if (selectedChat?.type === "private") {
+      setShowUserProfile(true)
     }
   }
 
@@ -193,8 +218,21 @@ export default function ChatPage() {
     setLoadingMessages(true)
 
     if (chat.type === "group") {
+      setGroups(prev => prev.map(group => {
+        if (group.id === chat.id) {
+          return { ...group, unread: 0 };
+        }
+        return group;
+      }));
+
       const groupId = chat.id.toString()
       connectToGroup(groupId)
+
+      if (groupWsRef.current && groupWsRef.current.readyState === WebSocket.OPEN) {
+        groupWsRef.current.send(JSON.stringify({
+          type: "mark_all_as_read"
+        }));
+      }
     } else {
       const roomId = chat.room_id || chat.id?.toString()
       if (roomId) {
@@ -270,8 +308,24 @@ export default function ChatPage() {
     }
   }
 
+  const isFileMessage = (msg: any): boolean => {
+    if (msg.message_type === "file") return true;
+
+    if (msg.type === "file") return true;
+
+    if (msg.message && msg.message.startsWith("File: ")) return true;
+
+    if (msg.file_url || msg.file_name) return true;
+
+    return false;
+  };
+
   const getMessageStatus = (msg: any): "sending" | "sent" | "delivered" | "read" | "read_file" => {
     if (!msg) return "read"
+
+    if (selectedChat?.type === "group") {
+      return msg.is_read ? "read" : "sent"
+    }
 
     if (!msg.isOwn) {
       return "read"
@@ -357,22 +411,22 @@ export default function ChatPage() {
     setFileUpload(prev => ({ ...prev, uploading: true, progress: 0 }));
 
     try {
-      const isGroup = selectedChat.type === "group"
-      const wsRef = isGroup ? groupWsRef : chatWsRef
+      const isGroup = selectedChat.type === "group";
 
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      if (isGroup) {
         const reader = new FileReader();
 
         reader.onload = (e) => {
           const base64Data = e.target?.result as string;
           const base64Content = base64Data.split(';base64,')[1];
 
-          if (wsRef.current) {
-            wsRef.current.send(JSON.stringify({
-              action: "upload_file",
+          if (groupWsRef.current && groupWsRef.current.readyState === WebSocket.OPEN) {
+            groupWsRef.current.send(JSON.stringify({
+              type: "file_upload",
               file_data: base64Content,
               file_name: fileUpload.file!.name,
-              file_type: fileUpload.file!.type
+              file_type: fileUpload.file!.type,
+              file_size: fileUpload.file!.size
             }));
           }
 
@@ -394,7 +448,39 @@ export default function ChatPage() {
 
         reader.readAsDataURL(fileUpload.file);
       } else {
-        throw new Error("WebSocket connection not available");
+        const wsRef = chatWsRef;
+
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          const reader = new FileReader();
+
+          reader.onload = (e) => {
+            const base64Data = e.target?.result as string;
+            const base64Content = base64Data.split(';base64,')[1];
+
+            if (wsRef.current) {
+              wsRef.current.send(JSON.stringify({
+                action: "upload_file",
+                file_data: base64Content,
+                file_name: fileUpload.file!.name,
+                file_type: fileUpload.file!.type,
+                file_size: fileUpload.file!.size
+              }));
+            }
+
+            setFileUpload({
+              file: null,
+              preview: null,
+              uploading: false,
+              progress: 0
+            });
+
+            if (fileInputRef.current) {
+              fileInputRef.current.value = '';
+            }
+          };
+
+          reader.readAsDataURL(fileUpload.file);
+        }
       }
     } catch (error) {
       console.error("Error uploading file:", error);
@@ -438,7 +524,16 @@ export default function ChatPage() {
     try {
       const token = localStorage.getItem('access_token');
 
-      const response = await fetch(fileUrl, {
+      // Always use the backend server URL (localhost:8000)
+      let downloadUrl = fileUrl;
+      if (!fileUrl.startsWith('http')) {
+        downloadUrl = `http://localhost:8000${fileUrl}`;
+      }
+
+      console.log('Downloading file from:', downloadUrl);
+
+      const response = await fetch(downloadUrl, {
+        method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -449,31 +544,24 @@ export default function ChatPage() {
       }
 
       const blob = await response.blob();
+
+      // Create download link and force download
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = fileName;
+      a.style.display = 'none';
+
+      // Add to DOM, click, then remove
       document.body.appendChild(a);
       a.click();
-
-      window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      if (selectedChat && selectedChat.type !== "group") {
-        const roomId = selectedChat.room_id || selectedChat.id?.toString()
-        if (roomId) {
-          const currentMessages = messages[roomId] || []
-          const fileMessage = currentMessages.find(msg =>
-            msg.type === "file" && msg.file_url === fileUrl && !msg.is_read && !msg.isOwn
-          )
-          if (fileMessage) {
-            markAsRead(roomId, undefined, fileMessage.id)
-          }
-        }
-      }
+      // Cleanup blob URL
+      window.URL.revokeObjectURL(url);
+
     } catch (error) {
       console.error('Download error:', error);
-      alert('Failed to download file. Please try again.');
     }
   };
 
@@ -508,7 +596,7 @@ export default function ChatPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-48 bg-gray-900">
-                <DropdownMenuItem className="text-white" onClick={() => setShowUserProfile(true)}>
+                <DropdownMenuItem className="text-white" onClick={() => setShowProfile(true)}>
                   <User className="mr-2 h-4 w-4 text-white" />
                   Profile
                 </DropdownMenuItem>
@@ -738,17 +826,25 @@ export default function ChatPage() {
                               : "bg-gray-700 text-white"
                               }`}
                           >
-                            {msg.type === "file" ? (
+                            {isFileMessage(msg) ? (
                               <div
-                                className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:opacity-80 ${msg.isOwn ? "bg-blue-700" : "bg-gray-600"
-                                  }`}
-                                onClick={() => handleDownload(msg.file_url || "", msg.file_name || "file")}
+                                className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:opacity-80 ${msg.isOwn ? "bg-blue-700" : "bg-gray-600"}`}
+                                onClick={() => handleDownload(msg.file_url || "", msg.file_name || msg.message?.replace("File: ", "") || "file")}
                               >
-                                <Paperclip className="h-4 w-4" />
-                                <span className="text-sm truncate flex-1">{msg.file_name || "File"}</span>
-                                <span className="text-xs opacity-70">
-                                  {msg.file_size ? formatFileSize(Number(msg.file_size)) : ""}
-                                </span>
+                                {getFileIcon(msg.file_type || msg.type)}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">
+                                    {msg.file_name || msg.message?.replace("File: ", "") || "File"}
+                                  </p>
+                                  {msg.file_size && (
+                                    <p className="text-xs opacity-70">
+                                      {formatFileSize(Number(msg.file_size))}
+                                    </p>
+                                  )}
+                                </div>
+                                {selectedChat?.type !== "group" && msg.isOwn && (
+                                  <MessageStatus status={getMessageStatus(msg)} isOwn={msg.isOwn} />
+                                )}
                               </div>
                             ) : (
                               <p className="text-sm break-words whitespace-pre-wrap overflow-wrap-anywhere max-w-full">
@@ -885,10 +981,21 @@ export default function ChatPage() {
         )}
       </div>
 
+      <ProfileModal
+        isOpen={showProfile}
+        onClose={() => setShowProfile(false)}
+        user={currentUser || {
+          id: 0,
+          fullname: "Loading...",
+          email: "",
+        }}
+        isOwnProfile={true}
+      />
+
       <UserProfileModal
         isOpen={showUserProfile}
         onClose={() => setShowUserProfile(false)}
-        user={currentUser || {
+        user={selectedChat || {
           id: 0,
           fullname: "Loading...",
           email: "",

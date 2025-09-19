@@ -203,6 +203,8 @@ export function useChat() {
             updateChatUnreadCount(data.contact_id, data.unread_count)
             break
 
+
+
           default:
             console.log("[Chat] Unknown notification type:", data.type)
         }
@@ -423,18 +425,21 @@ export function useChat() {
                   id: msg.id.toString(),
                   group_id: parseInt(groupId),
                   sender: {
-                    id: msg.sender?.toString() || msg.sender_id?.toString(),
+                    id: msg.sender_id?.toString(),
                     email: "",
                     fullname: msg.sender_fullname || "Unknown",
                     full_name: msg.sender_fullname || "Unknown",
                   },
-                  message: msg.content || msg.message || "",
-                  timestamp: msg.created_at || msg.timestamp || new Date().toISOString(),
-                  isOwn: (msg.sender?.toString() === currentUser?.id?.toString()) ||
-                    (msg.sender_id?.toString() === currentUser?.id?.toString()),
+                  message: msg.content || "",
+                  timestamp: msg.created_at,
+                  isOwn: msg.sender_id === currentUser?.id,
                   is_read: true,
                   is_updated: msg.is_updated || false,
-                  type: "text",
+                  type: msg.message_type || "text",
+                  file_name: msg.file_name,
+                  file_url: msg.file_url,
+                  file_type: msg.file_type,
+                  file_size: msg.file_size?.toString(),
                   reply_to: msg.reply_to,
                 }))
 
@@ -498,6 +503,99 @@ export function useChat() {
             case "role_updated":
               console.log("Role updated:", data)
               break
+
+            case "file_uploaded":
+              if (data.id) {
+                const fileMessage: Message = {
+                  id: data.id.toString(),
+                  group_id: parseInt(groupId),
+                  sender: {
+                    id: data.user?.id?.toString() || data.sender_id?.toString(),
+                    email: "",
+                    fullname: data.user?.fullname || data.sender_name || "Unknown",
+                    full_name: data.user?.fullname || data.sender_name || "Unknown",
+                  },
+                  message: data.file_name || "File",
+                  timestamp: data.uploaded_at || data.timestamp || new Date().toISOString(),
+                  isOwn: (data.user?.id || data.sender_id) === currentUser?.id,
+                  is_read: true,
+                  is_updated: false,
+                  type: "file",
+                  file_name: data.file_name,
+                  file_url: data.file_url,
+                  file_type: data.file_type || "file",
+                  file_size: data.file_size?.toString(),
+                }
+
+                console.log("[Chat] New group file message received:", fileMessage)
+                addMessage(`group_${groupId}`, fileMessage)
+              }
+              break
+
+            case 'initial_unread_count':
+              setGroups(prev => prev.map(group => {
+                if (group.id.toString() === groupId) {
+                  return { ...group, unread: data.count };
+                }
+                return group;
+              }));
+              break;
+
+            case 'unread_count_increment':
+              setGroups(prev => prev.map(group => {
+                if (group.id.toString() === currentGroupRef.current) {
+                  return { ...group, unread: (group.unread || 0) + data.count };
+                }
+                return group;
+              }));
+              break;
+
+            case 'unread_count_decrement':
+              setGroups(prev => prev.map(group => {
+                if (group.id.toString() === currentGroupRef.current) {
+                  return { ...group, unread: Math.max(0, (group.unread || 0) - data.count) };
+                }
+                return group;
+              }));
+              break;
+
+            case 'unread_count':
+              setGroups(prev => prev.map(group => {
+                if (group.id.toString() === currentGroupRef.current) {
+                  return { ...group, unread: data.count };
+                }
+                return group;
+              }));
+              break;
+
+            case 'read':
+              setMessages(prev => {
+                const groupId = data.group_id?.toString();
+                if (!groupId) return prev;
+
+                const roomKey = `group_${groupId}`;
+                const updatedRoomMessages = (prev[roomKey] || []).map(msg => {
+                  if (data.message_id && msg.id === data.message_id.toString()) {
+                    return { ...msg, is_read: true };
+                  }
+                  return msg;
+                });
+
+                return {
+                  ...prev,
+                  [roomKey]: updatedRoomMessages,
+                };
+              });
+              break;
+
+            case 'unread_count':
+              setGroups(prev => prev.map(group => {
+                if (group.id.toString() === currentGroupRef.current) {
+                  return { ...group, unread: data.count };
+                }
+                return group;
+              }));
+              break;
           }
         }
 
@@ -517,6 +615,27 @@ export function useChat() {
     },
     [currentUser],
   )
+
+  const sendGroupFile = useCallback((
+    groupId: string,
+    fileData: string,
+    fileName: string,
+    fileType: string
+  ) => {
+    if (!groupWsRef.current || groupWsRef.current.readyState !== WebSocket.OPEN) {
+      console.log("[Chat] Cannot send group file: WebSocket not ready")
+      return
+    }
+
+    groupWsRef.current.send(
+      JSON.stringify({
+        type: "file_upload",
+        file_data: fileData,
+        file_name: fileName,
+        file_type: fileType,
+      }),
+    )
+  }, [])
 
   const sendMessage = useCallback(
     (roomId: string, content: string) => {
@@ -559,6 +678,15 @@ export function useChat() {
         return
       }
 
+      if (currentGroupRef.current === groupId) {
+        setGroups(prev => prev.map(group => {
+          if (group.id.toString() === groupId) {
+            return { ...group, unread: 0 };
+          }
+          return group;
+        }));
+      }
+
       groupWsRef.current.send(
         JSON.stringify({
           type: "chat_message",
@@ -569,6 +697,25 @@ export function useChat() {
     },
     [],
   )
+
+  const markGroupMessageAsRead = useCallback((groupId: string, messageId: string) => {
+    if (groupWsRef.current && groupWsRef.current.readyState === WebSocket.OPEN) {
+      groupWsRef.current.send(JSON.stringify({
+        type: "mark_as_read",
+        message_id: messageId
+      }));
+    }
+  }, []);
+
+
+  const getGroupUnreadCount = useCallback((groupId: string) => {
+    if (groupWsRef.current && groupWsRef.current.readyState === WebSocket.OPEN) {
+      groupWsRef.current.send(JSON.stringify({
+        type: "get_unread_count"
+      }));
+    }
+  }, []);
+
 
   const markAsRead = useCallback(
     (roomId: string, messageId?: string, fileId?: string) => {
@@ -657,7 +804,7 @@ export function useChat() {
     console.log(`[Chat] User ${userId} is now ${isOnline ? 'online' : 'offline'}`)
   }, [])
 
-  // Group-specific functions
+
   const createGroup = useCallback(async (name: string, description?: string) => {
     try {
       const response = await apiClient.createGroup({
@@ -665,7 +812,7 @@ export function useChat() {
         description,
         created_by: currentUser.id
       })
-      await loadGroups() // Reload groups
+      await loadGroups()
       return response
     } catch (error) {
       console.error("[Chat] Failed to create group:", error)
@@ -703,17 +850,23 @@ export function useChat() {
     groups,
     isConnected,
     currentUser,
-    sendMessage,
-    sendGroupMessage,
-    markAsRead,
-    connectToChatRoom,
-    connectToGroup,
-    createGroup,
-    addGroupMember,
-    getGroupMembers,
-    loadGroups,
     apiClient,
     chatWsRef,
     groupWsRef,
+    loadGroups,
+    markAsRead,
+    sendMessage,
+    createGroup,
+    sendGroupFile,
+    updateMessage,
+    removeMessage,
+    connectToGroup,
+    addGroupMember,
+    getGroupMembers,
+    sendGroupMessage,
+    connectToChatRoom,
+    getGroupUnreadCount,
+    updateChatUnreadCount,
+    markGroupMessageAsRead,
   }
 }

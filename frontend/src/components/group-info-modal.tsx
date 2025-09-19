@@ -40,7 +40,6 @@ interface GroupInfoModalProps {
     description: string
     avatar: string
     memberCount: number
-    // isAdmin: boolean
   }
 }
 
@@ -61,7 +60,6 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
   const [isEditing, setIsEditing] = useState(false)
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
-  const [selectedUser, setSelectedUser] = useState<number | null>(null);
   const [selectedRole, setSelectedRole] = useState<'member' | 'admin'>('member');
   const [userExists, setUserExists] = useState<boolean | null>(null);
   const [foundUser, setFoundUser] = useState<any>(null);
@@ -222,13 +220,11 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
 
       await apiClient.addGroupMember(addData);
 
-      // Tozalash
       setUsername("");
       setSelectedRole('member');
       setUserExists(null);
       setFoundUser(null);
 
-      // A'zolar ro'yxatini yangilash
       await loadGroupMembers();
 
       alert(`${foundUser.username} guruhga muvaffaqiyatli qo'shildi`);

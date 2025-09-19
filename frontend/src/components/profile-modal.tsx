@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { MessageSquare, Phone, Video, UserPlus, UserMinus, Shield, Edit, Save, X } from "lucide-react"
 
-interface UserProfileModalProps {
+interface ProfileModalProps {
   isOpen: boolean
   onClose: () => void
   user: {
@@ -27,7 +27,7 @@ interface UserProfileModalProps {
   isOwnProfile?: boolean
 }
 
-export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }: UserProfileModalProps) {
+export function ProfileModal({ isOpen, onClose, user, isOwnProfile = false }: ProfileModalProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState({
     name: user.name,
@@ -87,6 +87,23 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
                     id="edit-name"
                     value={editData.name}
                     onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-bio">Bio</Label>
+                  <Input
+                    id="edit-bio"
+                    value={editData.bio}
+                    onChange={(e) => setEditData({ ...editData, bio: e.target.value })}
+                    placeholder="O'zingiz haqingizda yozing..."
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-phone">Telefon</Label>
+                  <Input
+                    id="edit-phone"
+                    value={editData.phone}
+                    onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
                   />
                 </div>
                 <Button onClick={handleSave} className="w-full">

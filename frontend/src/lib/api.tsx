@@ -123,11 +123,46 @@ export const apiClient = {
     return response.data;
   },
 
-  async downloadFile(fileId: number) {
-    const response = await api.get(`/chat/files/${fileId}/download/`, {
-      responseType: 'blob',
+  // Add these methods to your apiClient object in api.tsx
+
+  async downloadGroupFile(fileUrl: string): Promise<Blob> {
+    const response = await fetch(`${BASE_URL}${fileUrl}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+      },
     });
-    return response.data;
+
+    if (!response.ok) {
+      throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+    }
+
+    return response.blob();
+  },
+
+  async getGroupFileUrl(fileId: number): Promise<string> {
+    const response = await api.get(`/group/files/${fileId}/`);
+    return response.data.file_url;
+  },
+
+  // Alternative method using the existing API structure
+  async downloadFile(fileUrl: string, isGroupFile: boolean = false): Promise<Blob> {
+    const fullUrl = fileUrl.startsWith('http')
+      ? fileUrl
+      : `${BASE_URL}${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
+
+    const response = await fetch(fullUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+    }
+
+    return response.blob();
   },
 
   async getUserFiles() {
@@ -240,12 +275,12 @@ export const apiClient = {
 
   async markGroupMessageAsRead(groupId: number, messageId: number) {
     const response = await fetch(`${BASE_URL}/api/v1/group/messages/${messageId}/read/`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({ group_id: groupId })
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ group_id: groupId })
     });
     return this.handleResponse(response);
-},
+  },
 
   getGroupWebSocketUrl(groupId: string): string {
     const token = localStorage.getItem('access_token');
@@ -284,5 +319,15 @@ export const apiClient = {
       headers: this.getHeaders(),
     });
     return this.handleResponse(response);
+  },
+
+  async getGroupUnreadCount(groupId: number): Promise<number> {
+    const response = await api.get(`/group/unread-count/${groupId}/`);
+    return response.data.unread_count;
+  },
+
+  async markGroupMessagesAsRead(groupId: number): Promise<any> {
+    const response = await api.post(`/group/mark-all-read/${groupId}/`);
+    return response.data;
   },
 };
