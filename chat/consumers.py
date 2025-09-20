@@ -249,36 +249,47 @@ class P2PChatConsumer(BaseChatConsumer):
     async def handle_read(self, content):
         message_id = content.get("message_id")
         file_id = content.get("file_id")
-    
+
         if not message_id and not file_id:
             await self.send_error("message_id or file_id is required", "id_required")
             return
 
         success = False
         read_type = None
-    
+        item_id = None
+
         if message_id:
-            success = await self.mark_message_as_read(message_id)
-            read_type = "message"
+            try:
+                item_id = int(message_id)
+                success = await self.mark_message_as_read(item_id)
+                read_type = "message"
+            except (ValueError, TypeError):
+                await self.send_error(f"Invalid message ID: {message_id}", "invalid_id")
+                return
+            
         elif file_id:
-            success = await self.mark_file_as_read(file_id)
-            read_type = "file"
+            try:
+                item_id = int(file_id)
+                success = await self.mark_file_as_read(item_id)
+                read_type = "file"
+            except (ValueError, TypeError):
+                await self.send_error(f"Invalid file ID: {file_id}", "invalid_id")
+                return
 
         if success:
             await self.send_success(f"{read_type} marked as read")
-        
+    
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
                     "type": "read_update",
-                    "message_id": message_id if message_id else None,
-                    "file_id": file_id if file_id else None,
+                    "message_id": message_id,
+                    "file_id": file_id,
                     "user_id": self.user.id,
                     "success": success,
                 }
             )
-        
-            recipient = self.room.user2 if self.user == self.room.user1 else self.room.user1
+    
             unread_count = await self.get_unread_count_for_recipient(self.room.id, self.user.id)
             await self.send_unread_count_update(self.user.id, unread_count)
         else:
@@ -657,10 +668,15 @@ class P2PChatConsumer(BaseChatConsumer):
                 room=self.room,
                 recipient=self.user
             )
-            message.is_read = True
-            message.save(update_fields=["is_read"])
+        
+            if not message.is_read:
+                message.is_read = True
+                message.save(update_fields=["is_read"])
+                logger.info(f"Message {message_id} marked as read by user {self.user.id}")
+        
             return True
         except Message.DoesNotExist:
+            logger.error(f"Message not found: {message_id}, user: {self.user.id}, room: {self.room.id}")
             return False
         except Exception as e:
             logger.error(f"Error marking message as read: {e}")
@@ -713,29 +729,28 @@ class P2PChatConsumer(BaseChatConsumer):
     @database_sync_to_async
     def save_file(self, file_data, file_name, file_type=None):
         try:
-            if ';base64,' not in file_data:
-                logger.error("Invalid file data format")
-                return None
-            
-            format, file_str = file_data.split(';base64,')
-            file_bytes = base64.b64decode(file_str)
-        
+            if ';base64,' in file_data:
+                format, file_str = file_data.split(';base64,')
+                file_bytes = base64.b64decode(file_str)
+            else:
+                file_bytes = base64.b64decode(file_data)
+    
             file_content = ContentFile(file_bytes, name=file_name)
-        
+    
             recipient = self.room.user2 if self.user == self.room.user1 else self.room.user1
-        
+    
             file_upload = FileUpload(
                 user=self.user,
                 file=file_content,
                 room=self.room,
                 recipient=recipient
             )
-        
+    
             if hasattr(FileUpload, 'original_filename'):
                 file_upload.original_filename = file_name
-            
-            file_upload.save()
         
+            file_upload.save()
+    
             logger.info(f"File uploaded successfully: {file_upload.id}")
             return file_upload
         except Exception as e:

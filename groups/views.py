@@ -2,10 +2,8 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 
 from groups.models import Group, GroupMember, GroupMessage
-from groups.permissions import IsOwner, IsAdmin
-from groups.serializers import GroupSerializer, GroupMemberSerialzer, GroupMessageSerializer, GroupMembersSerializer
-
-from accounts.models import CustomUser
+from groups.permissions import IsGroupOwner, IsGroupAdmin
+from groups.serializers import GroupSerializer, GroupMemberSerialzer, GroupMessageSerializer, GroupMembersSerializer, GroupUpdateSerializer
 
 
 class GroupApiView(generics.GenericAPIView):
@@ -21,25 +19,26 @@ class GroupApiView(generics.GenericAPIView):
 
 class GroupDeleteApiView(generics.GenericAPIView):
     serializer_class = GroupSerializer
-    permission_classes = [IsOwner]
+    permission_classes = [IsGroupOwner]  
     
     def delete(self, request, id):
         try:
             group = Group.objects.get(id=id)
+            self.check_object_permissions(request, group) 
             group.delete()
             return Response({'message': 'Group deleted'}, status=status.HTTP_200_OK)
         except Group.DoesNotExist:
             return Response({'message': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
-        
-        
+
 class GroupUpdateApiView(generics.GenericAPIView):
-    serializer_class = GroupSerializer
-    permission_classes = [IsOwner, IsAdmin]
+    serializer_class = GroupUpdateSerializer
+    permission_classes = [IsGroupAdmin] 
     
     def put(self, request, id):
         try:
             group = Group.objects.get(id=id)
-            serializer = self.get_serializer(group)
+            self.check_object_permissions(request, group)  
+            serializer = self.get_serializer(group, data=request.data)
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response({'message': 'Group updated'}, status=status.HTTP_200_OK)
@@ -91,14 +90,29 @@ class GroupMemberAddApiView(generics.GenericAPIView):
 
 class GroupMemberDeleteApiView(generics.GenericAPIView):
     serializer_class = GroupMemberSerialzer
+    permission_classes = [IsGroupOwner, IsGroupAdmin]
     
-    def delete(self, request, id):
+    def delete(self, request, group_id, user_id):
         try:
-            member = GroupMember.objects.get(id=id)
+            member = GroupMember.objects.get(group_id=group_id, user_id=user_id)
+            
+            if member.user == request.user:
+                return Response(
+                    {'message': 'You cannot remove yourself'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if member.role == 'owner':
+                return Response(
+                    {'message': 'Cannot remove group owner'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
             member.delete()
-            return Response({'message': 'User removed from group'}, status=status.HTTP_200_OK)
+            return Response({'message': 'Member removed'}, status=status.HTTP_200_OK)
+            
         except GroupMember.DoesNotExist:
-            return Response({'User not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'message': 'Member not found'}, status=status.HTTP_404_NOT_FOUND)
         
         
 class GroupMembersApiView(generics.GenericAPIView):
@@ -118,3 +132,58 @@ class GroupMessageListApiView(generics.GenericAPIView):
         messages = GroupMessage.objects.filter(group_id=group_id)
         serializer = self.get_serializer(messages, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    
+    
+class GroupMemberDetailApiView(generics.GenericAPIView):
+    serializer_class = GroupMembersSerializer
+    
+    def get(self, request, id):
+        member = GroupMember.objects.get(id=id)
+        serializer = self.get_serializer(member)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+        
+    
+
+class UpdateGroupMemberRoleApiView(generics.GenericAPIView):
+    permission_classes = [IsGroupOwner] 
+    serializer_class = GroupMembersSerializer
+    
+    def put(self, request, group_id, user_id):
+        try:
+            member = GroupMember.objects.get(group_id=group_id, user_id=user_id)
+            group = member.group
+            
+            self.check_object_permissions(request, group)
+            
+            new_role = request.data.get('role')
+            
+            if new_role not in ['owner', 'admin', 'member']:
+                return Response(
+                    {'message': 'Invalid role'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if member.role == 'owner' and request.user != member.user:
+                return Response(
+                    {'message': 'Cannot change owner role'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if member.user == request.user and new_role == 'member':
+                return Response(
+                    {'message': 'You cannot demote yourself'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            member.role = new_role
+            member.save()
+            
+            serializer = self.get_serializer(member)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+            
+        except GroupMember.DoesNotExist:
+            return Response(
+                {'message': 'Member not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )

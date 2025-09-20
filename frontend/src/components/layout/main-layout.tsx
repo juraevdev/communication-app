@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { Suspense } from "react";
 import { useNavigate } from "react-router-dom";
+import { ThemeProvider } from "../ui/theme-provider";
 import { Sidebar } from "./sidebar";
 
 interface MainLayoutProps {
@@ -23,7 +25,12 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <Suspense fallback={null}>
+          <ThemeProvider  defaultTheme="dark" >
+            {children}
+          </ThemeProvider>
+        </Suspense>
         <div className="text-center">
           <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-slate-600">Loading...</p>
@@ -37,7 +44,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   }
 
   return (
-    <div className="flex h-screen bg-slate-50">
+    <div className="flex h-screen bg-black">
       <Sidebar />
       <main className="flex-1 overflow-auto">{children}</main>
     </div>

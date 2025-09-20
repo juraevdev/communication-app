@@ -100,7 +100,7 @@ export function Sidebar() {
       : baseNavItems;
 
   return (
-    <div className="w-64 bg-white border-r border-slate-200 h-screen flex flex-col">
+    <div className="w-64 bg-black border-r border-slate-200 h-screen flex flex-col">
       <div className="p-6 border-b border-slate-200 flex items-center space-x-3">
         <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
           <Shield className="w-5 h-5 text-white" />
