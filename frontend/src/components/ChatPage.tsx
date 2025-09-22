@@ -661,34 +661,34 @@ export default function ChatPage() {
           <div className="flex items-center justify-between mb-4 text-white">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="p-2">
+                <Button variant="ghost" size="sm" className="p-2 cursor-pointer">
                   <Menu className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-48 bg-gray-900">
-                <DropdownMenuItem className="text-white" onClick={() => setShowUserProfile(true)}>
+                <DropdownMenuItem className="text-white cursor-pointer" onClick={() => setShowUserProfile(true)}>
                   <User className="mr-2 h-4 w-4 text-white" />
                   Profile
                 </DropdownMenuItem>
-                <DropdownMenuItem className="text-white" onClick={() => setShowContacts(true)}>
+                <DropdownMenuItem className="text-white cursor-pointer" onClick={() => setShowContacts(true)}>
                   <UserPlus className="mr-2 h-4 w-4 text-white" />
                   Contacts
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-white">
+                <DropdownMenuItem className="text-white cursor-pointer">
                   <Settings className="mr-2 h-4 w-4 text-white" />
                   Settings
                 </DropdownMenuItem>
-                <DropdownMenuItem className="text-white" onClick={() => setShowCreateGroup(true)}>
+                <DropdownMenuItem className="text-white cursor-pointer" onClick={() => setShowCreateGroup(true)}>
                   <Users className="mr-2 h-4 w-4 text-white" />
                   New group
                 </DropdownMenuItem>
-                <DropdownMenuItem className="text-white" onClick={() => setShowCreateChannel(true)}>
+                <DropdownMenuItem className="text-white cursor-pointer" onClick={() => setShowCreateChannel(true)}>
                   <Hash className="mr-2 h-4 w-4 text-white" />
                   New channel
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-white" onClick={handleLogout}>
+                <DropdownMenuItem className="text-white cursor-pointer" onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" />
                   Logout
                 </DropdownMenuItem>

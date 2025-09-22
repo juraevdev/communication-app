@@ -1,12 +1,10 @@
 import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { MessageSquare, Phone, Video, UserPlus, UserMinus, Shield, Edit, Save, X } from "lucide-react"
+import { MessageSquare, Phone, Video, UserPlus, UserMinus, Edit, X } from "lucide-react"
 
 interface ProfileModalProps {
   isOpen: boolean
@@ -29,11 +27,6 @@ interface ProfileModalProps {
 
 export function ProfileModal({ isOpen, onClose, user, isOwnProfile = false }: ProfileModalProps) {
   const [isEditing, setIsEditing] = useState(false)
-  const [editData, setEditData] = useState({
-    name: user.name,
-    bio: user.bio,
-    phone: user.phone,
-  })
 
   const handleAddContact = () => {
     console.log("Adding contact:", user.id)

@@ -5,58 +5,15 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Badge } from "@/components/ui/badge"
-import { Search, Users, X } from "lucide-react"
+// import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+// import { Checkbox } from "@/components/ui/checkbox"
+// import { Badge } from "@/components/ui/badge"
+import { Search, Users, } from "lucide-react"
 
 interface CreateGroupModalProps {
   isOpen: boolean
   onClose: () => void
 }
-
-const mockUsers = [
-  {
-    id: 1,
-    name: "Akmal Karimov",
-    username: "akmal_k",
-    avatar: "/diverse-group.png",
-    role: "Developer",
-    isOnline: true,
-  },
-  {
-    id: 2,
-    name: "Malika Tosheva",
-    username: "malika_t",
-    avatar: "/diverse-group-meeting.png",
-    role: "Manager",
-    isOnline: false,
-  },
-  {
-    id: 3,
-    name: "Bobur Aliyev",
-    username: "bobur_a",
-    avatar: "/news-collage.png",
-    role: "Designer",
-    isOnline: true,
-  },
-  {
-    id: 4,
-    name: "Dilshod Rahimov",
-    username: "dilshod_r",
-    avatar: "/abstract-self.png",
-    role: "Accountant",
-    isOnline: false,
-  },
-  {
-    id: 5,
-    name: "Sevara Nazarova",
-    username: "sevara_n",
-    avatar: "/diverse-group.png",
-    role: "HR",
-    isOnline: true,
-  },
-]
 
 export function CreateGroupModal({ isOpen, onClose }: CreateGroupModalProps) {
   const [step, setStep] = useState(1)
@@ -68,15 +25,9 @@ export function CreateGroupModal({ isOpen, onClose }: CreateGroupModalProps) {
   const [selectedUsers, setSelectedUsers] = useState<number[]>([])
   const [searchQuery, setSearchQuery] = useState("")
 
-  const filteredUsers = mockUsers.filter(
-    (user) =>
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.username.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
-
-  const handleUserToggle = (userId: number) => {
-    setSelectedUsers((prev) => (prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]))
-  }
+  // const handleUserToggle = (userId: number) => {
+  //   setSelectedUsers((prev) => (prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]))
+  // }
 
   const handleCreateGroup = () => {
     console.log("Creating group:", {
@@ -107,19 +58,16 @@ export function CreateGroupModal({ isOpen, onClose }: CreateGroupModalProps) {
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-md bg-gray-300">
         <DialogHeader>
-          <DialogTitle>{step === 1 ? "Yangi guruh yaratish" : "A'zolarni tanlash"}</DialogTitle>
-          <DialogDescription>
-            {step === 1 ? "Guruh ma'lumotlarini kiriting" : "Guruhga qo'shmoqchi bo'lgan a'zolarni tanlang"}
-          </DialogDescription>
+          <DialogTitle>{step === 1 ? "Create a new group" : "A'zolarni tanlash"}</DialogTitle>
         </DialogHeader>
 
         {step === 1 ? (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="group-name">Guruh nomi *</Label>
+              <Label htmlFor="group-name">Group name *</Label>
               <Input
                 id="group-name"
-                placeholder="Guruh nomini kiriting"
+                placeholder="Enter group name"
                 value={groupData.name}
                 onChange={(e) => setGroupData({ ...groupData, name: e.target.value })}
                 required
@@ -127,10 +75,10 @@ export function CreateGroupModal({ isOpen, onClose }: CreateGroupModalProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="group-description">Tavsif</Label>
+              <Label htmlFor="group-description">Description</Label>
               <Textarea
                 id="group-description"
-                placeholder="Guruh haqida qisqacha ma'lumot"
+                placeholder="Description"
                 value={groupData.description}
                 onChange={(e) => setGroupData({ ...groupData, description: e.target.value })}
                 rows={3}
@@ -138,11 +86,11 @@ export function CreateGroupModal({ isOpen, onClose }: CreateGroupModalProps) {
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={onClose}>
-                Bekor qilish
+              <Button className="cursor pointer hover:scale-105 transition duration-300" variant="outline" onClick={onClose}>
+                Cancel
               </Button>
-              <Button onClick={handleNext} disabled={!groupData.name.trim()}>
-                Keyingi
+              <Button className="cursor pointer hover:scale-105 transition duration-300" onClick={handleNext} disabled={!groupData.name.trim()}>
+                Save
               </Button>
             </div>
           </div>
@@ -164,7 +112,7 @@ export function CreateGroupModal({ isOpen, onClose }: CreateGroupModalProps) {
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Tanlangan a'zolar ({selectedUsers.length})</Label>
                 <div className="flex flex-wrap gap-2">
-                  {selectedUsers.map((userId) => {
+                  {/* {selectedUsers.map((userId) => {
                     const user = mockUsers.find((u) => u.id === userId)
                     return user ? (
                       <Badge key={userId} variant="secondary" className="flex items-center gap-1">
@@ -172,7 +120,7 @@ export function CreateGroupModal({ isOpen, onClose }: CreateGroupModalProps) {
                         <X className="h-3 w-3 cursor-pointer" onClick={() => handleUserToggle(userId)} />
                       </Badge>
                     ) : null
-                  })}
+                  })} */}
                 </div>
               </div>
             )}
@@ -180,7 +128,7 @@ export function CreateGroupModal({ isOpen, onClose }: CreateGroupModalProps) {
             {/* User list */}
             <ScrollArea className="h-64">
               <div className="space-y-2">
-                {filteredUsers.map((user) => (
+                {/* {filteredUsers.map((user) => (
                   <div
                     key={user.id}
                     className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent cursor-pointer"
@@ -206,7 +154,7 @@ export function CreateGroupModal({ isOpen, onClose }: CreateGroupModalProps) {
                       <p className="text-xs text-muted-foreground">@{user.username}</p>
                     </div>
                   </div>
-                ))}
+                ))} */}
               </div>
             </ScrollArea>
 

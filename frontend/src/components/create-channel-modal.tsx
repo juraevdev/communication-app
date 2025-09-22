@@ -1,5 +1,3 @@
-"use client"
-
 import { useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -25,11 +23,9 @@ export function CreateChannelModal({ isOpen, onClose }: CreateChannelModalProps)
   const handleCreateChannel = () => {
     if (!channelData.name.trim()) return
 
-    // TODO: Implement create channel logic
     console.log("Creating channel:", channelData)
     alert("Kanal muvaffaqiyatli yaratildi!")
     onClose()
-    // Reset form
     setChannelData({
       name: "",
       description: "",
