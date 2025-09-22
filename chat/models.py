@@ -68,6 +68,7 @@ class FileUpload(models.Model):
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='files', null=True)
     recipient = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='received_files', null=True)
     group = models.ForeignKey('groups.Group', on_delete=models.CASCADE, related_name='files', null=True)
+    channel = models.ForeignKey('channel.Channel', on_delete=models.CASCADE, related_name='files', null=True)
     file = models.FileField(upload_to='chat_files/', null=True)
     original_filename = models.CharField(max_length=255, null=True)  
     uploaded_at = models.DateTimeField(auto_now_add=True)

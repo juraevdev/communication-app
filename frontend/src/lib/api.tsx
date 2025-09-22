@@ -90,7 +90,7 @@ export const apiClient = {
     return response.data;
   },
 
-  async searchUsers(searchTerm: string) {
+  async searchUsers(searchTerm: any) {
     const response = await api.get(`/accounts/users/search/?search=${searchTerm}`);
     return response.data;
   },

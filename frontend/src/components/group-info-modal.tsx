@@ -26,7 +26,6 @@ import {
   Edit,
   Save,
   X,
-  MessageSquare,
   LogOut,
 } from "lucide-react"
 import { apiClient } from "@/lib/api"
@@ -59,9 +58,9 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
   const [isAdmin, setIsAdmin] = useState(false);
   const [isEditing, setIsEditing] = useState(false)
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
-  const [availableUsers, setAvailableUsers] = useState<any[]>([]);
+  const [, setAvailableUsers] = useState<any[]>([]);
   const [selectedRole, setSelectedRole] = useState<'member' | 'admin'>('member');
-  const [userExists, setUserExists] = useState<boolean | null>(null);
+  const [, setUserExists] = useState<boolean | null>(null);
   const [foundUser, setFoundUser] = useState<any>(null);
   const [username, setUsername] = useState<any>(null);
   const [editData, setEditData] = useState({
@@ -100,7 +99,7 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
   }
 
   const checkUsername = async () => {
-    if (!username.trim()) {
+    if (!username) {
       setUserExists(null);
       setFoundUser(null);
       return;
@@ -277,9 +276,9 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
       <DialogContent className="max-w-2xl max-h-[80vh]">
         <DialogHeader>
           <div className="flex items-center justify-between">
-            <DialogTitle>Guruh ma'lumotlari</DialogTitle>
+            <DialogTitle>Group Info</DialogTitle>
             {isAdmin && (
-              <Button variant="ghost" size="sm" onClick={() => setIsEditing(!isEditing)}>
+              <Button className="cursor-pointer" variant="ghost" size="sm" onClick={() => setIsEditing(!isEditing)}>
                 {isEditing ? <X className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
               </Button>
             )}
@@ -296,7 +295,7 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
               {isEditing ? (
                 <div className="space-y-3">
                   <div>
-                    <Label htmlFor="edit-group-name">Guruh nomi</Label>
+                    <Label htmlFor="edit-group-name">Group name</Label>
                     <Input
                       id="edit-group-name"
                       value={editData.name}
@@ -304,7 +303,7 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
                     />
                   </div>
                   <div>
-                    <Label htmlFor="edit-group-description">Tavsif</Label>
+                    <Label htmlFor="edit-group-description">Description</Label>
                     <Textarea
                       id="edit-group-description"
                       value={editData.description}
@@ -313,23 +312,23 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
                     />
                   </div>
                   <div className="flex gap-2">
-                    <Button onClick={handleSave} size="sm">
+                    <Button className="cursor-pointer shadow-lg hover:scale-105 transition duration-300" onClick={handleSave} size="sm">
                       <Save className="mr-2 h-4 w-4" />
-                      Saqlash
+                      Save
                     </Button>
-                    <Button variant="outline" onClick={() => setIsEditing(false)} size="sm">
-                      Bekor qilish
+                    <Button className="cursor-pointer hover:scale-105 transition duration-300" variant="outline" onClick={() => setIsEditing(false)} size="sm">
+                      Cancel
                     </Button>
                   </div>
                 </div>
               ) : (
                 <div>
                   <h3 className="text-xl font-semibold">{group.name}</h3>
-                  <p className="text-muted-foreground">{group.description || "Tavsif mavjud emas"}</p>
+                  <p className="text-muted-foreground">{group.description || "No description"}</p>
                   <div className="flex items-center gap-2 mt-2">
                     <Badge variant="secondary">
                       <Users className="mr-1 h-3 w-3" />
-                      {members.length} a'zo
+                      {members.length} members
                     </Badge>
                     {isAdmin && (
                       <Badge variant="default">
@@ -346,24 +345,25 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
           {!isEditing && (
             <Tabs defaultValue="members" className="w-full">
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="members">A'zolar</TabsTrigger>
-                <TabsTrigger value="settings">Sozlamalar</TabsTrigger>
+                <TabsTrigger className="cursor-pointer" value="members">Members</TabsTrigger>
+                <TabsTrigger className="cursor-pointer" value="settings">Settings</TabsTrigger>
               </TabsList>
 
               <TabsContent value="members" className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="font-medium">Guruh a'zolari ({members.length})</h4>
+                  <h4 className="font-medium">Group members ({members.length})</h4>
                   {isAdmin && (
                     <Button
                       size="sm"
                       variant="outline"
+                      className="cursor-pointer"
                       onClick={() => {
                         setShowAddMemberModal(true);
                         loadAvailableUsers();
                       }}
                     >
                       <UserPlus className="mr-2 h-4 w-4" />
-                      A'zo qo'shish
+                      Add members
                     </Button>
                   )}
                 </div>
@@ -371,7 +371,7 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
                 <ScrollArea className="h-64">
                   {loading ? (
                     <div className="text-center py-8">
-                      <p>Yuklanmoqda...</p>
+                      <p>Loading...</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -393,39 +393,36 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
                             </div>
                             <p className="text-xs text-muted-foreground">@{member.user_username}</p>
                             <p className="text-xs text-muted-foreground">
-                              Qo'shildi: {formatDate(member.joined_at)}
+                              Joined: {formatDate(member.joined_at)}
                             </p>
                           </div>
                           <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="sm">
-                              <MessageSquare className="h-4 w-4" />
-                            </Button>
                             {isAdmin && member.role !== "owner" && (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm">
+                                  <Button className="cursor-pointer" variant="ghost" size="sm">
                                     <MoreVertical className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
+                                <DropdownMenuContent align="end" className="bg-gray-200">
                                   {member.role === "admin" ? (
-                                    <DropdownMenuItem onClick={() => handleRemoveAdmin(member.user)}>
+                                    <DropdownMenuItem className="cursor-pointer" onClick={() => handleRemoveAdmin(member.user)}>
                                       <UserMinus className="mr-2 h-4 w-4" />
-                                      Adminlikdan olish
+                                      Dissmiss admin
                                     </DropdownMenuItem>
                                   ) : (
-                                    <DropdownMenuItem onClick={() => handleMakeAdmin(member.user)}>
+                                    <DropdownMenuItem className="cursor-pointer" onClick={() => handleMakeAdmin(member.user)}>
                                       <Shield className="mr-2 h-4 w-4" />
-                                      Admin qilish
+                                      Admin
                                     </DropdownMenuItem>
                                   )}
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
-                                    className="text-destructive"
+                                    className="text-destructive cursor-pointer"
                                     onClick={() => handleRemoveMember(group.id, member.user)}
                                   >
                                     <UserMinus className="mr-2 h-4 w-4" />
-                                    Guruhdan chiqarish
+                                    Remove member
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -441,9 +438,9 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
               <Dialog open={showAddMemberModal} onOpenChange={setShowAddMemberModal}>
                 <DialogContent className="sm:max-w-md">
                   <DialogHeader>
-                    <DialogTitle>Guruhga a'zo qo'shish</DialogTitle>
+                    <DialogTitle>Add members to group</DialogTitle>
                     <DialogDescription>
-                      Foydalanuvchi username ni kiriting va rolini tanlang
+                      Enter username and role
                     </DialogDescription>
                   </DialogHeader>
 
@@ -452,26 +449,27 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
                       <Label htmlFor="username">Username</Label>
                       <Input
                         id="username"
-                        placeholder="username kiriting..."
+                        placeholder="enter username..."
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                       />
                     </div>
                     <div>
-                      <Label htmlFor="role-select">Rol</Label>
+                      <Label htmlFor="role-select">Role</Label>
                       <Select value={selectedRole} onValueChange={(value: 'member' | 'admin') => setSelectedRole(value)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Rol tanlang" />
+                        <SelectTrigger className="cursor-pointer">
+                          <SelectValue placeholder="Choose role" />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="member">A'zo</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
+                        <SelectContent className="bg-gray-200">
+                          <SelectItem className="cursor-pointer" value="member">Member</SelectItem>
+                          <SelectItem className="cursor-pointer" value="admin">Admin</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
                     <div className="flex gap-2 justify-end">
                       <Button
+                        className="cursor-pointer hover:scale-105 transition duration-300"
                         variant="outline"
                         onClick={() => {
                           setShowAddMemberModal(false);
@@ -481,13 +479,14 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
                           setFoundUser(null);
                         }}
                       >
-                        Bekor qilish
+                        Cancel
                       </Button>
                       <Button
+                        className="cursor-pointer hover:scale-105 transition duration-300"
                         onClick={handleAddMember}
                         disabled={!foundUser || !selectedRole}
                       >
-                        Qo'shish
+                        Add
                       </Button>
                     </div>
                   </div>
@@ -497,33 +496,33 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
               <TabsContent value="settings" className="space-y-4">
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <h4 className="font-medium">Guruh sozlamalari</h4>
+                    <h4 className="font-medium">Group settings</h4>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between p-3 border rounded-lg">
                         <div>
-                          <p className="font-medium text-sm">Xabar yuborish huquqi</p>
-                          <p className="text-xs text-muted-foreground">Faqat adminlar xabar yuborishi mumkin</p>
+                          <p className="font-medium text-sm">Message permission</p>
+                          <p className="text-xs text-muted-foreground">Only admin can message</p>
                         </div>
-                        <Button variant="outline" size="sm" disabled={!isAdmin}>
-                          O'zgartirish
+                        <Button className="cursor-pointer" variant="outline" size="sm" disabled={!isAdmin}>
+                          Change
                         </Button>
                       </div>
                       <div className="flex items-center justify-between p-3 border rounded-lg">
                         <div>
-                          <p className="font-medium text-sm">A'zo qo'shish huquqi</p>
-                          <p className="text-xs text-muted-foreground">Barcha a'zolar yangi a'zo qo'sha oladi</p>
+                          <p className="font-medium text-sm">Add member permission</p>
+                          <p className="text-xs text-muted-foreground">Everyone can add member</p>
                         </div>
-                        <Button variant="outline" size="sm" disabled={!isAdmin}>
-                          O'zgartirish
+                        <Button className="cursor-pointer" variant="outline" size="sm" disabled={!isAdmin}>
+                          Change
                         </Button>
                       </div>
                     </div>
                   </div>
 
                   <div className="pt-4 border-t">
-                    <Button variant="destructive" onClick={handleLeaveGroup} className="w-full">
+                    <Button variant="destructive" onClick={handleLeaveGroup} className="w-full cursor-pointer">
                       <LogOut className="mr-2 h-4 w-4" />
-                      Guruhdan chiqish
+                      Leave
                     </Button>
                   </div>
                 </div>

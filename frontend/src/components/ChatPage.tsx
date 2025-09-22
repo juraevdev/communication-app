@@ -397,7 +397,7 @@ export default function ChatPage() {
 
     return chatsToFilter.filter((chat) => {
       const chatName = getChatName(chat).toLowerCase()
-      const searchTerm = searchQuery.toLowerCase()
+      const searchTerm = searchQuery
       return chatName.includes(searchTerm)
     })
   }
@@ -704,7 +704,7 @@ export default function ChatPage() {
             <Input
               placeholder="Search..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={async (searchTerm) => setSearchQuery(await apiClient.searchUsers(searchTerm))}
               className="pl-10 border-gray-500 text-white bg-gray-800"
             />
           </div>

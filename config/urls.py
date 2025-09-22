@@ -33,6 +33,7 @@ urlpatterns = [
     path('api/v1/accounts/', include('accounts.urls')),
     path('api/v1/chat/', include('chat.urls')),
     path('api/v1/group/', include('groups.urls')),
+    path('api/v1/channels/', include('channel.urls')),
     path('swagger<str:format>/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     path('', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),

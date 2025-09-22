@@ -50,6 +50,7 @@ class GroupMessage(models.Model):
     reply_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='replies')
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
+    read_by = models.ManyToManyField(CustomUser, related_name='read_group_messages', blank=True)
 
     def __str__(self):
         return f"Message by {self.sender.username} in {self.group.name}"
