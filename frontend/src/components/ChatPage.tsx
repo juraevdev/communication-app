@@ -217,7 +217,7 @@ export default function ChatPage() {
     } else if (selectedChat?.type === "channel") {
       setShowChannelInfo(true)
     } else if (selectedChat?.type === "private") {
-      setShowUserProfile(true)
+      setShowProfile(true)
     }
   }
 
@@ -666,7 +666,7 @@ export default function ChatPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-48 bg-gray-900">
-                <DropdownMenuItem className="text-white" onClick={() => setShowProfile(true)}>
+                <DropdownMenuItem className="text-white" onClick={() => setShowUserProfile(true)}>
                   <User className="mr-2 h-4 w-4 text-white" />
                   Profile
                 </DropdownMenuItem>
@@ -1109,19 +1109,19 @@ export default function ChatPage() {
 
       <ProfileModal
         isOpen={showProfile}
-        onClose={() => setShowProfile(false)}
-        user={currentUser || {
+        onClose={() => setShowUserProfile(false)}
+        user={selectedChat || {
           id: 0,
           fullname: "Loading...",
           email: "",
         }}
-        isOwnProfile={true}
+        isOwnProfile={false}
       />
 
       <UserProfileModal
         isOpen={showUserProfile}
-        onClose={() => setShowUserProfile(false)}
-        user={selectedChat || {
+        onClose={() => setShowProfile(false)}
+        user={currentUser || {
           id: 0,
           fullname: "Loading...",
           email: "",
