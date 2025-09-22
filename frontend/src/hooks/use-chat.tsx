@@ -22,6 +22,7 @@ export interface Message {
   file_type?: string
   file_size?: string
   reply_to?: any
+  status?: any
 }
 
 export interface Chat {
@@ -392,6 +393,7 @@ export function useChat() {
     [currentUser],
   )
 
+  // Fix for use-chat.tsx - connectToGroup function
   const connectToGroup = useCallback(
     (groupId: string) => {
       if (currentGroupRef.current === groupId && groupWsRef.current?.readyState === WebSocket.OPEN) {
@@ -411,6 +413,11 @@ export function useChat() {
 
           groupWs.send(JSON.stringify({
             type: "get_history"
+          }))
+
+          // Automatically mark all messages as read when connecting to group
+          groupWs.send(JSON.stringify({
+            type: "mark_all_as_read"
           }))
         }
 
@@ -465,7 +472,7 @@ export function useChat() {
                 message: data.message?.content || data.message || "",
                 timestamp: data.timestamp || new Date().toISOString(),
                 isOwn: data.sender_id === currentUser?.id,
-                is_read: true,
+                is_read: data.sender_id === currentUser?.id ? false : false, // Barcha xabarlar dastlab o'qilmagan
                 is_updated: false,
                 type: "text",
                 reply_to: data.reply_to,
@@ -473,36 +480,25 @@ export function useChat() {
 
               console.log("[Chat] New group message received:", newMessage)
               addMessage(`group_${groupId}`, newMessage)
-              break
 
-            case "typing":
-              setTypingUsers(prev => {
-                const newTypingUsers = new Set(prev)
-                newTypingUsers.add(data.user_id)
-                return newTypingUsers
-              })
-              break
-
-
-            case "stop_typing":
-              setTypingUsers(prev => {
-                const newTypingUsers = new Set(prev)
-                newTypingUsers.delete(data.user_id)
-                return newTypingUsers
-              })
-              break
-
-            case "member_joined":
-              console.log("Member joined:", data.user)
-              break
-
-            case "member_left":
-              console.log("Member left:", data.user_name)
-              break
-
-            case "role_updated":
-              console.log("Role updated:", data)
-              break
+              // Faqat o'z xabarimiz uchun unread count'ni reset qilamiz
+              if (newMessage.isOwn) {
+                setGroups(prev => prev.map(group => {
+                  if (group.id.toString() === groupId) {
+                    return { ...group, unread: 0 };
+                  }
+                  return group;
+                }));
+              } else {
+                // Boshqa foydalanuvchi xabari uchun unread count'ni oshiramiz
+                setGroups(prev => prev.map(group => {
+                  if (group.id.toString() === groupId && currentGroupRef.current !== groupId) {
+                    return { ...group, unread: (group.unread || 0) + 1 };
+                  }
+                  return group;
+                }));
+              }
+              break;
 
             case "file_uploaded":
               if (data.id) {
@@ -518,7 +514,7 @@ export function useChat() {
                   message: data.file_name || "File",
                   timestamp: data.uploaded_at || data.timestamp || new Date().toISOString(),
                   isOwn: (data.user?.id || data.sender_id) === currentUser?.id,
-                  is_read: true,
+                  is_read: false, // Barcha fayl xabarlar dastlab o'qilmagan
                   is_updated: false,
                   type: "file",
                   file_name: data.file_name,
@@ -529,10 +525,29 @@ export function useChat() {
 
                 console.log("[Chat] New group file message received:", fileMessage)
                 addMessage(`group_${groupId}`, fileMessage)
+
+                // Faqat o'z xabarimiz uchun unread count'ni reset qilamiz
+                if (fileMessage.isOwn) {
+                  setGroups(prev => prev.map(group => {
+                    if (group.id.toString() === groupId) {
+                      return { ...group, unread: 0 };
+                    }
+                    return group;
+                  }));
+                } else {
+                  // Boshqa foydalanuvchi xabari uchun unread count'ni oshiramiz
+                  setGroups(prev => prev.map(group => {
+                    if (group.id.toString() === groupId && currentGroupRef.current !== groupId) {
+                      return { ...group, unread: (group.unread || 0) + 1 };
+                    }
+                    return group;
+                  }));
+                }
               }
-              break
+              break;
 
             case 'initial_unread_count':
+              // Set initial unread count when connecting
               setGroups(prev => prev.map(group => {
                 if (group.id.toString() === groupId) {
                   return { ...group, unread: data.count };
@@ -542,40 +557,35 @@ export function useChat() {
               break;
 
             case 'unread_count_increment':
-              setGroups(prev => prev.map(group => {
-                if (group.id.toString() === currentGroupRef.current) {
-                  return { ...group, unread: (group.unread || 0) + data.count };
-                }
-                return group;
-              }));
+              // Only increment if this is not the current active group
+              if (currentGroupRef.current !== groupId) {
+                setGroups(prev => prev.map(group => {
+                  if (group.id.toString() === groupId) {
+                    return { ...group, unread: (group.unread || 0) + data.count };
+                  }
+                  return group;
+                }));
+              }
               break;
 
             case 'unread_count_decrement':
               setGroups(prev => prev.map(group => {
-                if (group.id.toString() === currentGroupRef.current) {
+                if (group.id.toString() === groupId) {
                   return { ...group, unread: Math.max(0, (group.unread || 0) - data.count) };
                 }
                 return group;
               }));
               break;
 
-            case 'unread_count':
-              setGroups(prev => prev.map(group => {
-                if (group.id.toString() === currentGroupRef.current) {
-                  return { ...group, unread: data.count };
-                }
-                return group;
-              }));
-              break;
 
-            case 'read':
+            case 'message_read_confirmed':
               setMessages(prev => {
-                const groupId = data.group_id?.toString();
+                const groupId = currentGroupRef.current;
                 if (!groupId) return prev;
 
                 const roomKey = `group_${groupId}`;
-                const updatedRoomMessages = (prev[roomKey] || []).map(msg => {
-                  if (data.message_id && msg.id === data.message_id.toString()) {
+                const updatedMessages = (prev[roomKey] || []).map(msg => {
+                  if (msg.id === data.message_id && msg.isOwn) {
                     return { ...msg, is_read: true };
                   }
                   return msg;
@@ -583,14 +593,18 @@ export function useChat() {
 
                 return {
                   ...prev,
-                  [roomKey]: updatedRoomMessages,
+                  [roomKey]: updatedMessages,
                 };
               });
               break;
 
+            case 'message_read_status':
+              console.log(`${data.reader_name} xabarni o'qidi`);
+              break;
+
             case 'unread_count':
               setGroups(prev => prev.map(group => {
-                if (group.id.toString() === currentGroupRef.current) {
+                if (group.id.toString() === groupId) {
                   return { ...group, unread: data.count };
                 }
                 return group;
@@ -678,14 +692,12 @@ export function useChat() {
         return
       }
 
-      if (currentGroupRef.current === groupId) {
-        setGroups(prev => prev.map(group => {
-          if (group.id.toString() === groupId) {
-            return { ...group, unread: 0 };
-          }
-          return group;
-        }));
-      }
+      setGroups(prev => prev.map(group => {
+        if (group.id.toString() === groupId) {
+          return { ...group, unread: 0 };
+        }
+        return group;
+      }));
 
       groupWsRef.current.send(
         JSON.stringify({
@@ -703,6 +715,28 @@ export function useChat() {
       groupWsRef.current.send(JSON.stringify({
         type: "mark_as_read",
         message_id: messageId
+      }));
+
+      setMessages(prev => {
+        const roomKey = `group_${groupId}`;
+        const updatedMessages = (prev[roomKey] || []).map(msg => {
+          if (msg.id === messageId) {
+            return { ...msg, is_read: true };
+          }
+          return msg;
+        });
+
+        return {
+          ...prev,
+          [roomKey]: updatedMessages,
+        };
+      });
+
+      setGroups(prev => prev.map(group => {
+        if (group.id.toString() === groupId && group.unread > 0) {
+          return { ...group, unread: group.unread - 1 };
+        }
+        return group;
       }));
     }
   }, []);

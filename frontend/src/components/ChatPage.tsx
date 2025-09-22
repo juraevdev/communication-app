@@ -32,7 +32,8 @@ import {
   Info,
   Music,
   FileText,
-  X
+  X,
+  Reply
 } from "lucide-react"
 
 import { ProfileModal } from "./profile-modal"
@@ -81,6 +82,7 @@ export default function ChatPage() {
   const [activeTab, setActiveTab] = useState<"private" | "groups" | "channels">("private")
   const [groupMembers, setGroupMembers] = useState<any[]>([])
   const [group, setGroups] = useState<any[]>([])
+  const [replyingTo, setReplyingTo] = useState<any>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [fileUpload, setFileUpload] = useState<{
     file: File | null;
@@ -96,8 +98,6 @@ export default function ChatPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-
-
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -130,7 +130,7 @@ export default function ChatPage() {
 
     if (selectedChat.type === "group") {
       const groupId = selectedChat.id.toString()
-      sendGroupMessage(groupId, message)
+      sendGroupMessage(groupId, message, replyingTo?.id)
     } else {
       const roomId = selectedChat.room_id || selectedChat.id?.toString()
       if (roomId) {
@@ -138,6 +138,15 @@ export default function ChatPage() {
       }
     }
     setMessage("")
+    setReplyingTo(null)
+  }
+
+  const handleReply = (msg: any) => {
+    setReplyingTo(msg)
+  }
+
+  const cancelReply = () => {
+    setReplyingTo(null)
   }
 
   const handleMessageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -177,7 +186,6 @@ export default function ChatPage() {
     }
   }, [])
 
-
   useEffect(() => {
     if (selectedChat && selectedChat.unread > 0 && selectedChat.type === "group") {
       const groupId = selectedChat.id.toString();
@@ -216,6 +224,7 @@ export default function ChatPage() {
   const handleChatSelect = async (chat: any) => {
     setSelectedChat(chat)
     setLoadingMessages(true)
+    setReplyingTo(null)
 
     if (chat.type === "group") {
       setGroups(prev => prev.map(group => {
@@ -228,11 +237,13 @@ export default function ChatPage() {
       const groupId = chat.id.toString()
       connectToGroup(groupId)
 
-      if (groupWsRef.current && groupWsRef.current.readyState === WebSocket.OPEN) {
-        groupWsRef.current.send(JSON.stringify({
-          type: "mark_all_as_read"
-        }));
-      }
+      setTimeout(() => {
+        if (groupWsRef.current && groupWsRef.current.readyState === WebSocket.OPEN) {
+          groupWsRef.current.send(JSON.stringify({
+            type: "mark_all_as_read"
+          }));
+        }
+      }, 500);
     } else {
       const roomId = chat.room_id || chat.id?.toString()
       if (roomId) {
@@ -254,6 +265,16 @@ export default function ChatPage() {
     setLoadingMessages(false)
   }
 
+  useEffect(() => {
+    if (selectedChat && selectedChat.type === "group" && selectedChat.unread > 0) {
+      setGroups(prev => prev.map(group => {
+        if (group.id === selectedChat.id) {
+          return { ...group, unread: 0 };
+        }
+        return group;
+      }));
+    }
+  }, [selectedChat])
 
   const handleCreateGroup = async (groupData: { name: string; description?: string }) => {
     try {
@@ -524,7 +545,6 @@ export default function ChatPage() {
     try {
       const token = localStorage.getItem('access_token');
 
-      // Always use the backend server URL (localhost:8000)
       let downloadUrl = fileUrl;
       if (!fileUrl.startsWith('http')) {
         downloadUrl = `http://localhost:8000${fileUrl}`;
@@ -545,19 +565,16 @@ export default function ChatPage() {
 
       const blob = await response.blob();
 
-      // Create download link and force download
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = fileName;
       a.style.display = 'none';
 
-      // Add to DOM, click, then remove
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
 
-      // Cleanup blob URL
       window.URL.revokeObjectURL(url);
 
     } catch (error) {
@@ -565,9 +582,56 @@ export default function ChatPage() {
     }
   };
 
+  useEffect(() => {
+    if (selectedChat?.type === "group") {
+      const groupId = selectedChat.id.toString();
+      const currentMessages = messages[`group_${groupId}`] || [];
+
+      const unreadMessages = currentMessages
+        .filter(msg => !msg.isOwn && !msg.is_read)
+        .slice(-3);
+
+      if (unreadMessages.length > 0) {
+        const timer = setTimeout(() => {
+          unreadMessages.forEach(msg => {
+            markGroupMessageAsRead(groupId, msg.id);
+          });
+        }, 2000);
+
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [selectedChat, messages, markGroupMessageAsRead]);
+
+  useEffect(() => {
+    if (selectedChat?.type !== "group") return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const messageId = entry.target.getAttribute('data-message-id');
+            const isOwn = entry.target.getAttribute('data-is-own') === 'true';
+            const isRead = entry.target.getAttribute('data-is-read') === 'true';
+
+            if (messageId && !isOwn && !isRead) {
+              const groupId = selectedChat.id.toString();
+              markGroupMessageAsRead(groupId, messageId);
+            }
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
+
+    const messageElements = document.querySelectorAll('[data-message-id]');
+    messageElements.forEach(el => observer.observe(el));
+
+    return () => observer.disconnect();
+  }, [selectedChat, messages, markGroupMessageAsRead]);
+
   const isTyping = typingUsers.size > 0
   const typingUserNames = Array.from(typingUsers).map(userId => {
-
     return "Someone"
   }).join(', ')
 
@@ -581,8 +645,14 @@ export default function ChatPage() {
     }
   }
 
-  const currentMessages = getCurrentMessages()
+  const handleMessageClick = (msg: any) => {
+    if (selectedChat?.type === "group" && !msg.isOwn && !msg.is_read) {
+      const groupId = selectedChat.id.toString();
+      markGroupMessageAsRead(groupId, msg.id);
+    }
+  };
 
+  const currentMessages = getCurrentMessages()
 
   return (
     <div className="flex h-screen bg-gray-950">
@@ -797,7 +867,12 @@ export default function ChatPage() {
                     </div>
                   ) : (
                     currentMessages.map((msg) => (
-                      <div key={msg.id || Math.random()} className={`flex gap-3 ${msg.isOwn ? "flex-row-reverse" : ""}`}>
+                      <div
+                        key={msg.id || Math.random()}
+                        className={`group flex gap-3 ${msg.isOwn ? "flex-row-reverse" : ""}`}
+                        onClick={() => handleMessageClick(msg)}
+                        style={{ cursor: !msg.isOwn && !msg.is_read ? 'pointer' : 'default' }}
+                      >
                         {!msg.isOwn && (
                           <Avatar className="h-8 w-8 flex-shrink-0">
                             <AvatarImage src="/diverse-group.png" />
@@ -806,67 +881,88 @@ export default function ChatPage() {
                             </AvatarFallback>
                           </Avatar>
                         )}
-                        {isTyping && typingUsers.size > 0 && (
-                          <TypingIndicator
-                            isVisible={true}
-                            userName={Array.from(typingUsers).map(id => `User ${id}`).join(', ')}
-                            multiple={typingUsers.size > 1}
-                          />
-                        )}
-                        <div ref={messagesEndRef} />
                         <div className={`max-w-xs lg:max-w-md ${msg.isOwn ? "text-right" : ""}`}>
                           {!msg.isOwn && (
                             <p className="text-sm font-medium text-white mb-1">
                               {getSenderName(msg.sender)}
                             </p>
                           )}
-                          <div
-                            className={`rounded-lg px-3 py-2 ${msg.isOwn
-                              ? "bg-blue-600 text-white"
-                              : "bg-gray-700 text-white"
-                              }`}
-                          >
-                            {isFileMessage(msg) ? (
-                              <div
-                                className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:opacity-80 ${msg.isOwn ? "bg-blue-700" : "bg-gray-600"}`}
-                                onClick={() => handleDownload(msg.file_url || "", msg.file_name || msg.message?.replace("File: ", "") || "file")}
+                          <div className="relative">
+                            {/* Reply button - only show on hover and for non-own messages */}
+                            {!msg.isOwn && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="absolute -left-8 top-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-gray-400 hover:text-white hover:bg-gray-700 p-1 h-6 w-6"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleReply(msg);
+                                }}
                               >
-                                {getFileIcon(msg.file_type || msg.type)}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium truncate">
-                                    {msg.file_name || msg.message?.replace("File: ", "") || "File"}
+                                <Reply className="h-3 w-3" />
+                              </Button>
+                            )}
+                            
+                            {/* Message content */}
+                            <div
+                              className={`rounded-lg px-3 py-2 ${msg.isOwn
+                                ? "bg-blue-600 text-white"
+                                : "bg-gray-700 text-white"
+                                }`}
+                            >
+                              {/* Reply preview */}
+                              {msg.reply_to && (
+                                <div className="mb-2 p-2 bg-black bg-opacity-20 rounded border-l-2 border-blue-400">
+                                  <p className="text-xs opacity-70 mb-1">
+                                    Replying to {msg.reply_to.sender || "Unknown"}
                                   </p>
-                                  {msg.file_size && (
-                                    <p className="text-xs opacity-70">
-                                      {formatFileSize(Number(msg.file_size))}
-                                    </p>
-                                  )}
+                                  <p className="text-sm opacity-90 truncate">
+                                    {msg.reply_to.content || msg.reply_to.message || "Message"}
+                                  </p>
                                 </div>
-                                {selectedChat?.type !== "group" && msg.isOwn && (
-                                  <MessageStatus status={getMessageStatus(msg)} isOwn={msg.isOwn} />
-                                )}
-                              </div>
-                            ) : (
-                              <p className="text-sm break-words whitespace-pre-wrap overflow-wrap-anywhere max-w-full">
-                                {msg.message || ""}
+                              )}
+
+                              {isFileMessage(msg) ? (
+                                <div
+                                  className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:opacity-80 ${msg.isOwn ? "bg-blue-700" : "bg-gray-600"}`}
+                                  onClick={() => handleDownload(msg.file_url || "", msg.file_name || msg.message?.replace("File: ", "") || "file")}
+                                >
+                                  {getFileIcon(msg.file_type || msg.type)}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">
+                                      {msg.file_name || msg.message?.replace("File: ", "") || "File"}
+                                    </p>
+                                    {msg.file_size && (
+                                      <p className="text-xs opacity-70">
+                                        {formatFileSize(Number(msg.file_size))}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="text-sm break-words whitespace-pre-wrap overflow-wrap-anywhere max-w-full">
+                                  {msg.message || ""}
+                                </p>
+                              )}
+                              {msg.is_updated && (
+                                <p className="text-xs opacity-70 mt-1">edited</p>
+                              )}
+                            </div>
+                            
+                            <div className="flex items-center gap-1 mt-1">
+                              <p className="text-xs text-gray-400">
+                                {formatMessageTime(msg.timestamp)}
                               </p>
-                            )}
-                            {msg.is_updated && (
-                              <p className="text-xs opacity-70 mt-1">edited</p>
-                            )}
-                            {msg.reply_to && (
-                              <div className="text-xs opacity-70 mt-1 p-2 bg-gray-600 rounded">
-                                Replying to: {msg.reply_to.content}
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1 mt-1">
-                            <p className="text-xs text-gray-400">
-                              {formatMessageTime(msg.timestamp)}
-                            </p>
-                            {selectedChat.type !== "group" && (
-                              <MessageStatus status={getMessageStatus(msg)} isOwn={msg.isOwn} />
-                            )}
+                              {selectedChat.type !== "group" && (
+                                <MessageStatus status={getMessageStatus(msg)} isOwn={msg.isOwn} />
+                              )}
+                              {selectedChat.type === "group" && msg.isOwn && (
+                                <MessageStatus
+                                  status={msg.is_read ? "read" : "sent"}
+                                  isOwn={msg.isOwn}
+                                />
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -877,6 +973,36 @@ export default function ChatPage() {
                 </div>
               )}
             </ScrollArea>
+
+            {/* Reply preview bar */}
+            {replyingTo && (
+              <div className="px-4 py-2 bg-gray-800 border-t border-gray-600">
+                <div className="flex items-center justify-between bg-gray-700 rounded-lg p-3">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <Reply className="h-4 w-4 text-blue-400 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-blue-400 mb-1">
+                        Replying to {getSenderName(replyingTo.sender)}
+                      </p>
+                      <p className="text-sm text-white truncate">
+                        {isFileMessage(replyingTo) 
+                          ? `📎 ${replyingTo.file_name || "File"}` 
+                          : replyingTo.message
+                        }
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={cancelReply}
+                    className="text-gray-400 hover:text-white hover:bg-gray-600 ml-2"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {fileUpload.file && (
               <div className="p-4 border-t border-gray-500 bg-gray-800">
@@ -954,9 +1080,9 @@ export default function ChatPage() {
                 </Button>
                 <div className="flex-1 relative">
                   <Input
-                    placeholder="Type a message..."
+                    placeholder={replyingTo ? `Reply to ${getSenderName(replyingTo.sender)}...` : "Type a message..."}
                     value={message}
-                    onChange={handleMessageChange} // Yangi handler
+                    onChange={handleMessageChange}
                     className="pr-10 bg-gray-800 border-gray-600 text-white"
                     disabled={!isConnected}
                   />
