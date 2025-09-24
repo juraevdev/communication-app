@@ -772,8 +772,8 @@ const processGroupMessage = useCallback((data: any) => {
               variant={activeTab === "private" ? "default" : "ghost"}
               size="sm"
               className={`flex items-center ${activeTab === "private"
-                ? "bg-gray-700 text-white hover:bg-gray-800"
-                : "text-gray-300 hover:text-white hover:bg-gray-700"
+                ? "bg-gray-700 text-white hover:bg-gray-800 cursor-pointer hover:scale-105 transition duration-300"
+                : "text-gray-300 hover:text-white hover:bg-gray-700 cursor-pointer hover:scale-105 transition duration-300"
                 }`}
               onClick={() => setActiveTab("private")}
             >
@@ -785,8 +785,8 @@ const processGroupMessage = useCallback((data: any) => {
               variant={activeTab === "groups" ? "default" : "ghost"}
               size="sm"
               className={`flex items-center ${activeTab === "groups"
-                ? "bg-gray-700 text-white hover:bg-gray-800"
-                : "text-gray-300 hover:text-white hover:bg-gray-700"
+                ? "bg-gray-700 text-white hover:bg-gray-800 cursor-pointer hover:scale-105 transition duration-300"
+                : "text-gray-300 hover:text-white hover:bg-gray-700 cursor-pointer hover:scale-105 transition duration-300"
                 }`}
               onClick={() => setActiveTab("groups")}
             >
@@ -798,8 +798,8 @@ const processGroupMessage = useCallback((data: any) => {
               variant={activeTab === "channels" ? "default" : "ghost"}
               size="sm"
               className={`flex items-center ${activeTab === "channels"
-                ? "bg-gray-700 text-white hover:bg-gray-800"
-                : "text-gray-300 hover:text-white hover:bg-gray-700"
+                ? "bg-gray-700 text-white hover:bg-gray-800 cursor-pointer hover:scale-105 transition duration-300"
+                : "text-gray-300 hover:text-white hover:bg-gray-700 cursor-pointer hover:scale-105 transition duration-300"
                 }`}
               onClick={() => setActiveTab("channels")}
             >
