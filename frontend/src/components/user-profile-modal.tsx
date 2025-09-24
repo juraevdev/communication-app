@@ -39,8 +39,14 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
     setIsEditing(false)
   }
 
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      onClose()
+    }
+  }
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md bg-gray-300">
         <DialogHeader>
           <div className="flex items-center justify-between">
@@ -72,7 +78,7 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
                     onChange={(e) => setEditData({ ...editData, name: e.target.value })}
                   />
                 </div>
-                <Button onClick={handleSave} className="w-full cursor pointer hover:scale-105 transition duration-300">
+                <Button onClick={handleSave} className="w-full cursor-pointer hover:scale-105 transition duration-300">
                   <Save className="mr-2 h-4 w-4" />
                   Save
                 </Button>

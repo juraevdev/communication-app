@@ -17,6 +17,7 @@ class GroupApiView(generics.GenericAPIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 
+
 class GroupDeleteApiView(generics.GenericAPIView):
     serializer_class = GroupSerializer
     permission_classes = [IsGroupOwner]  
@@ -29,6 +30,8 @@ class GroupDeleteApiView(generics.GenericAPIView):
             return Response({'message': 'Group deleted'}, status=status.HTTP_200_OK)
         except Group.DoesNotExist:
             return Response({'message': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
 
 class GroupUpdateApiView(generics.GenericAPIView):
     serializer_class = GroupUpdateSerializer
@@ -46,6 +49,7 @@ class GroupUpdateApiView(generics.GenericAPIView):
             return Response({'message': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
         
         
+
 class GroupListApiView(generics.GenericAPIView):
     serializer_class = GroupSerializer
     
@@ -55,6 +59,7 @@ class GroupListApiView(generics.GenericAPIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     
+
 class GroupDetailApiView(generics.GenericAPIView):
     serializer_class = GroupSerializer
     
@@ -114,6 +119,7 @@ class GroupMemberDeleteApiView(generics.GenericAPIView):
         except GroupMember.DoesNotExist:
             return Response({'message': 'Member not found'}, status=status.HTTP_404_NOT_FOUND)
         
+
         
 class GroupMembersApiView(generics.GenericAPIView):
     serializer_class = GroupMembersSerializer

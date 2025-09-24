@@ -7,6 +7,18 @@ class GroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = Group
         fields = '__all__'
+    
+    def create(self, validated_data):
+        group = Group.objects.create(**validated_data)
+        
+        user = self.context['request'].user
+        GroupMember.objects.create(
+            group=group,
+            user=user,
+            role='owner'
+        )
+        
+        return group
         
         
         

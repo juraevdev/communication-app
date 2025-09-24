@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,72 +8,82 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Search, MessageSquare, Phone, MoreVertical } from "lucide-react"
 import { UserProfileModal } from "./user-profile-modal"
+import { apiClient } from "@/lib/api"
 
 interface ContactsModalProps {
   isOpen: boolean
   onClose: () => void
 }
 
-const mockContacts = [
-  {
-    id: 1,
-    name: "Akmal Karimov",
-    username: "akmal_k",
-    email: "akmal@company.gov.uz",
-    avatar: "/diverse-group.png",
-    bio: "IT mutaxassisi",
-    phone_number: "+998901234567",
-    isContact: true,
-    isOnline: true,
-    lastSeen: "2 daqiqa oldin",
-    role: "Developer",
-  },
-  {
-    id: 2,
-    name: "Malika Tosheva",
-    username: "malika_t",
-    email: "malika@company.gov.uz",
-    avatar: "/diverse-group-meeting.png",
-    bio: "Loyiha menejeri",
-    phone_number: "+998901234568",
-    isContact: true,
-    isOnline: false,
-    lastSeen: "1 soat oldin",
-    role: "Manager",
-  },
-  {
-    id: 3,
-    name: "Bobur Aliyev",
-    username: "bobur_a",
-    email: "bobur@company.gov.uz",
-    avatar: "/news-collage.png",
-    bio: "Dizayner",
-    phone_number: "+998901234569",
-    isContact: true,
-    isOnline: true,
-    lastSeen: "Hozir",
-    role: "Designer",
-  },
-]
+interface Contact {
+  id: number;
+  alias: string;
+  image: string;
+  owner: number;
+  contact_user: number;
+  phone_number: string;
+  email: string;
+  bio: string;
+  isContact: boolean;
+  isOnline: boolean;
+  avatar: string
+  is_online: boolean;
+  unread_count: number;
+  name: string;
+  username: string;
+  lastSeen: string;
+  role: string;
+}
+
 
 export function ContactsModal({ isOpen, onClose }: ContactsModalProps) {
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedUser, setSelectedUser] = useState<(typeof mockContacts)[0] | null>(null)
+  const [selectedUser, setSelectedUser] = useState<Contact | null>(null)
   const [showUserProfile, setShowUserProfile] = useState(false)
+  const [contacts, setContacts] = useState<Contact[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const filteredContacts = mockContacts.filter(
-    (contact) =>
-      contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      contact.username.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
+  useEffect(() => {
+    const fetchContacts = async () => {
+      if (!isOpen) return;
+      
+      setIsLoading(true)
+      setError(null)
+      try {
+        const contactsData = await apiClient.getContacts()
+        console.log("API dan kelgan kontaktlar:", contactsData); 
+        setContacts(Array.isArray(contactsData) ? contactsData : [])
+      } catch (err) {
+        setError("Kontaktlarni yuklab bo'lmadi")
+        console.error("Kontaktlarni yuklashda xato:", err)
+        setContacts([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
 
+    fetchContacts()
+  }, [isOpen])
 
-  const handleUserClick = (user: (typeof mockContacts)[0]) => {
+  const filteredContacts = (contacts || []).filter((contact) => {
+    if (!contact) return false;
+    
+    const alias = contact.alias || "";
+    const username = contact.alias || ""; 
+    
+    return (
+      alias.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      username.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  });
+
+  const handleUserClick = (user: Contact) => {
     setSelectedUser(user)
     setShowUserProfile(true)
   }
 
-  const handleStartChat = (user: (typeof mockContacts)[0]) => {
+  const handleStartChat = (user: Contact) => {
     console.log("Starting chat with:", user.id)
     onClose()
   }
@@ -90,7 +100,7 @@ export function ContactsModal({ isOpen, onClose }: ContactsModalProps) {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Foydalanuvchi qidirish..."
+                placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
@@ -104,49 +114,70 @@ export function ContactsModal({ isOpen, onClose }: ContactsModalProps) {
 
               <TabsContent value="contacts">
                 <ScrollArea className="h-96">
-                  <div className="space-y-2">
-                    {filteredContacts.map((contact) => (
-                      <div
-                        key={contact.id}
-                        className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent cursor-pointer transition-colors"
-                      >
-                        <div className="relative">
-                          <Avatar className="h-10 w-10">
-                            <AvatarImage src={contact.avatar || "/placeholder.svg"} />
-                            <AvatarFallback>{contact.name.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          {contact.isOnline && (
-                            <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 bg-green-500 border-2 border-background rounded-full" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0" onClick={() => handleUserClick(contact)}>
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-medium text-sm truncate">{contact.name}</h3>
-                            {contact.role && (
-                              <Badge variant="secondary" className="text-xs">
-                                {contact.role}
-                              </Badge>
-                            )}
+                  {isLoading ? (
+                    <div className="flex justify-center items-center h-40">
+                      <p>Loading...</p>
+                    </div>
+                  ) : error ? (
+                    <div className="flex justify-center items-center h-40">
+                      <p className="text-red-500">{error}</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {filteredContacts.map((contact) => (
+                        <div
+                          key={contact.id}
+                          className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent cursor-pointer transition-colors"
+                        >
+                          <div className="relative">
+                            <Avatar className="h-10 w-10">
+                              <AvatarImage src={contact.image || "/placeholder.svg"} />
+                              <AvatarFallback>{(contact.alias || "U").charAt(0)}</AvatarFallback>
+                            </Avatar> 
                           </div>
-                          <p className="text-sm text-muted-foreground truncate">@{contact.username}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {contact.isOnline ? "Onlayn" : contact.lastSeen}
-                          </p>
+                          <div className="flex-1 min-w-0" onClick={() => handleUserClick(contact)}>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-medium text-sm truncate">{contact.alias || "Unknown"}</h3>
+                              {contact.role && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {contact.role}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-muted-foreground truncate">@{contact.alias || "user"}</p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button 
+                              className="cursor-pointer" 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleStartChat(contact)}
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                            </Button>
+                            <Button className="cursor-pointer" variant="ghost" size="sm">
+                              <Phone className="h-4 w-4" />
+                            </Button>
+                            <Button className="cursor-pointer" variant="ghost" size="sm">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Button className="cursor-pointer" variant="ghost" size="sm" onClick={() => handleStartChat(contact)}>
-                            <MessageSquare className="h-4 w-4" />
-                          </Button>
-                          <Button className="cursor-pointer" variant="ghost" size="sm">
-                            <Phone className="h-4 w-4" />
-                          </Button>
-                          <Button className="cursor-pointer" variant="ghost" size="sm">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
+                      ))}
+                      
+                      {filteredContacts.length === 0 && searchQuery && (
+                        <div className="text-center py-8">
+                          <p>No contacts</p>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      )}
+                      
+                      {filteredContacts.length === 0 && !searchQuery && !isLoading && (
+                        <div className="text-center py-8">
+                          <p>Not found</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </ScrollArea>
               </TabsContent>
             </Tabs>

@@ -13,9 +13,10 @@ import { Search, Users, } from "lucide-react"
 interface CreateGroupModalProps {
   isOpen: boolean
   onClose: () => void
+  onCreateGroup?: (groupData: { name: string; description?: string }) => Promise<void> | void
 }
 
-export function CreateGroupModal({ isOpen, onClose }: CreateGroupModalProps) {
+export function CreateGroupModal({ isOpen, onClose, onCreateGroup }: CreateGroupModalProps) {
   const [step, setStep] = useState(1)
   const [groupData, setGroupData] = useState({
     name: "",
@@ -29,17 +30,29 @@ export function CreateGroupModal({ isOpen, onClose }: CreateGroupModalProps) {
   //   setSelectedUsers((prev) => (prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]))
   // }
 
-  const handleCreateGroup = () => {
-    console.log("Creating group:", {
-      ...groupData,
-      members: selectedUsers,
-    })
-    alert("Guruh muvaffaqiyatli yaratildi!")
-    onClose()
-    setStep(1)
-    setGroupData({ name: "", description: "", avatar: "" })
-    setSelectedUsers([])
-    setSearchQuery("")
+  const handleCreateGroup = async () => {
+    try {
+      if (onCreateGroup) {
+        await onCreateGroup({
+          name: groupData.name,
+          description: groupData.description
+        })
+      } else {
+        console.log("Creating group:", {
+          ...groupData,
+          members: selectedUsers,
+        })
+        alert("Guruh muvaffaqiyatli yaratildi!")
+      }
+      
+      onClose()
+      setStep(1)
+      setGroupData({ name: "", description: "", avatar: "" })
+      setSelectedUsers([])
+      setSearchQuery("")
+    } catch (error) {
+      console.error("Failed to create group:", error)
+    }
   }
 
   const handleNext = () => {

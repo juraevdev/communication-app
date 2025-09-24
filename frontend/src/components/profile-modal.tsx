@@ -1,10 +1,9 @@
-import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { MessageSquare, Phone, Video, UserPlus, UserMinus, Edit, X } from "lucide-react"
+import { MessageSquare, Phone, Video, UserPlus, UserMinus } from "lucide-react"
 
 interface ProfileModalProps {
   isOpen: boolean
@@ -26,7 +25,16 @@ interface ProfileModalProps {
 }
 
 export function ProfileModal({ isOpen, onClose, user, isOwnProfile = false }: ProfileModalProps) {
-  const [isEditing, setIsEditing] = useState(false)
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      onClose()
+    }
+  }
+
+  const getAvatarFallback = () => {
+    if (!user.name) return "U" 
+    return user.name.charAt(0).toUpperCase()
+  }
 
   const handleAddContact = () => {
     console.log("Adding contact:", user.id)
@@ -42,16 +50,11 @@ export function ProfileModal({ isOpen, onClose, user, isOwnProfile = false }: Pr
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md bg-gray-300">
         <DialogHeader>
           <div className="flex items-center justify-between">
-            <DialogTitle>{isOwnProfile ? "Mening profilim" : ""}</DialogTitle>
-            {isOwnProfile && (
-              <Button className="cursor-pointer" variant="ghost" size="sm" onClick={() => setIsEditing(!isEditing)}>
-                {isEditing ? <X className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
-              </Button>
-            )}
+            <DialogTitle></DialogTitle>
           </div>
         </DialogHeader>
 
@@ -60,41 +63,42 @@ export function ProfileModal({ isOpen, onClose, user, isOwnProfile = false }: Pr
             <div className="relative">
               <Avatar className="h-20 w-20">
                 <AvatarImage src={user.avatar || "/placeholder.svg"} />
-                <AvatarFallback className="text-lg">{user.name}</AvatarFallback>
+                <AvatarFallback className="text-lg">{getAvatarFallback()}</AvatarFallback>
               </Avatar>
             </div>
-              <div className="w-full space-y-2">
-                <h3 className="text-xl font-semibold">{user.name}</h3>
-              </div>
+            <div className="w-full space-y-2">
+              <h3 className="text-xl font-semibold">{user.name || ""}</h3>
+              <p className="text-muted-foreground">@{user.username || "user"}</p>
+            </div>
           </div>
 
-            <Tabs defaultValue="info" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger className="cursor-pointer" value="info">Info</TabsTrigger>
-                <TabsTrigger className="cursor-pointer" value="media">Media</TabsTrigger>
-              </TabsList>
+          <Tabs defaultValue="info" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger className="cursor-pointer" value="info">Info</TabsTrigger>
+              <TabsTrigger className="cursor-pointer" value="media">Media</TabsTrigger>
+            </TabsList>
 
-              <TabsContent value="info" className="space-y-4">
-                <div className="space-y-3">
-                  <div>
-                    <Label className="text-sm font-medium">Email</Label>
-                    <p className="text-sm text-muted-foreground">{user.email}</p>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Username</Label>
-                    <p className="text-sm text-muted-foreground">@{user.username}</p>
-                  </div>
+            <TabsContent value="info" className="space-y-4">
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-sm font-medium">Email</Label>
+                  <p className="text-sm text-muted-foreground">{user.email || "No email"}</p>
                 </div>
-              </TabsContent>
-
-              <TabsContent value="media" className="space-y-4">
-                <div className="text-center text-muted-foreground">
-                  <p className="text-sm">No media</p>
+                <div>
+                  <Label className="text-sm font-medium">Username</Label>
+                  <p className="text-sm text-muted-foreground">@{user.username || "user"}</p>
                 </div>
-              </TabsContent>
-            </Tabs>
+              </div>
+            </TabsContent>
 
-          {!isOwnProfile && !isEditing && (
+            <TabsContent value="media" className="space-y-4">
+              <div className="text-center text-muted-foreground">
+                <p className="text-sm">No media</p>
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          {!isOwnProfile && (
             <div className="flex gap-2">
               <Button onClick={handleStartChat} className="flex-1 cursor-pointer">
                 <MessageSquare className="mr-2 h-4 w-4" />
@@ -106,7 +110,12 @@ export function ProfileModal({ isOpen, onClose, user, isOwnProfile = false }: Pr
               <Button variant="outline" size="icon" className="cursor-pointer">
                 <Video className="h-4 w-4" />
               </Button>
-              <Button className="cursor-pointer" variant="outline" size="icon" onClick={user.isContact ? handleRemoveContact : handleAddContact}>
+              <Button 
+                className="cursor-pointer" 
+                variant="outline" 
+                size="icon" 
+                onClick={user.isContact ? handleRemoveContact : handleAddContact}
+              >
                 {user.isContact ? <UserMinus className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
               </Button>
             </div>

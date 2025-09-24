@@ -91,7 +91,7 @@ export const apiClient = {
   },
 
   async searchUsers(searchTerm: any) {
-    const response = await api.get(`/accounts/users/search/?search=${searchTerm}`);
+    const response = await api.get(`/accounts/filter/?search=${searchTerm}`);
     return response.data;
   },
 
@@ -198,7 +198,8 @@ export const apiClient = {
     };
   },
 
-  async createGroup(data: { name: string; description?: string; created_by: number }) {
+
+  async createGroup(data: { name: string; description?: string; created_by: string }) {
     const response = await fetch(`${BASE_URL}/api/v1/group/create/`, {
       method: 'POST',
       headers: this.getHeaders(),

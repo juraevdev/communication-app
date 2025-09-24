@@ -19,13 +19,13 @@ import {
   MessageSquare,
   Users,
   Hash,
-  Settings,
+  // Settings,
   UserPlus,
   LogOut,
   Send,
   Paperclip,
   Smile,
-  MoreVertical,
+  // MoreVertical,
   Phone,
   Video,
   User,
@@ -58,7 +58,7 @@ export default function ChatPage() {
     isConnected,
     markAsRead,
     sendMessage,
-    createGroup,
+    // createGroup,
     connectToGroup,
     getGroupMembers,
     sendGroupMessage,
@@ -70,18 +70,19 @@ export default function ChatPage() {
   const [selectedChat, setSelectedChat] = useState<any>(null)
   const [message, setMessage] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
-  const [showProfile, setShowProfile] = useState(false)
-  const [showUserProfile, setShowUserProfile] = useState(false)
+  const [searchResults, setSearchResults] = useState<any[]>([]) // Add search results state
+  const [isSearching, setIsSearching] = useState(false) // Add loading state for search
+  const [showOwnProfile, setShowOwnProfile] = useState(false) // O'z profilim modal
+  const [showUserProfile, setShowUserProfile] = useState(false) // Boshqa foydalanuvchi profili
   const [showContacts, setShowContacts] = useState(false)
   const [showCreateGroup, setShowCreateGroup] = useState(false)
   const [showGroupInfo, setShowGroupInfo] = useState(false)
   const [showCreateChannel, setShowCreateChannel] = useState(false)
   const [showChannelInfo, setShowChannelInfo] = useState(false)
-  const [typingUsers, setTypingUsers] = useState<Set<number>>(new Set())
+  const [typingUsers,] = useState<Set<number>>(new Set())
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [activeTab, setActiveTab] = useState<"private" | "groups" | "channels">("private")
-  const [groupMembers, setGroupMembers] = useState<any[]>([])
-  const [group, setGroups] = useState<any[]>([])
+  const [, setGroupMembers] = useState<any[]>([])
   const [replyingTo, setReplyingTo] = useState<any>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [fileUpload, setFileUpload] = useState<{
@@ -99,10 +100,12 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, selectedChat?.id])
 
+  // Mark messages as read when chat is selected
   useEffect(() => {
     if (selectedChat && selectedChat.unread > 0 && selectedChat.type !== "group") {
       const roomId = selectedChat.room_id || selectedChat.id?.toString()
@@ -178,6 +181,7 @@ export default function ChatPage() {
     }
   }
 
+  // Cleanup typing timeout
   useEffect(() => {
     return () => {
       if (isTypingTimeoutRef.current) {
@@ -186,11 +190,11 @@ export default function ChatPage() {
     }
   }, [])
 
+  // Mark group messages as read
   useEffect(() => {
     if (selectedChat && selectedChat.unread > 0 && selectedChat.type === "group") {
       const groupId = selectedChat.id.toString();
 
-      // Guruhdagi o'qilmagan xabarlarni o'qilgan deb belgilash
       const currentMessages = messages[`group_${groupId}`] || [];
       const unreadMessages = currentMessages.filter(msg => !msg.is_read && !msg.isOwn);
 
@@ -217,7 +221,7 @@ export default function ChatPage() {
     } else if (selectedChat?.type === "channel") {
       setShowChannelInfo(true)
     } else if (selectedChat?.type === "private") {
-      setShowProfile(true)
+      setShowUserProfile(true) // Boshqa foydalanuvchi profilini ko'rsatish
     }
   }
 
@@ -225,14 +229,15 @@ export default function ChatPage() {
     setSelectedChat(chat)
     setLoadingMessages(true)
     setReplyingTo(null)
+    // Clear search when selecting a chat
+    setSearchQuery("")
+    setSearchResults([])
 
     if (chat.type === "group") {
-      setGroups(prev => prev.map(group => {
-        if (group.id === chat.id) {
-          return { ...group, unread: 0 };
-        }
-        return group;
-      }));
+      // Update groups state to mark as read
+      if (chat.unread > 0) {
+        // You might want to update your groups state here
+      }
 
       const groupId = chat.id.toString()
       connectToGroup(groupId)
@@ -265,20 +270,49 @@ export default function ChatPage() {
     setLoadingMessages(false)
   }
 
-  useEffect(() => {
-    if (selectedChat && selectedChat.type === "group" && selectedChat.unread > 0) {
-      setGroups(prev => prev.map(group => {
-        if (group.id === selectedChat.id) {
-          return { ...group, unread: 0 };
-        }
-        return group;
-      }));
+  // Handle search user selection
+  const handleSearchUserSelect = async (user: any) => {
+    try {
+      setLoadingMessages(true)
+
+      // Create a chat object similar to existing chats
+      const newChat = {
+        id: user.id,
+        sender_id: user.id,
+        sender: user.username || user.email,
+        name: user.username || user.email,
+        email: user.email,
+        avatar: user.avatar,
+        type: "private",
+        unread: 0,
+        last_message: "",
+        timestamp: new Date().toISOString()
+      }
+
+      // Start chat with this user
+      const response = await apiClient.startChat(user.id)
+      if (response.room_id) {
+        const updatedChat = { ...newChat, room_id: response.room_id.toString() }
+        setSelectedChat(updatedChat)
+        connectToChatRoom(response.room_id.toString())
+      }
+
+      // Clear search
+      setSearchQuery("")
+      setSearchResults([])
+      setLoadingMessages(false)
+    } catch (error) {
+      console.error("Failed to start chat:", error)
+      setLoadingMessages(false)
     }
-  }, [selectedChat])
+  }
 
   const handleCreateGroup = async (groupData: { name: string; description?: string }) => {
     try {
-      await createGroup(groupData.name, groupData.description)
+      await apiClient.createGroup({
+        ...groupData,
+        created_by: currentUser.id
+      })
       setShowCreateGroup(false)
     } catch (error) {
       console.error("Failed to create group:", error)
@@ -331,13 +365,9 @@ export default function ChatPage() {
 
   const isFileMessage = (msg: any): boolean => {
     if (msg.message_type === "file") return true;
-
     if (msg.type === "file") return true;
-
     if (msg.message && msg.message.startsWith("File: ")) return true;
-
     if (msg.file_url || msg.file_name) return true;
-
     return false;
   };
 
@@ -397,12 +427,13 @@ export default function ChatPage() {
 
     return chatsToFilter.filter((chat) => {
       const chatName = getChatName(chat).toLowerCase()
-      const searchTerm = searchQuery
+      const searchTerm = searchQuery.toLowerCase()
       return chatName.includes(searchTerm)
     })
   }
 
-  const filteredChats = getFilteredChats()
+  // Show search results if searching, otherwise show filtered chats
+  const displayChats = searchQuery.trim() ? searchResults : getFilteredChats()
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -582,58 +613,10 @@ export default function ChatPage() {
     }
   };
 
-  useEffect(() => {
-    if (selectedChat?.type === "group") {
-      const groupId = selectedChat.id.toString();
-      const currentMessages = messages[`group_${groupId}`] || [];
-
-      const unreadMessages = currentMessages
-        .filter(msg => !msg.isOwn && !msg.is_read)
-        .slice(-3);
-
-      if (unreadMessages.length > 0) {
-        const timer = setTimeout(() => {
-          unreadMessages.forEach(msg => {
-            markGroupMessageAsRead(groupId, msg.id);
-          });
-        }, 2000);
-
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [selectedChat, messages, markGroupMessageAsRead]);
-
-  useEffect(() => {
-    if (selectedChat?.type !== "group") return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            const messageId = entry.target.getAttribute('data-message-id');
-            const isOwn = entry.target.getAttribute('data-is-own') === 'true';
-            const isRead = entry.target.getAttribute('data-is-read') === 'true';
-
-            if (messageId && !isOwn && !isRead) {
-              const groupId = selectedChat.id.toString();
-              markGroupMessageAsRead(groupId, messageId);
-            }
-          }
-        });
-      },
-      { threshold: 0.5 }
-    );
-
-    const messageElements = document.querySelectorAll('[data-message-id]');
-    messageElements.forEach(el => observer.observe(el));
-
-    return () => observer.disconnect();
-  }, [selectedChat, messages, markGroupMessageAsRead]);
-
   const isTyping = typingUsers.size > 0
-  const typingUserNames = Array.from(typingUsers).map(userId => {
-    return "Someone"
-  }).join(', ')
+  // const typingUserNames = Array.from(typingUsers).map(userId => {
+  //   return "Someone"
+  // }).join(', ')
 
   const getCurrentMessages = () => {
     if (!selectedChat) return []
@@ -654,8 +637,36 @@ export default function ChatPage() {
 
   const currentMessages = getCurrentMessages()
 
+  // Safe user data for modals
+  const safeCurrentUser = currentUser || {
+    id: 0,
+    name: "User",
+    username: "user",
+    email: "",
+    avatar: "",
+    bio: "",
+    phone: "",
+    isContact: false,
+    isOnline: true,
+    lastSeen: new Date().toISOString()
+  }
+
+  const safeSelectedChatUser = selectedChat ? {
+    id: selectedChat.id || 0,
+    name: getChatName(selectedChat),
+    username: selectedChat.username || "user",
+    email: selectedChat.email || "",
+    avatar: selectedChat.avatar || "",
+    bio: selectedChat.bio || "",
+    phone: selectedChat.phone || "",
+    isContact: selectedChat.isContact || false,
+    isOnline: selectedChat.isOnline || false,
+    lastSeen: selectedChat.lastSeen || new Date().toISOString()
+  } : safeCurrentUser
+
   return (
     <div className="flex h-screen bg-gray-950">
+      {/* Sidebar */}
       <div className="w-80 border-r border-gray-500 bg-card flex flex-col">
         <div className="p-4 border-b border-gray-500">
           <div className="flex items-center justify-between mb-4 text-white">
@@ -666,23 +677,21 @@ export default function ChatPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-48 bg-gray-900">
-                <DropdownMenuItem className="text-white cursor-pointer" onClick={() => setShowUserProfile(true)}>
+                <DropdownMenuItem className="text-white cursor-pointer" onClick={() => setShowOwnProfile(true)}>
                   <User className="mr-2 h-4 w-4 text-white" />
                   Profile
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-white cursor-pointer" onClick={() => setShowContacts(true)}>
                   <UserPlus className="mr-2 h-4 w-4 text-white" />
                   Contacts
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-white cursor-pointer">
-                  <Settings className="mr-2 h-4 w-4 text-white" />
-                  Settings
-                </DropdownMenuItem>
                 <DropdownMenuItem className="text-white cursor-pointer" onClick={() => setShowCreateGroup(true)}>
                   <Users className="mr-2 h-4 w-4 text-white" />
                   New group
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-white cursor-pointer" onClick={() => setShowCreateChannel(true)}>
                   <Hash className="mr-2 h-4 w-4 text-white" />
                   New channel
@@ -695,16 +704,36 @@ export default function ChatPage() {
               </DropdownMenuContent>
             </DropdownMenu>
             <div className="flex items-center gap-2">
-              <h1 className="text-white font-semibold">ChatApp</h1>
+              <h1 className="text-white font-semibold">NewGram</h1>
             </div>
           </div>
 
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Search..."
+              placeholder="Search users..."
               value={searchQuery}
-              onChange={async (searchTerm) => setSearchQuery(await apiClient.searchUsers(searchTerm))}
+              onChange={async (e) => {
+                const value = e.target.value
+                setSearchQuery(value)
+
+                if (value.trim()) {
+                  setIsSearching(true)
+                  try {
+                    const results = await apiClient.searchUsers(value)
+                    console.log("Search results:", results)
+                    setSearchResults(results || [])
+                  } catch (err) {
+                    console.error("Search error:", err)
+                    setSearchResults([])
+                  } finally {
+                    setIsSearching(false)
+                  }
+                } else {
+                  setSearchResults([])
+                  setIsSearching(false)
+                }
+              }}
               className="pl-10 border-gray-500 text-white bg-gray-800"
             />
           </div>
@@ -744,67 +773,86 @@ export default function ChatPage() {
 
         <ScrollArea className="flex-1">
           <div className="p-2">
-            {filteredChats.length === 0 ? (
+            {isSearching ? (
+              <div className="text-center py-8">
+                <Search className="h-8 w-8 text-gray-400 mx-auto mb-2 animate-pulse" />
+                <p className="text-gray-400">Searching...</p>
+              </div>
+            ) : displayChats.length === 0 ? (
               <div className="text-center py-8">
                 <MessageSquare className="h-8 w-8 text-gray-400 mx-auto mb-2" />
                 <p className="text-gray-400">
-                  {activeTab === "private" && chats.length === 0 && "No chats"}
-                  {activeTab === "groups" && groups.length === 0 && "No groups"}
-                  {activeTab === "channels" && "No channels"}
-                  {(
-                    (activeTab === "private" && chats.length > 0) ||
-                    (activeTab === "groups" && groups.length > 0)
-                  ) && "Nothing found"}
+                  {searchQuery.trim() ? "No users found" : (
+                    activeTab === "private" && chats.length === 0 ? "No chats" :
+                      activeTab === "groups" && groups.length === 0 ? "No groups" :
+                        activeTab === "channels" ? "No channels" : "Nothing found"
+                  )}
                 </p>
               </div>
             ) : (
-              filteredChats.map((chat) => (
-                <div
-                  key={`${chat.type}-${chat.id}` || Math.random()}
-                  className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-gray-800 transition-colors ${selectedChat?.id === chat.id && selectedChat?.type === chat.type ? "bg-gray-800" : ""
-                    }`}
-                  onClick={() => handleChatSelect(chat)}
-                >
-                  <div className="relative">
-                    <Avatar className="h-10 w-10">
-                      <AvatarImage src={chat.type === "group" ? "/group-avatar.png" : "/diverse-group.png"} />
-                      <AvatarFallback className="bg-gray-600 text-white">
-                        {getAvatarLetter(getChatName(chat))}
-                      </AvatarFallback>
-                    </Avatar>
-                    {chat.type === "group" && (
-                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
-                        <Users className="h-2 w-2 text-white" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-medium text-white truncate">
-                        {getChatName(chat)}
-                      </h3>
-                      <span className="text-xs text-gray-400">
-                        {formatChatTime(chat.timestamp)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-gray-400 truncate">
-                        {chat.message_type === "file" ? "📎 File" : (chat.last_message || "")}
-                      </p>
-                      {chat.unread > 0 && (
-                        <Badge variant="default" className="h-5 min-w-5 text-white px-1.5">
-                          {chat.unread}
-                        </Badge>
+              displayChats.map((item, index) => {
+                // Check if this is a search result or regular chat
+                const isSearchResult = searchQuery.trim() && searchResults.includes(item)
+
+                return (
+                  <div
+                    key={isSearchResult ? `search-${item.id}` : `${item.type}-${item.id}` || index}
+                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-gray-800 transition-colors ${selectedChat?.id === item.id && selectedChat?.type === item.type ? "bg-gray-800" : ""
+                      }`}
+                    onClick={() => isSearchResult ? handleSearchUserSelect(item) : handleChatSelect(item)}
+                  >
+                    <div className="relative">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={item.type === "group" ? "/group-avatar.png" : "/diverse-group.png"} />
+                        <AvatarFallback className="bg-gray-600 text-white">
+                          {isSearchResult ? getAvatarLetter(item.username || item.email) : getAvatarLetter(getChatName(item))}
+                        </AvatarFallback>
+                      </Avatar>
+                      {item.type === "group" && (
+                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
+                          <Users className="h-2 w-2 text-white" />
+                        </div>
+                      )}
+                      {isSearchResult && (
+                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                          <User className="h-2 w-2 text-white" />
+                        </div>
                       )}
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-medium text-white truncate">
+                          {isSearchResult ? (item.username || item.email) : getChatName(item)}
+                        </h3>
+                        {!isSearchResult && (
+                          <span className="text-xs text-gray-400">
+                            {formatChatTime(item.timestamp)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-gray-400 truncate">
+                          {isSearchResult ?
+                            (item.email || "User") :
+                            (item.message_type === "file" ? "📎 File" : (item.last_message || ""))
+                          }
+                        </p>
+                        {!isSearchResult && item.unread > 0 && (
+                          <Badge variant="default" className="h-5 min-w-5 text-white px-1.5">
+                            {item.unread}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))
+                )
+              })
             )}
           </div>
         </ScrollArea>
       </div>
 
+      {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         {selectedChat ? (
           <>
@@ -824,15 +872,10 @@ export default function ChatPage() {
                     <h2 className="font-semibold text-white">
                       {getChatName(selectedChat)}
                     </h2>
-                    {selectedChat.type === "group" && (
-                      <p className="text-xs text-gray-400">
-                        {selectedChat.memberCount || 0} members
-                      </p>
-                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {selectedChat.type !== "group" && (
+                  {selectedChat.type == "private" && (
                     <>
                       <Button variant="ghost" size="sm" className="text-white hover:bg-gray-800">
                         <Phone className="h-4 w-4" />
@@ -842,11 +885,15 @@ export default function ChatPage() {
                       </Button>
                     </>
                   )}
+                  {selectedChat.type == "group" && (
+                    <>
+                      <Button variant="ghost" size="sm" className="text-white hover:bg-gray-800">
+                        <Video className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
                   <Button variant="ghost" size="sm" className="text-white hover:bg-gray-800" onClick={handleChatHeaderClick}>
                     <Info className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" className="text-white hover:bg-gray-800">
-                    <MoreVertical className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
@@ -888,7 +935,7 @@ export default function ChatPage() {
                             </p>
                           )}
                           <div className="relative">
-                            {/* Reply button - only show on hover and for non-own messages */}
+                            {/* Reply button */}
                             {!msg.isOwn && (
                               <Button
                                 variant="ghost"
@@ -902,7 +949,7 @@ export default function ChatPage() {
                                 <Reply className="h-3 w-3" />
                               </Button>
                             )}
-                            
+
                             {/* Message content */}
                             <div
                               className={`rounded-lg px-3 py-2 ${msg.isOwn
@@ -948,7 +995,7 @@ export default function ChatPage() {
                                 <p className="text-xs opacity-70 mt-1">edited</p>
                               )}
                             </div>
-                            
+
                             <div className="flex items-center gap-1 mt-1">
                               <p className="text-xs text-gray-400">
                                 {formatMessageTime(msg.timestamp)}
@@ -985,8 +1032,8 @@ export default function ChatPage() {
                         Replying to {getSenderName(replyingTo.sender)}
                       </p>
                       <p className="text-sm text-white truncate">
-                        {isFileMessage(replyingTo) 
-                          ? `📎 ${replyingTo.file_name || "File"}` 
+                        {isFileMessage(replyingTo)
+                          ? `📎 ${replyingTo.file_name || "File"}`
                           : replyingTo.message
                         }
                       </p>
@@ -1004,6 +1051,7 @@ export default function ChatPage() {
               </div>
             )}
 
+            {/* File upload preview */}
             {fileUpload.file && (
               <div className="p-4 border-t border-gray-500 bg-gray-800">
                 <div className="flex items-center space-x-3 bg-gray-700 rounded-lg p-3">
@@ -1059,6 +1107,7 @@ export default function ChatPage() {
               </div>
             )}
 
+            {/* Message input */}
             <div className="p-4 border-t border-gray-500 bg-gray-900">
               <form onSubmit={handleSendMessage} className="flex items-center gap-2">
                 <input
@@ -1107,26 +1156,19 @@ export default function ChatPage() {
         )}
       </div>
 
-      <ProfileModal
-        isOpen={showProfile}
-        onClose={() => setShowUserProfile(false)}
-        user={selectedChat || {
-          id: 0,
-          fullname: "Loading...",
-          email: "",
-        }}
-        isOwnProfile={false}
+      {/* Modals */}
+      <UserProfileModal
+        isOpen={showOwnProfile}
+        onClose={() => setShowOwnProfile(false)}
+        user={safeCurrentUser}
+        isOwnProfile={true}
       />
 
-      <UserProfileModal
+      <ProfileModal
         isOpen={showUserProfile}
-        onClose={() => setShowProfile(false)}
-        user={currentUser || {
-          id: 0,
-          fullname: "Loading...",
-          email: "",
-        }}
-        isOwnProfile={true}
+        onClose={() => setShowUserProfile(false)}
+        user={safeSelectedChatUser}
+        isOwnProfile={false}
       />
 
       <ContactsModal isOpen={showContacts} onClose={() => setShowContacts(false)} />
@@ -1134,6 +1176,7 @@ export default function ChatPage() {
       <CreateGroupModal
         isOpen={showCreateGroup}
         onClose={() => setShowCreateGroup(false)}
+        onCreateGroup={handleCreateGroup}
       />
 
       <CreateChannelModal isOpen={showCreateChannel} onClose={() => setShowCreateChannel(false)} />

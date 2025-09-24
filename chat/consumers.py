@@ -1070,7 +1070,7 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             
             conversations.sort(key=lambda x: x['timestamp'], reverse=True)
             
-            return conversations[:3]
+            return conversations[:]
             
         except Exception as e:
             logger.error(f"Error getting recent conversations: {e}")
