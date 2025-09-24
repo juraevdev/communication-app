@@ -24,7 +24,6 @@ export function CreateChannelModal({ isOpen, onClose }: CreateChannelModalProps)
     if (!channelData.name.trim()) return
 
     console.log("Creating channel:", channelData)
-    alert("Kanal muvaffaqiyatli yaratildi!")
     onClose()
     setChannelData({
       name: "",
@@ -47,13 +46,12 @@ export function CreateChannelModal({ isOpen, onClose }: CreateChannelModalProps)
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Yangi kanal yaratish</DialogTitle>
-          <DialogDescription>Kanal ma'lumotlarini kiriting va sozlamalarni tanlang</DialogDescription>
+          <DialogTitle>New channel</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="channel-name">Kanal nomi *</Label>
+            <Label htmlFor="channel-name">Channel Name</Label>
             <Input
               id="channel-name"
               placeholder="Kanal nomini kiriting"
@@ -69,61 +67,35 @@ export function CreateChannelModal({ isOpen, onClose }: CreateChannelModalProps)
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="channel-username">Kanal manzili</Label>
+            <Label htmlFor="channel-username">Channel link</Label>
             <div className="flex items-center">
-              <span className="text-muted-foreground mr-1">@</span>
               <Input
                 id="channel-username"
-                placeholder="kanal_manzili"
+                placeholder="invite link"
                 value={channelData.username}
                 onChange={(e) => setChannelData({ ...channelData, username: e.target.value })}
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Kanalga qo'shilish uchun ishlatiladi. Faqat harflar, raqamlar va pastki chiziq.
-            </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="channel-description">Tavsif</Label>
+            <Label htmlFor="channel-description">Description</Label>
             <Textarea
               id="channel-description"
-              placeholder="Kanal haqida qisqacha ma'lumot"
+              placeholder="About channel"
               value={channelData.description}
               onChange={(e) => setChannelData({ ...channelData, description: e.target.value })}
               rows={3}
             />
           </div>
 
-          <div className="flex items-center justify-between p-3 border rounded-lg">
-            <div className="flex items-center gap-3">
-              {channelData.isPrivate ? (
-                <Lock className="h-5 w-5 text-muted-foreground" />
-              ) : (
-                <Globe className="h-5 w-5 text-muted-foreground" />
-              )}
-              <div>
-                <p className="font-medium text-sm">{channelData.isPrivate ? "Shaxsiy kanal" : "Ochiq kanal"}</p>
-                <p className="text-xs text-muted-foreground">
-                  {channelData.isPrivate
-                    ? "Faqat taklif orqali qo'shilish mumkin"
-                    : "Har kim qo'shilishi va ko'rishi mumkin"}
-                </p>
-              </div>
-            </div>
-            <Switch
-              checked={channelData.isPrivate}
-              onCheckedChange={(checked) => setChannelData({ ...channelData, isPrivate: checked })}
-            />
-          </div>
-
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>
-              Bekor qilish
+            <Button className="cursor-pointer hover:scale-105 transition duration-300" variant="outline" onClick={onClose}>
+              Cancel
             </Button>
-            <Button onClick={handleCreateChannel} disabled={!channelData.name.trim()}>
+            <Button className="cursor-pointer hover:scale-105 transition duration-300" onClick={handleCreateChannel} disabled={!channelData.name.trim()}>
               <Hash className="mr-2 h-4 w-4" />
-              Kanal yaratish
+              Save
             </Button>
           </div>
         </div>

@@ -426,29 +426,38 @@ export function useChat() {
           console.log("[Chat] Group message received:", data)
 
           switch (data.type) {
+
             case "message_history":
               if (data.messages && Array.isArray(data.messages)) {
-                const formattedMessages: Message[] = data.messages.map((msg: any) => ({
-                  id: msg.id.toString(),
-                  group_id: parseInt(groupId),
-                  sender: {
-                    id: msg.sender_id?.toString(),
-                    email: "",
-                    fullname: msg.sender_fullname || "Unknown",
-                    full_name: msg.sender_fullname || "Unknown",
-                  },
-                  message: msg.content || "",
-                  timestamp: msg.created_at,
-                  isOwn: msg.sender_id === currentUser?.id,
-                  is_read: true,
-                  is_updated: msg.is_updated || false,
-                  type: msg.message_type || "text",
-                  file_name: msg.file_name,
-                  file_url: msg.file_url,
-                  file_type: msg.file_type,
-                  file_size: msg.file_size?.toString(),
-                  reply_to: msg.reply_to,
-                }))
+                console.log("[DEBUG] Raw messages from server:", data.messages);
+
+                const formattedMessages: Message[] = data.messages.map((msg: any) => {
+                  console.log(`[DEBUG] Message ${msg.id}: is_read = ${msg.is_read}, sender = ${msg.sender_id}, current_user = ${currentUser?.id}`);
+
+                  return {
+                    id: msg.id.toString(),
+                    group_id: parseInt(groupId),
+                    sender: {
+                      id: msg.sender_id?.toString(),
+                      email: "",
+                      fullname: msg.sender_fullname || "Unknown",
+                      full_name: msg.sender_fullname || "Unknown",
+                    },
+                    message: msg.content || "",
+                    timestamp: msg.created_at,
+                    isOwn: msg.sender_id === currentUser?.id,
+                    is_read: Boolean(msg.is_read),
+                    is_updated: msg.is_updated || false,
+                    type: msg.message_type || "text",
+                    file_name: msg.file_name,
+                    file_url: msg.file_url,
+                    file_type: msg.file_type,
+                    file_size: msg.file_size?.toString(),
+                    reply_to: msg.reply_to,
+                  }
+                })
+
+                console.log("[DEBUG] Formatted messages:", formattedMessages);
 
                 formattedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
 
@@ -458,6 +467,41 @@ export function useChat() {
                 }))
               }
               break
+
+            case 'message_read_confirmed':
+              setMessages(prev => {
+                const roomKey = `group_${groupId}`;
+                const updatedMessages = (prev[roomKey] || []).map(msg => {
+                  if (msg.id === data.message_id.toString()) {
+                    return { ...msg, is_read: true };
+                  }
+                  return msg;
+                });
+
+                return {
+                  ...prev,
+                  [roomKey]: updatedMessages,
+                };
+              });
+              break;
+
+
+            case 'read':
+              setMessages(prev => {
+                const roomKey = `group_${groupId}`;
+                const updatedMessages = (prev[roomKey] || []).map(msg => {
+                  if (msg.id === data.message_id.toString()) {
+                    return { ...msg, is_read: true };
+                  }
+                  return msg;
+                });
+
+                return {
+                  ...prev,
+                  [roomKey]: updatedMessages,
+                };
+              });
+              break;
 
             case "chat_message":
               const newMessage: Message = {
@@ -472,32 +516,49 @@ export function useChat() {
                 message: data.message?.content || data.message || "",
                 timestamp: data.timestamp || new Date().toISOString(),
                 isOwn: data.sender_id === currentUser?.id,
-                is_read: data.sender_id === currentUser?.id ? false : false, // Barcha xabarlar dastlab o'qilmagan
+                is_read: data.sender_id === currentUser?.id,
                 is_updated: false,
-                type: "text",
+                type: data.message_type || "text",
                 reply_to: data.reply_to,
+                file_name: data.file_name,
+                file_url: data.file_url,
+                file_type: data.file_type,
+                file_size: data.file_size?.toString(),
               }
 
               console.log("[Chat] New group message received:", newMessage)
-              addMessage(`group_${groupId}`, newMessage)
 
-              // Faqat o'z xabarimiz uchun unread count'ni reset qilamiz
-              if (newMessage.isOwn) {
-                setGroups(prev => prev.map(group => {
-                  if (group.id.toString() === groupId) {
-                    return { ...group, unread: 0 };
-                  }
-                  return group;
-                }));
-              } else {
-                // Boshqa foydalanuvchi xabari uchun unread count'ni oshiramiz
-                setGroups(prev => prev.map(group => {
-                  if (group.id.toString() === groupId && currentGroupRef.current !== groupId) {
+              // UNREAD COUNT YANGILASH - HAR QANDAY YANGI XABAR UCHUN
+              setGroups(prev => prev.map(group => {
+                if (group.id.toString() === groupId) {
+                  // Agar bu joriy ochilgan guruh bo'lsa
+                  if (currentGroupRef.current === groupId) {
+                    // Joriy guruhda yangi xabar - unread oshirmaymiz
+                    return group;
+                  } else {
+                    // Boshqa guruhda yangi xabar - unread oshiramiz
                     return { ...group, unread: (group.unread || 0) + 1 };
                   }
-                  return group;
-                }));
-              }
+                }
+                return group;
+              }));
+
+              setMessages(prev => {
+                const roomKey = `group_${groupId}`;
+                const currentMessages = prev[roomKey] || [];
+
+                if (currentMessages.some(msg => msg.id === newMessage.id)) {
+                  return prev;
+                }
+
+                const updatedMessages = [...currentMessages, newMessage];
+                updatedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+                return {
+                  ...prev,
+                  [roomKey]: updatedMessages,
+                };
+              });
               break;
 
             case "file_uploaded":
@@ -514,7 +575,7 @@ export function useChat() {
                   message: data.file_name || "File",
                   timestamp: data.uploaded_at || data.timestamp || new Date().toISOString(),
                   isOwn: (data.user?.id || data.sender_id) === currentUser?.id,
-                  is_read: false, // Barcha fayl xabarlar dastlab o'qilmagan
+                  is_read: (data.user?.id || data.sender_id) === currentUser?.id,
                   is_updated: false,
                   type: "file",
                   file_name: data.file_name,
@@ -524,20 +585,51 @@ export function useChat() {
                 }
 
                 console.log("[Chat] New group file message received:", fileMessage)
-                addMessage(`group_${groupId}`, fileMessage)
 
-                // Faqat o'z xabarimiz uchun unread count'ni reset qilamiz
-                if (fileMessage.isOwn) {
-                  setGroups(prev => prev.map(group => {
-                    if (group.id.toString() === groupId) {
+                // UNREAD COUNT YANGILASH - FAYL XABARLARI UCHUN
+                setGroups(prev => prev.map(group => {
+                  if (group.id.toString() === groupId) {
+                    if (currentGroupRef.current === groupId && !fileMessage.isOwn) {
+                      return group;
+                    } else if (currentGroupRef.current !== groupId && !fileMessage.isOwn) {
+                      return { ...group, unread: (group.unread || 0) + 1 };
+                    } else if (fileMessage.isOwn) {
                       return { ...group, unread: 0 };
                     }
-                    return group;
-                  }));
-                } else {
-                  // Boshqa foydalanuvchi xabari uchun unread count'ni oshiramiz
+                  }
+                  return group;
+                }));
+
+                addMessage(`group_${groupId}`, fileMessage)
+              }
+              break;
+
+              // Yangi funksiya qo'shamiz: real-time unread count yangilash
+              const updateGroupUnreadCount = useCallback((groupId: string, increment: boolean = true) => {
+                setGroups(prev => prev.map(group => {
+                  if (group.id.toString() === groupId) {
+                    if (increment) {
+                      // Faqat joriy guruh emas bo'lsa unread oshiramiz
+                      if (currentGroupRef.current !== groupId) {
+                        return { ...group, unread: (group.unread || 0) + 1 };
+                      }
+                    } else {
+                      // Unread kamaytiramiz (0 dan pastga tushmasligi kerak)
+                      return { ...group, unread: Math.max(0, (group.unread || 0) - 1) };
+                    }
+                  }
+                  return group;
+                }));
+              }, []);
+
+            // WebSocket message handlerda quyidagi yangi holatni qo'shamiz
+            case 'new_message_notification':
+              // Serverdan yangi xabar haqida bildirishnoma kelsa
+              if (data.group_id && data.group_id.toString() === groupId) {
+                // Faqat joriy guruh emas bo'lsa unread oshiramiz
+                if (currentGroupRef.current !== groupId) {
                   setGroups(prev => prev.map(group => {
-                    if (group.id.toString() === groupId && currentGroupRef.current !== groupId) {
+                    if (group.id.toString() === groupId) {
                       return { ...group, unread: (group.unread || 0) + 1 };
                     }
                     return group;
@@ -879,14 +971,15 @@ export function useChat() {
   }, [])
 
   return {
-    messages,
     chats,
     groups,
-    isConnected,
-    currentUser,
+    messages,
     apiClient,
     chatWsRef,
     groupWsRef,
+    isConnected,
+    currentUser,
+    setGroups,
     loadGroups,
     markAsRead,
     sendMessage,

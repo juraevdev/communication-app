@@ -96,7 +96,7 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
             <Tabs defaultValue="info" className="w-full">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger className="cursor-pointer" value="info">Info</TabsTrigger>
-                <TabsTrigger className="cursor-pointer" value="media">Media</TabsTrigger>
+                <TabsTrigger className="cursor-pointer" value="media">Settings</TabsTrigger>
               </TabsList>
 
               <TabsContent value="info" className="space-y-4">
@@ -113,8 +113,46 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
               </TabsContent>
 
               <TabsContent value="media" className="space-y-4">
-                <div className="text-center text-muted-foreground">
-                  <p className="text-sm">No media</p>
+                <div className="space-y-2">
+                  <Label htmlFor="new_password">New Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="new_password"
+                      // type={showNewPassword ? "text" : "password"}
+                      // value={profileData.new_password}
+                      // onChange={(e) => handleInputChange("new_password", e.target.value)}
+                      className="pl-10 pr-10"
+                      placeholder="Enter new password"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    >
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirm_password">Confirm New Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="confirm_password"
+                      // type={showConfirmPassword ? "text" : "password"}
+                      // value={profileData.confirm_password}
+                      // onChange={(e) => handleInputChange("confirm_password", e.target.value)}
+                      className="pl-10 pr-10"
+                      placeholder="Confirm new password"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    >
+                    </Button>
+                  </div>
                 </div>
               </TabsContent>
             </Tabs>

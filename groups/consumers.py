@@ -81,7 +81,24 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
             
     async def handle_mark_as_read(self, data):
         message_id = data.get('message_id')
-        await self.mark_message_as_read(message_id)
+        success, new_unread_count = await self.mark_message_as_read(message_id)
+    
+        if success:
+            await self.channel_layer.group_send(
+                self.group_room_name,
+                {
+                    'type': 'unread_count_updated',
+                    'new_count': new_unread_count,
+                    'message_id': message_id,
+                    'user_id': self.user.id,
+                }
+            )
+
+    async def unread_count_updated(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'unread_count',
+            'count': event['new_count']
+        }))
 
     async def mark_message_as_read(self, message_id):
         if message_id:
@@ -96,18 +113,30 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                 }
             )
 
+    # group-consumer.py faylida message_read funksiyasini to'g'rilash
+
     async def message_read(self, event):
-        if event['user_id'] == self.user.id:
+        message_id = event['message_id']
+        reader_id = event['user_id']
+        reader_name = event['user_name']
+
+        if reader_id == self.user.id:
             await self.send(text_data=json.dumps({
-                'type': 'unread_count_decrement',
-                'count': 1
+                'type': 'message_read_confirmed',
+                'message_id': message_id
             }))
-    
+        
+            unread_count = await self.get_unread_count()
+            await self.send(text_data=json.dumps({
+                'type': 'unread_count',
+                'count': unread_count
+            }))
+
         await self.send(text_data=json.dumps({
-            'type': 'read',
-            'message_id': event['message_id'],
-            'user_id': event['user_id'],
-            'user_name': event['user_name'],
+            'type': 'message_read_status',
+            'message_id': message_id,
+            'reader_id': reader_id,
+            'reader_name': reader_name,
         }))
 
     async def send_unread_count(self):
@@ -120,13 +149,24 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
     async def handle_chat_message(self, data):
         content = data.get('message', '')
         reply_to_id = data.get('reply_to', None)
-        
+    
         if not content.strip():
             return
 
         message = await self.save_message(content, reply_to_id)
-        
+    
         if message:
+            await self.channel_layer.group_send(
+                self.group_room_name,
+                {
+                    'type': 'new_message_notification',
+                    'message_id': message.id,
+                    'sender_id': self.user.id,
+                    'sender_name': self.user.fullname,
+                    'timestamp': message.created_at.isoformat(),
+                }
+            )
+        
             await self.channel_layer.group_send(
                 self.group_room_name,
                 {
@@ -138,6 +178,29 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                     'reply_to': await self.get_reply_message(reply_to_id) if reply_to_id else None
                 }
             )
+            
+    
+    async def new_group_message(self, event):
+        current_unread_count = await self.get_unread_count()
+    
+        await self.send(text_data=json.dumps({
+            'type': 'unread_count_updated',
+            'count': current_unread_count,
+            'message_id': event['message_id'],
+            'sender_id': event['sender_id'],
+        }))
+            
+    
+    async def new_message_notification(self, event):
+        if event['sender_id'] != self.user.id:
+            await self.send(text_data=json.dumps({
+                'type': 'new_message',
+                'message_id': event['message_id'],
+                'sender_id': event['sender_id'],
+                'sender_name': event['sender_name'],
+                'timestamp': event['timestamp'],
+            }))
+            
 
     async def handle_typing(self, data):
         await self.channel_layer.group_send(
@@ -161,11 +224,17 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
 
     async def chat_message(self, event):
         if event['sender_id'] != self.user.id:
+            current_unread_count = await self.get_unread_count()
             await self.send(text_data=json.dumps({
                 'type': 'unread_count_increment',
                 'count': 1
             }))
-    
+        
+            await self.send(text_data=json.dumps({
+                'type': 'unread_count',
+                'count': current_unread_count + 1
+            }))
+
         await self.send(text_data=json.dumps({
             'type': 'chat_message',
             'message': event['message'],
@@ -250,11 +319,17 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
 
     async def file_message(self, event):
         if event['sender_id'] != self.user.id:
+            current_unread_count = await self.get_unread_count()
             await self.send(text_data=json.dumps({
                 'type': 'unread_count_increment',
                 'count': 1
             }))
-    
+        
+            await self.send(text_data=json.dumps({
+                'type': 'unread_count',
+                'count': current_unread_count + 1
+            }))
+
         await self.send(text_data=json.dumps({
             'type': 'file_uploaded',
             'id': event['file_id'],
@@ -373,7 +448,7 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def get_group_messages(self):
         messages = GroupMessage.objects.filter(group_id=self.group_id).select_related('sender', 'reply_to', 'file').order_by('created_at')
-    
+
         result = []
         for msg in messages:
             message_data = {
@@ -384,8 +459,9 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                 'created_at': msg.created_at.isoformat(),
                 'message_type': msg.message_type,
                 'is_updated': False,
+                'is_read': msg.is_read,
             }
-        
+    
             if msg.file:
                 message_data.update({
                     'file_name': msg.file.original_filename,
@@ -394,8 +470,16 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                     'file_size': msg.file.file.size if msg.file.file else 0,
                 })
         
-            result.append(message_data)
+            if msg.reply_to:
+                message_data['reply_to'] = {
+                    'id': msg.reply_to.id,
+                    'content': msg.reply_to.content,
+                    'sender': msg.reply_to.sender.fullname,
+                    'message': msg.reply_to.content  
+                }
     
+            result.append(message_data)
+
         return result
 
 
@@ -406,10 +490,16 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
             if message.sender != self.user:  
                 message.is_read = is_read
                 message.save()
-                return True
+            
+                unread_count = GroupMessage.objects.filter(
+                    group_id=self.group_id,
+                    is_read=False
+                ).exclude(sender=self.user).count()
+            
+                return True, unread_count
+            return False, 0
         except GroupMessage.DoesNotExist:
-            pass
-        return False
+            return False, 0
 
 
     @database_sync_to_async

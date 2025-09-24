@@ -1,6 +1,6 @@
 import type React from "react"
 import { apiClient } from "@/lib/api"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -56,6 +56,7 @@ export default function ChatPage() {
     groupWsRef,
     currentUser,
     isConnected,
+    setGroups,
     markAsRead,
     sendMessage,
     // createGroup,
@@ -70,10 +71,10 @@ export default function ChatPage() {
   const [selectedChat, setSelectedChat] = useState<any>(null)
   const [message, setMessage] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
-  const [searchResults, setSearchResults] = useState<any[]>([]) // Add search results state
-  const [isSearching, setIsSearching] = useState(false) // Add loading state for search
-  const [showOwnProfile, setShowOwnProfile] = useState(false) // O'z profilim modal
-  const [showUserProfile, setShowUserProfile] = useState(false) // Boshqa foydalanuvchi profili
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [showOwnProfile, setShowOwnProfile] = useState(false)
+  const [showUserProfile, setShowUserProfile] = useState(false)
   const [showContacts, setShowContacts] = useState(false)
   const [showCreateGroup, setShowCreateGroup] = useState(false)
   const [showGroupInfo, setShowGroupInfo] = useState(false)
@@ -190,23 +191,58 @@ export default function ChatPage() {
     }
   }, [])
 
-  // Mark group messages as read
-  useEffect(() => {
-    if (selectedChat && selectedChat.unread > 0 && selectedChat.type === "group") {
-      const groupId = selectedChat.id.toString();
 
+  useEffect(() => {
+    if (selectedChat && selectedChat.type === "group") {
+      const groupId = selectedChat.id.toString();
       const currentMessages = messages[`group_${groupId}`] || [];
-      const unreadMessages = currentMessages.filter(msg => !msg.is_read && !msg.isOwn);
+
+      const unreadMessages = currentMessages.filter(msg =>
+        !msg.is_read &&
+        !msg.isOwn
+      );
 
       if (unreadMessages.length > 0) {
         unreadMessages.forEach(msg => {
           markGroupMessageAsRead(groupId, msg.id);
         });
 
-        getGroupUnreadCount(groupId);
+        setGroups(prev => prev.map(group =>
+          group.id.toString() === groupId ? { ...group, unread: 0 } : group
+        ));
       }
     }
-  }, [selectedChat, messages, markGroupMessageAsRead, getGroupUnreadCount]);
+  }, [selectedChat, messages, markGroupMessageAsRead, setGroups]);
+
+  // Guruh xabarlarini qayta ishlash
+const processGroupMessage = useCallback((data: any) => {
+    switch (data.type) {
+        case 'unread_count':
+            setGroups(prev => prev.map(group => {
+                if (group.id.toString() === selectedChat?.id.toString()) {
+                    return { ...group, unread: data.count };
+                }
+                return group;
+            }));
+            break;
+        
+        case 'chat_message':
+        case 'file_uploaded':
+            // Xabar qo'shilganda unread count yangilanishi kerak
+            if (data.sender_id !== currentUser?.id) {
+                setGroups(prev => prev.map(group => {
+                    if (group.id.toString() === selectedChat?.id.toString()) {
+                        return { ...group, unread: (group.unread || 0) + 1 };
+                    }
+                    return group;
+                }));
+            }
+            break;
+            
+        default:
+            break;
+    }
+}, [selectedChat, currentUser, setGroups]);
 
   const handleChatHeaderClick = async () => {
     if (selectedChat?.type === "group") {
@@ -225,30 +261,22 @@ export default function ChatPage() {
     }
   }
 
+
   const handleChatSelect = async (chat: any) => {
     setSelectedChat(chat)
     setLoadingMessages(true)
     setReplyingTo(null)
-    // Clear search when selecting a chat
     setSearchQuery("")
     setSearchResults([])
 
     if (chat.type === "group") {
-      // Update groups state to mark as read
-      if (chat.unread > 0) {
-        // You might want to update your groups state here
-      }
+      // Guruh unread count'ni 0 qilish
+      setGroups(prev => prev.map(g =>
+        g.id === chat.id ? { ...g, unread: 0 } : g
+      ));
 
       const groupId = chat.id.toString()
       connectToGroup(groupId)
-
-      setTimeout(() => {
-        if (groupWsRef.current && groupWsRef.current.readyState === WebSocket.OPEN) {
-          groupWsRef.current.send(JSON.stringify({
-            type: "mark_all_as_read"
-          }));
-        }
-      }, 500);
     } else {
       const roomId = chat.room_id || chat.id?.toString()
       if (roomId) {
@@ -614,30 +642,23 @@ export default function ChatPage() {
   };
 
   const isTyping = typingUsers.size > 0
-  // const typingUserNames = Array.from(typingUsers).map(userId => {
-  //   return "Someone"
-  // }).join(', ')
 
   const getCurrentMessages = () => {
     if (!selectedChat) return []
 
     if (selectedChat.type === "group") {
-      return messages[`group_${selectedChat.id}`] || []
+      const groupMessages = messages[`group_${selectedChat.id}`] || []
+      console.log(`[UI Debug] Group ${selectedChat.id} messages:`, groupMessages)
+      return groupMessages
     } else {
-      return messages[selectedChat.room_id || selectedChat.id?.toString()] || []
+      const roomId = selectedChat.room_id || selectedChat.id?.toString()
+      return messages[roomId] || []
     }
   }
 
-  const handleMessageClick = (msg: any) => {
-    if (selectedChat?.type === "group" && !msg.isOwn && !msg.is_read) {
-      const groupId = selectedChat.id.toString();
-      markGroupMessageAsRead(groupId, msg.id);
-    }
-  };
 
   const currentMessages = getCurrentMessages()
 
-  // Safe user data for modals
   const safeCurrentUser = currentUser || {
     id: 0,
     name: "User",
@@ -663,6 +684,12 @@ export default function ChatPage() {
     isOnline: selectedChat.isOnline || false,
     lastSeen: selectedChat.lastSeen || new Date().toISOString()
   } : safeCurrentUser
+
+  useEffect(() => {
+    console.log("[UI Debug] Messages updated:", messages)
+    console.log("[UI Debug] Selected chat:", selectedChat)
+    console.log("[UI Debug] Current messages:", getCurrentMessages())
+  }, [messages, selectedChat])
 
   return (
     <div className="flex h-screen bg-gray-950">
@@ -744,25 +771,36 @@ export default function ChatPage() {
             <Button
               variant={activeTab === "private" ? "default" : "ghost"}
               size="sm"
-              className="text-white"
+              className={`flex items-center ${activeTab === "private"
+                ? "bg-gray-700 text-white hover:bg-gray-800"
+                : "text-gray-300 hover:text-white hover:bg-gray-700"
+                }`}
               onClick={() => setActiveTab("private")}
             >
               <MessageSquare className="mr-1 h-3 w-3" />
               Private
             </Button>
+
             <Button
               variant={activeTab === "groups" ? "default" : "ghost"}
               size="sm"
-              className="text-white"
+              className={`flex items-center ${activeTab === "groups"
+                ? "bg-gray-700 text-white hover:bg-gray-800"
+                : "text-gray-300 hover:text-white hover:bg-gray-700"
+                }`}
               onClick={() => setActiveTab("groups")}
             >
               <Users className="mr-1 h-3 w-3" />
               Groups
             </Button>
+
             <Button
               variant={activeTab === "channels" ? "default" : "ghost"}
               size="sm"
-              className="text-white"
+              className={`flex items-center ${activeTab === "channels"
+                ? "bg-gray-700 text-white hover:bg-gray-800"
+                : "text-gray-300 hover:text-white hover:bg-gray-700"
+                }`}
               onClick={() => setActiveTab("channels")}
             >
               <Hash className="mr-1 h-3 w-3" />
@@ -917,7 +955,6 @@ export default function ChatPage() {
                       <div
                         key={msg.id || Math.random()}
                         className={`group flex gap-3 ${msg.isOwn ? "flex-row-reverse" : ""}`}
-                        onClick={() => handleMessageClick(msg)}
                         style={{ cursor: !msg.isOwn && !msg.is_read ? 'pointer' : 'default' }}
                       >
                         {!msg.isOwn && (
@@ -959,7 +996,7 @@ export default function ChatPage() {
                             >
                               {/* Reply preview */}
                               {msg.reply_to && (
-                                <div className="mb-2 p-2 bg-black bg-opacity-20 rounded border-l-2 border-blue-400">
+                                <div className="mb-2 p-2 bg-blue-800 bg-opacity-20 rounded border-l-2 border-blue-400">
                                   <p className="text-xs opacity-70 mb-1">
                                     Replying to {msg.reply_to.sender || "Unknown"}
                                   </p>
