@@ -5,6 +5,7 @@ export interface Message {
   id: string
   room_id?: number
   group_id?: number
+  channel_id?: number
   sender: {
     id: string
     email: string
@@ -51,6 +52,23 @@ export interface GroupMember {
   joined_at: string
 }
 
+export interface Chat {
+    id: number
+    name: string
+    sender: string
+    sender_id: number
+    last_message: string
+    timestamp: string
+    unread: number
+    avatar: string
+    message_type: "text" | "file"
+    room_id?: string
+    type?: "private" | "group" | "channel" 
+    description?: string
+    memberCount?: number
+    isAdmin?: boolean
+}
+
 export function useChat() {
   const [messages, setMessages] = useState<{ [roomId: string]: Message[] }>({})
   const [chats, setChats] = useState<Chat[]>([])
@@ -64,7 +82,11 @@ export function useChat() {
   const notificationsWsRef = useRef<WebSocket | null>(null)
   const currentRoomRef = useRef<string | null>(null)
   const currentGroupRef = useRef<string | null>(null)
-  const [typingUsers, setTypingUsers] = useState<Set<number>>(new Set())
+  const groupConnectionsRef = useRef<Map<string, WebSocket>>(new Map())
+  const [channels, setChannels] = useState<Chat[]>([])
+  const channelWsRef = useRef<WebSocket | null>(null)
+  const currentChannelRef = useRef<string | null>(null)
+  const channelConnectionsRef = useRef<Map<string, WebSocket>>(new Map())
 
   useEffect(() => {
     const initializeUser = async () => {
@@ -76,6 +98,7 @@ export function useChat() {
         initializeStatusWebSocket()
         initializeNotificationsWebSocket()
         await loadGroups()
+        await loadChannels()
       } catch (error) {
         console.error("[Chat] Failed to load user:", error)
         window.location.href = "/login"
@@ -97,6 +120,8 @@ export function useChat() {
       if (notificationsWsRef.current) {
         notificationsWsRef.current.close()
       }
+      groupConnectionsRef.current.forEach(ws => ws.close())
+      groupConnectionsRef.current.clear()
     }
   }, [])
 
@@ -120,8 +145,83 @@ export function useChat() {
         isAdmin: group.created_by === currentUser?.id,
       }))
       setGroups(formattedGroups)
+
+      formattedGroups.forEach(group => {
+        initializeGroupBackgroundListener(group.id.toString())
+      })
     } catch (error) {
       console.error("[Chat] Failed to load groups:", error)
+    }
+  }, [currentUser])
+
+  const initializeGroupBackgroundListener = useCallback((groupId: string) => {
+    if (groupConnectionsRef.current.has(groupId)) {
+      return
+    }
+
+    try {
+      const groupWs = new WebSocket(apiClient.getGroupWebSocketUrl(groupId))
+
+      groupWs.onopen = () => {
+      }
+
+      groupWs.onmessage = (event) => {
+        const data = JSON.parse(event.data)
+
+        if (currentGroupRef.current !== groupId) {
+          switch (data.type) {
+            case "chat_message":
+            case "file_uploaded":
+              if (data.sender_id !== currentUser?.id) {
+                setGroups(prev => prev.map(group => {
+                  if (group.id.toString() === groupId) {
+                    return { ...group, unread: (group.unread || 0) + 1 };
+                  }
+                  return group;
+                }));
+              }
+              break;
+
+            case "new_message_notification":
+              if (data.sender_id !== currentUser?.id) {
+                setGroups(prev => prev.map(group => {
+                  if (group.id.toString() === groupId) {
+                    return { ...group, unread: (group.unread || 0) + 1 };
+                  }
+                  return group;
+                }));
+              }
+              break;
+
+            case "unread_count":
+              setGroups(prev => prev.map(group => {
+                if (group.id.toString() === groupId) {
+                  return { ...group, unread: data.count };
+                }
+                return group;
+              }));
+              break;
+
+            default:
+              break;
+          }
+        }
+      }
+
+      groupWs.onclose = () => {
+        groupConnectionsRef.current.delete(groupId)
+        setTimeout(() => {
+          if (currentUser && !groupConnectionsRef.current.has(groupId)) {
+            initializeGroupBackgroundListener(groupId)
+          }
+        }, 3000)
+      }
+
+      groupWs.onerror = (error) => {
+      }
+
+      groupConnectionsRef.current.set(groupId, groupWs)
+    } catch (error) {
     }
   }, [currentUser])
 
@@ -136,11 +236,6 @@ export function useChat() {
 
       statusWs.onmessage = (event) => {
         const data = JSON.parse(event.data)
-        console.log("[Chat] Status update received:", data)
-
-        if (data.type === "status_update") {
-          updateUserOnlineStatus(data.user_id, data.status === "online")
-        }
       }
 
       statusWs.onclose = () => {
@@ -203,8 +298,6 @@ export function useChat() {
           case "unread_count_update":
             updateChatUnreadCount(data.contact_id, data.unread_count)
             break
-
-
 
           default:
             console.log("[Chat] Unknown notification type:", data.type)
@@ -393,7 +486,6 @@ export function useChat() {
     [currentUser],
   )
 
-  // Fix for use-chat.tsx - connectToGroup function
   const connectToGroup = useCallback(
     (groupId: string) => {
       if (currentGroupRef.current === groupId && groupWsRef.current?.readyState === WebSocket.OPEN) {
@@ -415,7 +507,6 @@ export function useChat() {
             type: "get_history"
           }))
 
-          // Automatically mark all messages as read when connecting to group
           groupWs.send(JSON.stringify({
             type: "mark_all_as_read"
           }))
@@ -429,10 +520,8 @@ export function useChat() {
 
             case "message_history":
               if (data.messages && Array.isArray(data.messages)) {
-                console.log("[DEBUG] Raw messages from server:", data.messages);
 
                 const formattedMessages: Message[] = data.messages.map((msg: any) => {
-                  console.log(`[DEBUG] Message ${msg.id}: is_read = ${msg.is_read}, sender = ${msg.sender_id}, current_user = ${currentUser?.id}`);
 
                   return {
                     id: msg.id.toString(),
@@ -485,7 +574,6 @@ export function useChat() {
               });
               break;
 
-
             case 'read':
               setMessages(prev => {
                 const roomKey = `group_${groupId}`;
@@ -527,21 +615,6 @@ export function useChat() {
               }
 
               console.log("[Chat] New group message received:", newMessage)
-
-              // UNREAD COUNT YANGILASH - HAR QANDAY YANGI XABAR UCHUN
-              setGroups(prev => prev.map(group => {
-                if (group.id.toString() === groupId) {
-                  // Agar bu joriy ochilgan guruh bo'lsa
-                  if (currentGroupRef.current === groupId) {
-                    // Joriy guruhda yangi xabar - unread oshirmaymiz
-                    return group;
-                  } else {
-                    // Boshqa guruhda yangi xabar - unread oshiramiz
-                    return { ...group, unread: (group.unread || 0) + 1 };
-                  }
-                }
-                return group;
-              }));
 
               setMessages(prev => {
                 const roomKey = `group_${groupId}`;
@@ -586,47 +659,12 @@ export function useChat() {
 
                 console.log("[Chat] New group file message received:", fileMessage)
 
-                // UNREAD COUNT YANGILASH - FAYL XABARLARI UCHUN
-                setGroups(prev => prev.map(group => {
-                  if (group.id.toString() === groupId) {
-                    if (currentGroupRef.current === groupId && !fileMessage.isOwn) {
-                      return group;
-                    } else if (currentGroupRef.current !== groupId && !fileMessage.isOwn) {
-                      return { ...group, unread: (group.unread || 0) + 1 };
-                    } else if (fileMessage.isOwn) {
-                      return { ...group, unread: 0 };
-                    }
-                  }
-                  return group;
-                }));
-
                 addMessage(`group_${groupId}`, fileMessage)
               }
               break;
 
-              // Yangi funksiya qo'shamiz: real-time unread count yangilash
-              const updateGroupUnreadCount = useCallback((groupId: string, increment: boolean = true) => {
-                setGroups(prev => prev.map(group => {
-                  if (group.id.toString() === groupId) {
-                    if (increment) {
-                      // Faqat joriy guruh emas bo'lsa unread oshiramiz
-                      if (currentGroupRef.current !== groupId) {
-                        return { ...group, unread: (group.unread || 0) + 1 };
-                      }
-                    } else {
-                      // Unread kamaytiramiz (0 dan pastga tushmasligi kerak)
-                      return { ...group, unread: Math.max(0, (group.unread || 0) - 1) };
-                    }
-                  }
-                  return group;
-                }));
-              }, []);
-
-            // WebSocket message handlerda quyidagi yangi holatni qo'shamiz
             case 'new_message_notification':
-              // Serverdan yangi xabar haqida bildirishnoma kelsa
-              if (data.group_id && data.group_id.toString() === groupId) {
-                // Faqat joriy guruh emas bo'lsa unread oshiramiz
+              if (data.sender_id !== currentUser?.id) {
                 if (currentGroupRef.current !== groupId) {
                   setGroups(prev => prev.map(group => {
                     if (group.id.toString() === groupId) {
@@ -639,7 +677,6 @@ export function useChat() {
               break;
 
             case 'initial_unread_count':
-              // Set initial unread count when connecting
               setGroups(prev => prev.map(group => {
                 if (group.id.toString() === groupId) {
                   return { ...group, unread: data.count };
@@ -649,7 +686,6 @@ export function useChat() {
               break;
 
             case 'unread_count_increment':
-              // Only increment if this is not the current active group
               if (currentGroupRef.current !== groupId) {
                 setGroups(prev => prev.map(group => {
                   if (group.id.toString() === groupId) {
@@ -667,31 +703,6 @@ export function useChat() {
                 }
                 return group;
               }));
-              break;
-
-
-            case 'message_read_confirmed':
-              setMessages(prev => {
-                const groupId = currentGroupRef.current;
-                if (!groupId) return prev;
-
-                const roomKey = `group_${groupId}`;
-                const updatedMessages = (prev[roomKey] || []).map(msg => {
-                  if (msg.id === data.message_id && msg.isOwn) {
-                    return { ...msg, is_read: true };
-                  }
-                  return msg;
-                });
-
-                return {
-                  ...prev,
-                  [roomKey]: updatedMessages,
-                };
-              });
-              break;
-
-            case 'message_read_status':
-              console.log(`${data.reader_name} xabarni o'qidi`);
               break;
 
             case 'unread_count':
@@ -826,13 +837,12 @@ export function useChat() {
 
       setGroups(prev => prev.map(group => {
         if (group.id.toString() === groupId && group.unread > 0) {
-          return { ...group, unread: group.unread - 1 };
+          return { ...group, unread: Math.max(0, group.unread - 1) };
         }
         return group;
       }));
     }
   }, []);
-
 
   const getGroupUnreadCount = useCallback((groupId: string) => {
     if (groupWsRef.current && groupWsRef.current.readyState === WebSocket.OPEN) {
@@ -841,7 +851,6 @@ export function useChat() {
       }));
     }
   }, []);
-
 
   const markAsRead = useCallback(
     (roomId: string, messageId?: string, fileId?: string) => {
@@ -926,10 +935,6 @@ export function useChat() {
     )
   }, [])
 
-  const updateUserOnlineStatus = useCallback((userId: number, isOnline: boolean) => {
-    console.log(`[Chat] User ${userId} is now ${isOnline ? 'online' : 'offline'}`)
-  }, [])
-
 
   const createGroup = useCallback(async (name: string, description?: string) => {
     try {
@@ -970,6 +975,307 @@ export function useChat() {
     }
   }, [])
 
+  const initializeChannelBackgroundListener = useCallback((channelId: string) => {
+    if (channelConnectionsRef.current.has(channelId)) {
+      return;
+    }
+
+    try {
+      const channelWs = new WebSocket(apiClient.getChannelWebSocketUrl(channelId))
+
+      channelWs.onopen = () => {
+        console.log(`[Chat] Channel background listener connected to channel ${channelId}`)
+      }
+
+      channelWs.onmessage = (event) => {
+        const data = JSON.parse(event.data)
+
+        if (currentChannelRef.current !== channelId) {
+          switch (data.type) {
+            case "chat_message":
+            case "file_uploaded":
+              if (data.message?.user?.id !== currentUser?.id?.toString()) {
+                setChannels(prev => prev.map(channel => {
+                  if (channel.id.toString() === channelId) {
+                    return { ...channel, unread: (channel.unread || 0) + 1 };
+                  }
+                  return channel;
+                }));
+              }
+              break;
+
+            case "unread_count":
+              setChannels(prev => prev.map(channel => {
+                if (channel.id.toString() === channelId) {
+                  return { ...channel, unread: data.count };
+                }
+                return channel;
+              }));
+              break;
+          }
+        }
+      }
+
+      channelWs.onclose = () => {
+        channelConnectionsRef.current.delete(channelId)
+        setTimeout(() => {
+          if (currentUser && !channelConnectionsRef.current.has(channelId)) {
+            initializeChannelBackgroundListener(channelId)
+          }
+        }, 3000)
+      }
+
+      channelConnectionsRef.current.set(channelId, channelWs)
+    } catch (error) {
+      console.error("[Chat] Failed to initialize channel background listener:", error)
+    }
+  }, [currentUser])
+
+
+  // Kanalga ulanish
+  const connectToChannel = useCallback((channelId: string) => {
+    if (currentChannelRef.current === channelId && channelWsRef.current?.readyState === WebSocket.OPEN) {
+      return
+    }
+
+    if (channelWsRef.current) {
+      channelWsRef.current.close()
+    }
+
+    try {
+      const channelWs = new WebSocket(apiClient.getChannelWebSocketUrl(channelId))
+
+      channelWs.onopen = () => {
+        console.log(`[Chat] Channel WebSocket connected to channel ${channelId}`)
+        currentChannelRef.current = channelId
+
+        channelWs.send(JSON.stringify({
+          action: "get_history"
+        }))
+
+        channelWs.send(JSON.stringify({
+          action: "get_unread_count"
+        }))
+      }
+
+      channelWs.onmessage = (event) => {
+        const data = JSON.parse(event.data)
+        console.log("[Chat] Channel message received:", data)
+
+        switch (data.type) {
+          case "message_history":
+            if (data.messages && Array.isArray(data.messages)) {
+              const formattedMessages: Message[] = data.messages.map((msg: any) => ({
+                id: msg.id.toString(),
+                channel_id: parseInt(channelId),
+                sender: {
+                  id: msg.user.id,
+                  email: "",
+                  fullname: msg.user.fullname || "Unknown",
+                  full_name: msg.user.fullname || "Unknown",
+                },
+                message: msg.content || "",
+                timestamp: msg.created_at,
+                isOwn: msg.user.id === currentUser?.id?.toString(),
+                is_read: msg.is_read,
+                is_updated: msg.is_updated,
+                type: msg.message_type || "text",
+                file_name: msg.file?.name,
+                file_url: msg.file?.url,
+                file_type: msg.file?.type,
+                file_size: msg.file?.size?.toString(),
+              })).reverse()
+
+              setMessages(prev => ({
+                ...prev,
+                [`channel_${channelId}`]: formattedMessages,
+              }))
+            }
+            break;
+
+          case "chat_message":
+            const newMessage: Message = {
+              id: data.message?.id?.toString() || `temp-${Date.now()}`,
+              channel_id: parseInt(channelId),
+              sender: data.message.user,
+              message: data.message.content || "",
+              timestamp: data.message.created_at,
+              isOwn: data.message.user.id === currentUser?.id?.toString(),
+              is_read: data.message.is_read,
+              is_updated: data.message.is_updated,
+              type: data.message.message_type || "text",
+              file_name: data.message.file?.name,
+              file_url: data.message.file?.url,
+              file_type: data.message.file?.type,
+              file_size: data.message.file?.size?.toString(),
+            }
+
+            addMessage(`channel_${channelId}`, newMessage)
+
+            if (data.unread_count !== undefined) {
+              setChannels(prev => prev.map(channel => {
+                if (channel.id.toString() === channelId) {
+                  return { ...channel, unread: data.unread_count };
+                }
+                return channel;
+              }));
+            }
+            break;
+
+          case "file_uploaded":
+            const fileMessage: Message = {
+              id: data.message?.id?.toString() || `temp-${Date.now()}`,
+              channel_id: parseInt(channelId),
+              sender: data.message.user,
+              message: data.message.content || "",
+              timestamp: data.message.created_at,
+              isOwn: data.message.user.id === currentUser?.id?.toString(),
+              is_read: data.message.is_read,
+              is_updated: data.message.is_updated,
+              type: "file",
+              file_name: data.file_info?.name,
+              file_url: data.file_info?.url,
+              file_type: data.file_info?.type,
+              file_size: data.file_info?.size?.toString(),
+            }
+
+            addMessage(`channel_${channelId}`, fileMessage)
+            break;
+
+          case "unread_count":
+            setChannels(prev => prev.map(channel => {
+              if (channel.id.toString() === channelId) {
+                return { ...channel, unread: data.count };
+              }
+              return channel;
+            }));
+            break;
+
+          case "message_read":
+            setMessages(prev => {
+              const roomKey = `channel_${channelId}`;
+              const updatedMessages = (prev[roomKey] || []).map(msg => {
+                if (msg.id === data.message_id.toString()) {
+                  return { ...msg, is_read: true };
+                }
+                return msg;
+              });
+
+              return {
+                ...prev,
+                [roomKey]: updatedMessages,
+              };
+            });
+
+            setChannels(prev => prev.map(channel => {
+              if (channel.id.toString() === channelId) {
+                return { ...channel, unread: data.unread_count };
+              }
+              return channel;
+            }));
+            break;
+        }
+      }
+
+      channelWs.onclose = () => {
+        console.log(`[Chat] Channel WebSocket disconnected from channel ${channelId}`)
+        currentChannelRef.current = null
+      }
+
+      channelWs.onerror = (error) => {
+        console.error("[Chat] Channel WebSocket error:", error)
+      }
+
+      channelWsRef.current = channelWs
+    } catch (error) {
+      console.error("[Chat] Failed to connect to channel:", error)
+    }
+  }, [currentUser])
+
+  // Kanal xabari yuborish
+  const sendChannelMessage = useCallback((channelId: string, content: string) => {
+    if (!channelWsRef.current || channelWsRef.current.readyState !== WebSocket.OPEN || !content.trim()) {
+      return
+    }
+
+    channelWsRef.current.send(JSON.stringify({
+      action: "send_message",
+      message: content.trim(),
+      message_type: "text"
+    }))
+  }, [])
+
+  // Kanal fayli yuborish
+  const sendChannelFile = useCallback((channelId: string, fileData: string, fileName: string, fileType: string) => {
+    if (!channelWsRef.current || channelWsRef.current.readyState !== WebSocket.OPEN) {
+      return
+    }
+
+    channelWsRef.current.send(JSON.stringify({
+      action: "upload_file",
+      file_data: fileData,
+      file_name: fileName,
+      file_type: fileType
+    }))
+  }, [])
+
+  // Kanal xabarini o'qilgan deb belgilash
+  const markChannelMessageAsRead = useCallback((channelId: string, messageId: string) => {
+    if (channelWsRef.current && channelWsRef.current.readyState === WebSocket.OPEN) {
+      channelWsRef.current.send(JSON.stringify({
+        action: "mark_as_read",
+        message_id: messageId
+      }))
+    }
+  }, [])
+
+  // Kanal yaratish
+  const createChannel = useCallback(async (name: string, description?: string) => {
+    try {
+      const response = await apiClient.createChannel({
+        name,
+        description,
+        owner: currentUser.id
+      })
+      await loadChannels()
+      return response
+    } catch (error) {
+      console.error("[Chat] Failed to create channel:", error)
+      throw error
+    }
+  }, [currentUser])
+
+  // Kanallarni yuklash
+const loadChannels = useCallback(async () => {
+  try {
+    const channelsData = await apiClient.getChannels()
+    const currentUserData = await apiClient.getMe() 
+    
+    const formattedChannels: Chat[] = channelsData.map((channel: any) => ({
+      id: channel.id,
+      name: channel.name,
+      sender: channel.owner_name || "Unknown",
+      sender_id: channel.owner,
+      last_message: channel.last_message || "",
+      timestamp: channel.updated_at,
+      unread: channel.unread_count || 0,
+      avatar: "/channel-avatar.png",
+      message_type: "text",
+      room_id: `channel_${channel.id}`,
+      type: "channel",
+      description: channel.description,
+      memberCount: channel.member_count || 0,
+      isAdmin: channel.owner === currentUserData?.id, 
+      isOwner: channel.owner === currentUserData?.id, 
+    }))
+    setChannels(formattedChannels)
+  } catch (error) {
+    console.error("[Chat] Failed to load channels:", error)
+  }
+}, [currentUser])
+
+  
+
   return {
     chats,
     groups,
@@ -995,5 +1301,13 @@ export function useChat() {
     getGroupUnreadCount,
     updateChatUnreadCount,
     markGroupMessageAsRead,
+    channels,
+    channelWsRef,
+    loadChannels,
+    createChannel,
+    connectToChannel,
+    sendChannelMessage,
+    sendChannelFile,
+    markChannelMessageAsRead,
   }
 }

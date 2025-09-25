@@ -14,7 +14,7 @@ import { apiClient } from "@/lib/api"
 interface CreateGroupModalProps {
   isOpen: boolean
   onClose: () => void
-  onCreateGroup?: (groupData: { name: string; description?: string; members: number[] }) => Promise<{ id: number; [key: string]: any }> | { id: number; [key: string]: any }
+  onCreateGroup?: (groupData: { name: string; description?: string; members: number[] }) => Promise<any> | any
 }
 
 interface User {

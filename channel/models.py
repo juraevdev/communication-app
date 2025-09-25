@@ -25,6 +25,8 @@ class ChannelMessage(models.Model):
     file = models.ForeignKey(FileUpload, on_delete=models.CASCADE, related_name='channel_files', null=True, blank=True)
     message_type = models.CharField(max_length=10, default='text', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_updated = models.BooleanField(default=False, null=True)
     is_read = models.BooleanField(default=False)
     
     def __str__(self):

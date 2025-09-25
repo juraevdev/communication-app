@@ -331,4 +331,88 @@ export const apiClient = {
     const response = await api.post(`/group/mark-all-read/${groupId}/`);
     return response.data;
   },
+
+   async createChannel(data: { name: string; description?: string; owner: string }) {
+        const response = await fetch(`${BASE_URL}/api/v1/channels/create/`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(data),
+        });
+        return this.handleResponse(response);
+    },
+
+    async getChannels() {
+        const response = await fetch(`${BASE_URL}/api/v1/channels/list/`, {
+            method: 'GET',
+            headers: this.getHeaders(),
+        });
+        return this.handleResponse(response);
+    },
+
+    async getChannelDetail(channelId: number) {
+        const response = await fetch(`${BASE_URL}/api/v1/channels/${channelId}/`, {
+            method: 'GET',
+            headers: this.getHeaders(),
+        });
+        return this.handleResponse(response);
+    },
+
+    async updateChannel(channelId: number, data: { name?: string; description?: string }) {
+        const response = await fetch(`${BASE_URL}/api/v1/channels/edit/${channelId}/`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+            body: JSON.stringify(data),
+        });
+        return this.handleResponse(response);
+    },
+
+    async deleteChannel(channelId: number) {
+        const response = await fetch(`${BASE_URL}/api/v1/channels/delete/${channelId}/`, {
+            method: 'DELETE',
+            headers: this.getHeaders(),
+        });
+        return this.handleResponse(response);
+    },
+
+    async addChannelMember(channelId: number, userId: number) {
+        const response = await fetch(`${BASE_URL}/api/v1/channels/follow/`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify({ channel: channelId, user: userId }),
+        });
+        return this.handleResponse(response);
+    },
+
+    async removeChannelMember(channelId: number, memberId: number) {
+        const response = await fetch(`${BASE_URL}/api/v1/channels/unfollow/${channelId}/${memberId}/`, {
+            method: 'DELETE',
+            headers: this.getHeaders(),
+        });
+        return this.handleResponse(response);
+    },
+
+    async getChannelMembers(channelId: number) {
+        const response = await fetch(`${BASE_URL}/api/v1/channels/members/${channelId}/`, {
+            method: 'GET',
+            headers: this.getHeaders(),
+        });
+        return this.handleResponse(response);
+    },
+
+    async getChannelMessages(channelId: number) {
+        const response = await fetch(`${BASE_URL}/api/v1/channels/messages/${channelId}/`, {
+            method: 'GET',
+            headers: this.getHeaders(),
+        });
+        return this.handleResponse(response);
+    },
+
+    getChannelWebSocketUrl(channelId: string): string {
+        const token = localStorage.getItem('access_token');
+        return `${WS_BASE_URL}/ws/channel/${channelId}/?token=${token}`;
+    },
+
+    async downloadChannelFile(fileUrl: string): Promise<Blob> {
+        return this.downloadFile(fileUrl);
+    },
 };

@@ -1,4 +1,4 @@
-from rest_framework import generics, status
+from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 
 from groups.models import Group, GroupMember, GroupMessage
@@ -54,14 +54,16 @@ class GroupListApiView(generics.GenericAPIView):
     serializer_class = GroupSerializer
     
     def get(self, request):
-        group = Group.objects.all()
-        serializer = self.get_serializer(group, many=True)
+        user_groups = Group.objects.filter(members__user=request.user)
+        
+        serializer = self.get_serializer(user_groups, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     
 
 class GroupDetailApiView(generics.GenericAPIView):
     serializer_class = GroupSerializer
+    permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request, id):
         group = Group.objects.get(id=id)

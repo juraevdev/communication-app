@@ -1,9 +1,13 @@
-from rest_framework import generics, status
+from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 
 from channel.permissions import IsOwner
 from channel.models import Channel, ChannelMessage
-from channel.serializers import ChannelSerializer, ChannelMessageSerializer, FollowChannelSerializer
+from channel.serializers import ChannelSerializer, ChannelMessageSerializer, FollowChannelSerializer, ChannelUpdateSerializer
+
+
+from django.db.models import Q
+
 
 from accounts.models import CustomUser
 
@@ -23,14 +27,18 @@ class ChannelApiView(generics.GenericAPIView):
     
 class ChannelListApiView(generics.GenericAPIView):
     serializer_class = ChannelSerializer
+    permission_classes = [permissions.IsAuthenticated] 
     
     def get(self, request):
         try:
-            channel = Channel.objects.all()
-        except Channel.DoesNotExist:
-            return Response({'message': 'Channel not found'}, status=status.HTTP_404_NOT_FOUND)
-        serializer = self.get_serializer(channel, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+            user_channels = Channel.objects.filter(
+                Q(members=request.user) | Q(owner=request.user)
+            ).distinct()
+            
+            serializer = self.get_serializer(user_channels, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'message': 'Error retrieving channels', 'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
     
 
@@ -50,8 +58,8 @@ class ChannelDeleteApiView(generics.GenericAPIView):
     
     
 class ChannelUpdateApiView(generics.GenericAPIView):
-    serializer_class = ChannelSerializer
-    # permission_classes = [IsOwner]
+    serializer_class = ChannelUpdateSerializer
+    permission_classes = [IsOwner]
     
     
     def put(self, request, id):
@@ -60,18 +68,22 @@ class ChannelUpdateApiView(generics.GenericAPIView):
         except Channel.DoesNotExist:
             return Response({'message': 'Channel not found'}, status=status.HTTP_404_NOT_FOUND)
         serializer = self.get_serializer(channel, data=request.data)
-        serializer.is_valid()
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     
 
 class ChannelDetailApiView(generics.GenericAPIView):
     serializer_class = ChannelSerializer
+    permission_classes = [permissions.IsAuthenticated]  
     
     def get(self, request, id):
         try:
             channel = Channel.objects.get(id=id)
+            if not channel.members.filter(id=request.user.id).exists():
+                return Response({'message': 'You are not subscribed to this channel'}, status=status.HTTP_403_FORBIDDEN)
         except Channel.DoesNotExist:
             return Response({'message': 'Channel not found'}, status=status.HTTP_404_NOT_FOUND)
         serializer = self.get_serializer(channel)
@@ -90,7 +102,7 @@ class FollowChannelApiView(generics.GenericAPIView):
         
         try:
             channel = Channel.objects.get(id=channel_id)
-            user = CustomUser.objects.get(id=user_id)
+            user = request.user
         except:
             if Channel.DoesNotExist():
                 return Response({'error': 'Channel not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -112,7 +124,7 @@ class UnFollowChannelApiView(generics.GenericAPIView):
         
         try:
             channel = Channel.objects.get(id=channel_id)
-            user = CustomUser.objects.get(id=user_id)
+            user = request.user
         except:
             if Channel.DoesNotExist():
                 return Response({'error': 'Channel not found'}, status=status.HTTP_404_NOT_FOUND)

@@ -51,21 +51,24 @@ export default function ChatPage() {
   const {
     chats,
     groups,
+    channels, // channels ni qo'shing
     messages,
     chatWsRef,
     groupWsRef,
+    channelWsRef, // channelWsRef ni qo'shing
     currentUser,
     isConnected,
     setGroups,
     markAsRead,
     sendMessage,
-    // createGroup,
     connectToGroup,
     getGroupMembers,
     sendGroupMessage,
     connectToChatRoom,
     getGroupUnreadCount,
     markGroupMessageAsRead,
+    connectToChannel, // connectToChannel ni qo'shing
+    sendChannelMessage, // sendChannelMessage ni qo'shing
   } = useChat();
 
   const [selectedChat, setSelectedChat] = useState<any>(null)
@@ -135,6 +138,9 @@ export default function ChatPage() {
     if (selectedChat.type === "group") {
       const groupId = selectedChat.id.toString()
       sendGroupMessage(groupId, message, replyingTo?.id)
+    } else if (selectedChat.type === "channel") {
+      const channelId = selectedChat.id.toString()
+      sendChannelMessage(channelId, message)
     } else {
       const roomId = selectedChat.room_id || selectedChat.id?.toString()
       if (roomId) {
@@ -215,34 +221,34 @@ export default function ChatPage() {
   }, [selectedChat, messages, markGroupMessageAsRead, setGroups]);
 
   // Guruh xabarlarini qayta ishlash
-const processGroupMessage = useCallback((data: any) => {
+  const processGroupMessage = useCallback((data: any) => {
     switch (data.type) {
-        case 'unread_count':
-            setGroups(prev => prev.map(group => {
-                if (group.id.toString() === selectedChat?.id.toString()) {
-                    return { ...group, unread: data.count };
-                }
-                return group;
-            }));
-            break;
-        
-        case 'chat_message':
-        case 'file_uploaded':
-            // Xabar qo'shilganda unread count yangilanishi kerak
-            if (data.sender_id !== currentUser?.id) {
-                setGroups(prev => prev.map(group => {
-                    if (group.id.toString() === selectedChat?.id.toString()) {
-                        return { ...group, unread: (group.unread || 0) + 1 };
-                    }
-                    return group;
-                }));
+      case 'unread_count':
+        setGroups(prev => prev.map(group => {
+          if (group.id.toString() === selectedChat?.id.toString()) {
+            return { ...group, unread: data.count };
+          }
+          return group;
+        }));
+        break;
+
+      case 'chat_message':
+      case 'file_uploaded':
+        // Xabar qo'shilganda unread count yangilanishi kerak
+        if (data.sender_id !== currentUser?.id) {
+          setGroups(prev => prev.map(group => {
+            if (group.id.toString() === selectedChat?.id.toString()) {
+              return { ...group, unread: (group.unread || 0) + 1 };
             }
-            break;
-            
-        default:
-            break;
+            return group;
+          }));
+        }
+        break;
+
+      default:
+        break;
     }
-}, [selectedChat, currentUser, setGroups]);
+  }, [selectedChat, currentUser, setGroups]);
 
   const handleChatHeaderClick = async () => {
     if (selectedChat?.type === "group") {
@@ -257,7 +263,7 @@ const processGroupMessage = useCallback((data: any) => {
     } else if (selectedChat?.type === "channel") {
       setShowChannelInfo(true)
     } else if (selectedChat?.type === "private") {
-      setShowUserProfile(true) // Boshqa foydalanuvchi profilini ko'rsatish
+      setShowUserProfile(true)
     }
   }
 
@@ -277,7 +283,12 @@ const processGroupMessage = useCallback((data: any) => {
 
       const groupId = chat.id.toString()
       connectToGroup(groupId)
+    } else if (chat.type === "channel") {
+      // Kanalga ulanish
+      const channelId = chat.id.toString()
+      connectToChannel(channelId)
     } else {
+      // Shaxsiy chat
       const roomId = chat.room_id || chat.id?.toString()
       if (roomId) {
         connectToChatRoom(roomId)
@@ -447,7 +458,7 @@ const processGroupMessage = useCallback((data: any) => {
         chatsToFilter = groups
         break
       case "channels":
-        chatsToFilter = []
+        chatsToFilter = channels // Kanal qo'shildi
         break
       default:
         chatsToFilter = chats
@@ -491,7 +502,7 @@ const processGroupMessage = useCallback((data: any) => {
     setFileUpload(prev => ({ ...prev, uploading: true, progress: 0 }));
 
     try {
-      const isGroup = selectedChat.type === "group";
+      const isGroup = selectedChat.type === "group" || "channel";
 
       if (isGroup) {
         const reader = new FileReader();
@@ -648,8 +659,10 @@ const processGroupMessage = useCallback((data: any) => {
 
     if (selectedChat.type === "group") {
       const groupMessages = messages[`group_${selectedChat.id}`] || []
-      console.log(`[UI Debug] Group ${selectedChat.id} messages:`, groupMessages)
       return groupMessages
+    } else if (selectedChat.type === "channel") {
+      const channelMessages = messages[`channel_${selectedChat.id}`] || []
+      return channelMessages
     } else {
       const roomId = selectedChat.room_id || selectedChat.id?.toString()
       return messages[roomId] || []
@@ -829,7 +842,6 @@ const processGroupMessage = useCallback((data: any) => {
               </div>
             ) : (
               displayChats.map((item, index) => {
-                // Check if this is a search result or regular chat
                 const isSearchResult = searchQuery.trim() && searchResults.includes(item)
 
                 return (
@@ -841,7 +853,10 @@ const processGroupMessage = useCallback((data: any) => {
                   >
                     <div className="relative">
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={item.type === "group" ? "/group-avatar.png" : "/diverse-group.png"} />
+                        <AvatarImage src={
+                          item.type === "group" ? "/group-avatar.png" :
+                            item.type === "channel" ? "/channel-avatar.png" : "/diverse-group.png"
+                        } />
                         <AvatarFallback className="bg-gray-600 text-white">
                           {isSearchResult ? getAvatarLetter(item.username || item.email) : getAvatarLetter(getChatName(item))}
                         </AvatarFallback>
@@ -851,7 +866,12 @@ const processGroupMessage = useCallback((data: any) => {
                           <Users className="h-2 w-2 text-white" />
                         </div>
                       )}
-                      {isSearchResult && (
+                      {item.type === "channel" && (
+                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
+                          <Hash className="h-2 w-2 text-white" />
+                        </div>
+                      )}
+                      {isSearchResult && item.type !== "group" && item.type !== "channel" && (
                         <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
                           <User className="h-2 w-2 text-white" />
                         </div>
@@ -1040,12 +1060,7 @@ const processGroupMessage = useCallback((data: any) => {
                               {selectedChat.type !== "group" && (
                                 <MessageStatus status={getMessageStatus(msg)} isOwn={msg.isOwn} />
                               )}
-                              {selectedChat.type === "group" && msg.isOwn && (
-                                <MessageStatus
-                                  status={msg.is_read ? "read" : "sent"}
-                                  isOwn={msg.isOwn}
-                                />
-                              )}
+
                             </div>
                           </div>
                         </div>
@@ -1243,7 +1258,7 @@ const processGroupMessage = useCallback((data: any) => {
             username: selectedChat.username || "channel",
             avatar: selectedChat.avatar || "",
             subscriberCount: selectedChat.subscriberCount || 0,
-            isAdmin: selectedChat.isAdmin || false,
+            isOwner: selectedChat.isOwner || false,
             isPrivate: selectedChat.isPrivate || false,
             isSubscribed: selectedChat.isSubscribed || false,
             isMuted: selectedChat.isMuted || false,

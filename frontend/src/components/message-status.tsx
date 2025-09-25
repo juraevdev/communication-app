@@ -1,12 +1,11 @@
-// MessageStatus component ni yangilash - message-status.tsx
 import { Check, CheckCheck } from "lucide-react"
 
 interface MessageStatusProps {
   status: "sending" | "sent" | "delivered" | "read" | "read_file"
   isOwn: boolean
   isGroup?: boolean
-  readCount?: number // Guruhda nechta kishi o'qigani
-  totalMembers?: number // Guruhda jami a'zolar soni
+  readCount?: number 
+  totalMembers?: number 
 }
 
 export function MessageStatus({ 
