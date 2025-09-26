@@ -8,6 +8,12 @@ class ChannelSerializer(serializers.ModelSerializer):
         model = Channel
         fields = '__all__'
         
+
+class ChannelCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Channel
+        fields = ['name', 'username', 'description', 'owner']
+
         
 class ChannelUpdateSerializer(serializers.ModelSerializer):
     class Meta:

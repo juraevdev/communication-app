@@ -126,3 +126,15 @@ class ContactListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contact
         fields = ['id', 'owner', 'contact_user', 'alias']
+
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    password = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True, min_length=6)
+    confirm_password = serializers.CharField(required=True)
+
+    def validate(self, data):
+        if data['new_password'] != data['confirm_password']:
+            raise serializers.ValidationError("New passwords do not match")
+        return data

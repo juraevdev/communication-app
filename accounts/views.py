@@ -15,7 +15,7 @@ from accounts.serializers import (
     RegisterSerializer, LoginSerializer,
     UserProfileSerializer, ContactSerializer,
     ContactSearchSerializer, ContactListSerializer,
-    UserSerializer, UserUpdateSerializer
+    UserSerializer, UserUpdateSerializer, ChangePasswordSerializer
 )
 
 
@@ -215,32 +215,28 @@ class MeApiView(generics.RetrieveAPIView):
 
 class ChangePasswordView(generics.GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ChangePasswordSerializer
 
     def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
         user = request.user
-        password = request.data.get('password')
-        new_password = request.data.get('new_password')
-        confirm_password = request.data.get('confirm_password')
+        data = serializer.validated_data
 
-        if not user.check_password(password):
+        if not user.check_password(data['password']):
             return Response(
                 {"message": "Current password is incorrect"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if new_password != confirm_password:
+        if user.check_password(data['new_password']):
             return Response(
-                {"message": "New passwords do not match"}, 
+                {"message": "New password must be different from current password"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if len(new_password) < 6:
-            return Response(
-                {"message": "Password must be at least 6 characters long"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        user.set_password(new_password)
+        user.set_password(data['new_password'])
         user.save()
         update_session_auth_hash(request, user) 
 

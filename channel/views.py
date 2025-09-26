@@ -3,18 +3,20 @@ from rest_framework.response import Response
 
 from channel.permissions import IsOwner
 from channel.models import Channel, ChannelMessage
-from channel.serializers import ChannelSerializer, ChannelMessageSerializer, FollowChannelSerializer, ChannelUpdateSerializer
-
+from channel.serializers import (
+    ChannelSerializer, ChannelMessageSerializer,
+    FollowChannelSerializer, ChannelUpdateSerializer,
+    ChannelCreateSerializer
+)
 
 from django.db.models import Q
-
 
 from accounts.models import CustomUser
 
 
 
 class ChannelApiView(generics.GenericAPIView):
-    serializer_class = ChannelSerializer
+    serializer_class = ChannelCreateSerializer
     
     def post(self, request):
         serializer = self.get_serializer(data=request.data)

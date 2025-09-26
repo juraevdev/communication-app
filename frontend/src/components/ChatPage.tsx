@@ -1,6 +1,6 @@
 import type React from "react"
 import { apiClient } from "@/lib/api"
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -65,7 +65,6 @@ export default function ChatPage() {
     getGroupMembers,
     sendGroupMessage,
     connectToChatRoom,
-    getGroupUnreadCount,
     markGroupMessageAsRead,
     connectToChannel, // connectToChannel ni qo'shing
     sendChannelMessage, // sendChannelMessage ni qo'shing
@@ -220,36 +219,6 @@ export default function ChatPage() {
     }
   }, [selectedChat, messages, markGroupMessageAsRead, setGroups]);
 
-  // Guruh xabarlarini qayta ishlash
-  const processGroupMessage = useCallback((data: any) => {
-    switch (data.type) {
-      case 'unread_count':
-        setGroups(prev => prev.map(group => {
-          if (group.id.toString() === selectedChat?.id.toString()) {
-            return { ...group, unread: data.count };
-          }
-          return group;
-        }));
-        break;
-
-      case 'chat_message':
-      case 'file_uploaded':
-        // Xabar qo'shilganda unread count yangilanishi kerak
-        if (data.sender_id !== currentUser?.id) {
-          setGroups(prev => prev.map(group => {
-            if (group.id.toString() === selectedChat?.id.toString()) {
-              return { ...group, unread: (group.unread || 0) + 1 };
-            }
-            return group;
-          }));
-        }
-        break;
-
-      default:
-        break;
-    }
-  }, [selectedChat, currentUser, setGroups]);
-
   const handleChatHeaderClick = async () => {
     if (selectedChat?.type === "group") {
       try {
@@ -355,6 +324,23 @@ export default function ChatPage() {
       setShowCreateGroup(false)
     } catch (error) {
       console.error("Failed to create group:", error)
+    }
+  }
+
+  const handleCreateChannel = async (channelData: {
+    name: string;
+    description?: string;
+    username: string;
+    owner?: string
+  }) => {
+    try {
+      await apiClient.createChannel({
+        ...channelData,
+        owner: currentUser.id
+      })
+      setShowCreateChannel(false)
+    } catch (error) {
+      console.error("Failed to create channel:", error)
     }
   }
 
@@ -502,16 +488,29 @@ export default function ChatPage() {
     setFileUpload(prev => ({ ...prev, uploading: true, progress: 0 }));
 
     try {
-      const isGroup = selectedChat.type === "group" || "channel";
+      const isGroup = selectedChat.type === "group";
+      const isChannel = selectedChat.type === "channel";
 
-      if (isGroup) {
+      if (isGroup || isChannel) {
+        // Guruh yoki kanal uchun fayl yuklash
         const reader = new FileReader();
 
         reader.onload = (e) => {
           const base64Data = e.target?.result as string;
           const base64Content = base64Data.split(';base64,')[1];
 
-          if (groupWsRef.current && groupWsRef.current.readyState === WebSocket.OPEN) {
+          // Kanal uchun WebSocket
+          if (isChannel && channelWsRef.current?.readyState === WebSocket.OPEN) {
+            channelWsRef.current.send(JSON.stringify({
+              type: "file_upload",
+              file_data: base64Content,
+              file_name: fileUpload.file!.name,
+              file_type: fileUpload.file!.type,
+              file_size: fileUpload.file!.size
+            }));
+          }
+          // Guruh uchun WebSocket
+          else if (isGroup && groupWsRef.current?.readyState === WebSocket.OPEN) {
             groupWsRef.current.send(JSON.stringify({
               type: "file_upload",
               file_data: base64Content,
@@ -531,10 +530,6 @@ export default function ChatPage() {
           if (fileInputRef.current) {
             fileInputRef.current.value = '';
           }
-        };
-
-        reader.onerror = () => {
-          throw new Error("Failed to read file");
         };
 
         reader.readAsDataURL(fileUpload.file);
@@ -658,11 +653,9 @@ export default function ChatPage() {
     if (!selectedChat) return []
 
     if (selectedChat.type === "group") {
-      const groupMessages = messages[`group_${selectedChat.id}`] || []
-      return groupMessages
+      return messages[`group_${selectedChat.id}`] || []
     } else if (selectedChat.type === "channel") {
-      const channelMessages = messages[`channel_${selectedChat.id}`] || []
-      return channelMessages
+      return messages[`channel_${selectedChat.id}`] || []
     } else {
       const roomId = selectedChat.room_id || selectedChat.id?.toString()
       return messages[roomId] || []
@@ -1231,7 +1224,12 @@ export default function ChatPage() {
         onCreateGroup={handleCreateGroup}
       />
 
-      <CreateChannelModal isOpen={showCreateChannel} onClose={() => setShowCreateChannel(false)} />
+      <CreateChannelModal
+        isOpen={showCreateChannel}
+        onClose={() => setShowCreateChannel(false)}
+        onCreateChannel={handleCreateChannel}
+        currentUserId={currentUser?.id?.toString() || ""}
+      />
 
       {selectedChat?.type === "group" && (
         <GroupInfoModal
@@ -1255,7 +1253,7 @@ export default function ChatPage() {
             id: selectedChat.id || 0,
             name: getChatName(selectedChat),
             description: selectedChat.description || "No channel description",
-            username: selectedChat.username || "channel",
+            username: selectedChat.username || selectedChat.name?.toLowerCase().replace(/\s+/g, '_') || "channel",
             avatar: selectedChat.avatar || "",
             subscriberCount: selectedChat.subscriberCount || 0,
             isOwner: selectedChat.isOwner || false,

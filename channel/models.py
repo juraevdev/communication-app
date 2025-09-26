@@ -10,6 +10,7 @@ class Channel(models.Model):
     members = models.ManyToManyField(CustomUser, related_name='channel_members')
     name = models.CharField(max_length=50)
     description = models.TextField(null=True, blank=True)
+    username = models.CharField(max_length=50, unique=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
