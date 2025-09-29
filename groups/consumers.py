@@ -69,7 +69,7 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
             elif message_type == 'get_unread_count': 
                 await self.send_unread_count()
             elif message_type == 'mark_all_as_read':
-                await self.handle_mark_all_as_read()
+                await self.handle_mark_all_as_read()    
             
         except json.JSONDecodeError:
             await self.send(text_data=json.dumps({
@@ -79,7 +79,12 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
             
     async def handle_mark_all_as_read(self):
         await self.mark_all_messages_as_read()
-        await self.send_unread_count()
+        unread_count = await self.get_unread_count()
+        
+        await self.send(text_data=json.dumps({
+            'type': 'unread_count',
+            'count': unread_count
+        }))
 
 
     async def handle_mark_as_read(self, data):
@@ -90,19 +95,16 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
             }))
             return
         
-        success, new_unread_count = await self.mark_message_as_read(message_id)
+        success = await self.mark_message_as_read(message_id)
     
         if success:
-            await self.channel_layer.group_send(
-                self.group_room_name,
-                {
-                    'type': 'message_read',
-                    'message_id': message_id,
-                    'user_id': self.user.id,
-                    'user_name': self.user.fullname,
-                    'new_unread_count': new_unread_count
-                }
-            )
+            new_unread_count = await self.get_unread_count()
+            
+            await self.send(text_data=json.dumps({
+                'type': 'message_read_confirmed',
+                'message_id': message_id,
+                'unread_count': new_unread_count
+            }))
         else:
             await self.send(text_data=json.dumps({
                 'error': 'Failed to mark message as read'
@@ -154,8 +156,6 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
         message = await self.save_message(content, reply_to_id)
 
         if message:
-            all_members = await self.get_group_members()
-            
             await self.channel_layer.group_send(
                 self.group_room_name,
                 {
@@ -168,18 +168,6 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                     'temp_message_id': temp_message_id
                 }
             )
-            
-            for member in all_members:
-                if member.user.id != self.user.id:
-                    unread_count = await self.get_unread_count_for_user(member.user.id)
-                    await self.channel_layer.group_send(
-                        self.group_room_name,
-                        {
-                            'type': 'unread_count_for_user',
-                            'target_user_id': member.user.id,
-                            'count': unread_count
-                        }
-                    )
 
 
     async def chat_message(self, event):
@@ -192,6 +180,13 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
             'reply_to': event['reply_to'],
             'temp_message_id': event.get('temp_message_id')
         }))
+        
+        if event['sender_id'] != self.user.id:
+            unread_count = await self.get_unread_count()
+            await self.send(text_data=json.dumps({
+                'type': 'unread_count',
+                'count': unread_count
+            }))
 
 
     async def unread_count_for_user(self, event):
@@ -453,10 +448,16 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
             
     @database_sync_to_async
     def get_group_messages(self):
-        messages = GroupMessage.objects.filter(group_id=self.group_id).select_related('sender', 'reply_to', 'file').order_by('created_at')
+        messages = GroupMessage.objects.filter(
+            group_id=self.group_id
+        ).prefetch_related('read_by').select_related(
+            'sender', 'reply_to', 'file'
+        ).order_by('created_at')
 
         result = []
         for msg in messages:
+            is_read_by_user = self.user in msg.read_by.all() or msg.sender == self.user
+            
             message_data = {
                 'id': msg.id,
                 'content': msg.content,
@@ -465,14 +466,14 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                 'created_at': msg.created_at.isoformat(),
                 'message_type': msg.message_type,
                 'is_updated': False,
-                'is_read': msg.is_read,
+                'is_read': is_read_by_user, 
             }
     
             if msg.file:
                 message_data.update({
                     'file_name': msg.file.original_filename,
                     'file_url': msg.file.file.url if msg.file.file else '',
-                    'file_type': 'file',  
+                    'file_type': 'file',
                     'file_size': msg.file.file.size if msg.file.file else 0,
                 })
         
@@ -481,44 +482,139 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                     'id': msg.reply_to.id,
                     'content': msg.reply_to.content,
                     'sender': msg.reply_to.sender.fullname,
-                    'message': msg.reply_to.content  
+                    'message': msg.reply_to.content
                 }
     
             result.append(message_data)
 
         return result
+    
+    async def handle_edit_message(self, data):
+        message_id = data.get('message_id')
+        new_content = data.get('new_content')
+
+        if not message_id or not new_content:
+            await self.send(text_data=json.dumps({
+                'error': 'message_id and new_content are required'
+            }))
+            return
+
+        success = await self.edit_message(message_id, new_content)
+        if success:
+            await self.channel_layer.group_send(
+                self.group_room_name,
+                {
+                    'type': 'message_updated',
+                    'message_id': message_id,
+                    'new_content': new_content
+                }
+            )
+        else:
+            await self.send(text_data=json.dumps({
+                'error': 'You cannot edit this message or message not found'
+            }))
+
+    async def handle_delete_message(self, data):
+        message_id = data.get('message_id')
+        if not message_id:
+            await self.send(text_data=json.dumps({
+                'error': 'message_id is required'
+            }))
+            return
+
+        success = await self.delete_message(message_id)
+        if success:
+            await self.channel_layer.group_send(
+                self.group_room_name,
+                {
+                    'type': 'message_deleted',
+                    'message_id': message_id
+                }
+            )
+        else:
+            await self.send(text_data=json.dumps({
+                'error': 'You cannot delete this message or message not found'
+            }))
+
+    async def message_updated(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'message_updated',
+            'message_id': event['message_id'],
+            'new_content': event['new_content']
+        }))
+
+    async def message_deleted(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'message_deleted',
+            'message_id': event['message_id']
+        }))
+
+    @database_sync_to_async
+    def edit_message(self, message_id, new_content):
+        try:
+            message = GroupMessage.objects.get(
+                id=message_id,
+                group_id=self.group_id,
+                sender=self.user
+            )
+        
+            if message.content == new_content.strip():
+                return True
+        
+            message.content = new_content.strip()
+            message.is_updated = True
+            message.save(update_fields=["content", "is_updated"])
+        
+            return True
+        except GroupMessage.DoesNotExist:
+            return False
+
+    @database_sync_to_async
+    def delete_message(self, message_id):
+        try:
+            message = GroupMessage.objects.get(
+                id=message_id,
+                group_id=self.group_id,
+                sender=self.user
+            )
+            message.delete()
+            return True
+        except GroupMessage.DoesNotExist:
+            return False
 
 
     @database_sync_to_async
     def mark_message_as_read(self, message_id):
         try:
             message = GroupMessage.objects.get(id=message_id, group_id=self.group_id)
-            if message.sender != self.user:  
-                message.is_read = True
-                message.save()
-            
-                unread_count = GroupMessage.objects.filter(
-                    group_id=self.group_id,
-                    is_read=False
-                ).exclude(sender=self.user).count()
-            
-                return True, unread_count
-            return False, 0
+            if message.sender != self.user:
+                message.read_by.add(self.user)
+                return True
+            return False
         except GroupMessage.DoesNotExist:
-            return False, 0
+            return False
 
 
     @database_sync_to_async
     def get_unread_count(self):
         return GroupMessage.objects.filter(
-            group_id=self.group_id,
-            is_read=False
-        ).exclude(sender=self.user).count()
+            group_id=self.group_id
+        ).exclude(
+            sender=self.user
+        ).exclude(
+            read_by=self.user
+        ).count()
         
         
     @database_sync_to_async
     def mark_all_messages_as_read(self):
-        GroupMessage.objects.filter(
-            group_id=self.group_id,
-            is_read=False
-        ).exclude(sender=self.user).update(is_read=True)
+        messages = GroupMessage.objects.filter(
+            group_id=self.group_id
+        ).exclude(
+            sender=self.user
+        ).exclude(
+            read_by=self.user
+        )
+        
+        for message in messages:
+            message.read_by.add(self.user)

@@ -158,6 +158,12 @@ export const apiClient = {
     return response.data;
   },
 
+  // api.js fayliga qo'shiladi
+async getVideoCallWebSocketUrl(roomId: any) {
+  const token = localStorage.getItem('access_token');
+  return `ws://localhost:8000/ws/videocall/${roomId}/?token=${token}`;
+},
+
   async removeContact(contactId: number) {
     const response = await api.delete(`/accounts/contact/delete/${contactId}/`);
     return response.data;
@@ -398,7 +404,7 @@ export const apiClient = {
     name: string;
     description?: string;
     owner: string;
-    username: string;
+    username: string; 
   }) {
     const response = await fetch(`${BASE_URL}/api/v1/channels/create/`, {
       method: 'POST',
@@ -421,8 +427,8 @@ export const apiClient = {
     return this.handleResponse(response);
   },
 
-  async getChannelsFilter() {
-    const response = await api.get('channels/filter/');
+  async getChannelsFilter(searchTerm: string) {
+    const response = await api.get(`channels/filter/?search=${encodeURIComponent(searchTerm)}`);
     return response.data;
   },
 

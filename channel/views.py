@@ -27,40 +27,40 @@ class ChannelApiView(generics.GenericAPIView):
     
     
     
-# class ChannelListApiView(generics.GenericAPIView):
-#     serializer_class = ChannelSerializer
-#     permission_classes = [permissions.IsAuthenticated] 
-    
-#     def get(self, request):
-#         try:
-#             user_channels = Channel.objects.filter(
-#                 Q(members=request.user) | Q(owner=request.user)
-#             ).distinct()
-            
-#             serializer = self.get_serializer(user_channels, many=True)
-#             return Response(serializer.data, status=status.HTTP_200_OK)
-#         except Exception as e:
-#             return Response({'message': 'Error retrieving channels', 'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    
 class ChannelListApiView(generics.GenericAPIView):
     serializer_class = ChannelSerializer
     permission_classes = [permissions.IsAuthenticated] 
     
     def get(self, request):
         try:
-            # Barcha kanallarni olish (faqat foydalanuvchi kanallarini emas)
-            all_channels = Channel.objects.all()
+            user_channels = Channel.objects.filter(
+                Q(members=request.user) | Q(owner=request.user)
+            ).distinct()
             
-            # Serializer da context yuborish
-            serializer = self.get_serializer(
-                all_channels, 
-                many=True, 
-                context={'request': request}  # Bu muhim!
-            )
-            
+            serializer = self.get_serializer(user_channels, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'message': 'Error retrieving channels', 'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+# class ChannelListApiView(generics.GenericAPIView):
+#     serializer_class = ChannelSerializer
+#     permission_classes = [permissions.IsAuthenticated] 
+    
+#     def get(self, request):
+#         try:
+#             # Barcha kanallarni olish (faqat foydalanuvchi kanallarini emas)
+#             all_channels = Channel.objects.all()
+            
+#             # Serializer da context yuborish
+#             serializer = self.get_serializer(
+#                 all_channels, 
+#                 many=True, 
+#                 context={'request': request}  # Bu muhim!
+#             )
+            
+#             return Response(serializer.data, status=status.HTTP_200_OK)
+#         except Exception as e:
+#             return Response({'message': 'Error retrieving channels', 'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
             
     
 

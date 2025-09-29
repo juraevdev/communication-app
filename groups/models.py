@@ -36,9 +36,12 @@ class GroupMember(models.Model):
     @property
     def unread_count(self):
         return GroupMessage.objects.filter(
-            group=self.group,
-            is_read=False
-        ).exclude(sender=self.user).count()
+            group=self.group
+        ).exclude(
+            sender=self.user
+        ).exclude(
+            read_by=self.user
+        ).count()
 
 
 class GroupMessage(models.Model):
@@ -48,26 +51,23 @@ class GroupMessage(models.Model):
     file = models.ForeignKey(FileUpload, on_delete=models.SET_NULL, related_name='group_files', null=True, blank=True)
     message_type = models.CharField(max_length=10, default='text', null=True)
     reply_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='replies')
-    created_at = models.DateTimeField(auto_now_add=True)
-    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    is_read = models.BooleanField(default=False)  
     read_by = models.ManyToManyField(CustomUser, related_name='read_group_messages', blank=True)
 
     def __str__(self):
         return f"Message by {self.sender.username} in {self.group.name}"
     
-    
     def save(self, *args, **kwargs):
         if self.file:
             self.message_type = 'file'
         super().save(*args, **kwargs)
-
-    def __str__(self):
-        return f"Message by {self.sender.username} in {self.group.name}"
     
-    
-    def mark_as_read(self, user):
-        if self.sender != user and not self.is_read:
-            self.is_read = True
-            self.save()
+    def mark_as_read_by(self, user):
+        if self.sender != user and user not in self.read_by.all():
+            self.read_by.add(user)
             return True
         return False
+    
+    def is_read_by(self, user):
+        return self.sender == user or user in self.read_by.all()

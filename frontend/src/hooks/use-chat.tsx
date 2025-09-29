@@ -55,20 +55,20 @@ export interface GroupMember {
 }
 
 export interface Chat {
-    id: number
-    name: string
-    sender: string
-    sender_id: number
-    last_message: string
-    timestamp: string
-    unread: number
-    avatar: string
-    message_type: "text" | "file"
-    room_id?: string
-    type?: "private" | "group" | "channel" 
-    description?: string
-    memberCount?: number
-    isAdmin?: boolean
+  id: number
+  name: string
+  sender: string
+  sender_id: number
+  last_message: string
+  timestamp: string
+  unread: number
+  avatar: string
+  message_type: "text" | "file"
+  room_id?: string
+  type?: "private" | "group" | "channel"
+  description?: string
+  memberCount?: number
+  isAdmin?: boolean
 }
 
 export function useChat() {
@@ -127,6 +127,8 @@ export function useChat() {
     }
   }, [])
 
+
+
   const loadGroups = useCallback(async () => {
     try {
       const groupsData = await apiClient.getGroups()
@@ -165,26 +167,18 @@ export function useChat() {
       const groupWs = new WebSocket(apiClient.getGroupWebSocketUrl(groupId))
 
       groupWs.onopen = () => {
+        console.log(`[Chat] Group background listener connected to group ${groupId}`)
       }
 
       groupWs.onmessage = (event) => {
         const data = JSON.parse(event.data)
 
+        // Faqat ochiq bo'lmagan guruhlar uchun notification
         if (currentGroupRef.current !== groupId) {
           switch (data.type) {
             case "chat_message":
             case "file_uploaded":
-              if (data.sender_id !== currentUser?.id) {
-                setGroups(prev => prev.map(group => {
-                  if (group.id.toString() === groupId) {
-                    return { ...group, unread: (group.unread || 0) + 1 };
-                  }
-                  return group;
-                }));
-              }
-              break;
-
-            case "new_message_notification":
+              // Boshqa a'zoning xabari kelsa - unread count oshadi
               if (data.sender_id !== currentUser?.id) {
                 setGroups(prev => prev.map(group => {
                   if (group.id.toString() === groupId) {
@@ -196,15 +190,13 @@ export function useChat() {
               break;
 
             case "unread_count":
+              // Backend periodic ravishda har bir a'zoga o'zining unread count'ini yuborishi mumkin
               setGroups(prev => prev.map(group => {
                 if (group.id.toString() === groupId) {
                   return { ...group, unread: data.count };
                 }
                 return group;
               }));
-              break;
-
-            default:
               break;
           }
         }
@@ -219,11 +211,9 @@ export function useChat() {
         }, 3000)
       }
 
-      groupWs.onerror = (error) => {
-      }
-
       groupConnectionsRef.current.set(groupId, groupWs)
     } catch (error) {
+      console.error("[Chat] Failed to initialize group background listener:", error)
     }
   }, [currentUser])
 
@@ -405,6 +395,46 @@ export function useChat() {
               }
               break
 
+            case "message_updated":
+              setMessages(prev => {
+                const targetRoomId = data.room_id?.toString() || roomId;
+                if (!targetRoomId) return prev;
+
+                const updatedRoomMessages = (prev[targetRoomId] || []).map(msg => {
+                  if (msg.id === data.message_id.toString()) {
+                    return {
+                      ...msg,
+                      message: data.new_content,
+                      is_updated: true
+                    };
+                  }
+                  return msg;
+                });
+
+                return {
+                  ...prev,
+                  [targetRoomId]: updatedRoomMessages,
+                };
+              });
+              break;
+
+
+            case "message_deleted":
+              setMessages(prev => {
+                const roomId = data.room_id?.toString();
+                if (!roomId) return prev;
+
+                const updatedRoomMessages = (prev[roomId] || []).filter(
+                  msg => msg.id !== data.message_id.toString()
+                );
+
+                return {
+                  ...prev,
+                  [roomId]: updatedRoomMessages,
+                };
+              });
+              break;
+
             case "file_uploaded":
               if (data.id) {
                 const fileMessage: Message = {
@@ -509,8 +539,9 @@ export function useChat() {
             type: "get_history"
           }))
 
+          // Backenddan joriy foydalanuvchi uchun unread count so'rash
           groupWs.send(JSON.stringify({
-            type: "mark_all_as_read"
+            type: "get_unread_count"
           }))
         }
 
@@ -519,38 +550,34 @@ export function useChat() {
           console.log("[Chat] Group message received:", data)
 
           switch (data.type) {
-
             case "message_history":
               if (data.messages && Array.isArray(data.messages)) {
+                const formattedMessages: Message[] = data.messages.map((msg: any) => ({
+                  id: msg.id.toString(),
+                  group_id: parseInt(groupId),
+                  sender: {
+                    id: msg.sender_id?.toString(),
+                    email: "",
+                    fullname: msg.sender_fullname || "Unknown",
+                    full_name: msg.sender_fullname || "Unknown",
+                  },
+                  message: msg.content || "",
+                  timestamp: msg.created_at,
+                  isOwn: msg.sender_id === currentUser?.id,
+                  // Backend har bir foydalanuvchi uchun alohida is_read yuboradi
+                  is_read: Boolean(msg.is_read),
+                  is_updated: msg.is_updated || false,
+                  type: msg.message_type || "text",
+                  file_name: msg.file_name,
+                  file_url: msg.file_url,
+                  file_type: msg.file_type,
+                  file_size: msg.file_size?.toString(),
+                  reply_to: msg.reply_to,
+                }))
 
-                const formattedMessages: Message[] = data.messages.map((msg: any) => {
-
-                  return {
-                    id: msg.id.toString(),
-                    group_id: parseInt(groupId),
-                    sender: {
-                      id: msg.sender_id?.toString(),
-                      email: "",
-                      fullname: msg.sender_fullname || "Unknown",
-                      full_name: msg.sender_fullname || "Unknown",
-                    },
-                    message: msg.content || "",
-                    timestamp: msg.created_at,
-                    isOwn: msg.sender_id === currentUser?.id,
-                    is_read: Boolean(msg.is_read),
-                    is_updated: msg.is_updated || false,
-                    type: msg.message_type || "text",
-                    file_name: msg.file_name,
-                    file_url: msg.file_url,
-                    file_type: msg.file_type,
-                    file_size: msg.file_size?.toString(),
-                    reply_to: msg.reply_to,
-                  }
-                })
-
-                console.log("[DEBUG] Formatted messages:", formattedMessages);
-
-                formattedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                formattedMessages.sort((a, b) =>
+                  new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+                )
 
                 setMessages((prev) => ({
                   ...prev,
@@ -559,7 +586,18 @@ export function useChat() {
               }
               break
 
+            case 'initial_unread_count':
+              // Guruhga birinchi ulanishda unread count
+              setGroups(prev => prev.map(group => {
+                if (group.id.toString() === groupId) {
+                  return { ...group, unread: data.count };
+                }
+                return group;
+              }));
+              break;
+
             case 'message_read_confirmed':
+              // Xabar o'qilgandan keyin tasdiq
               setMessages(prev => {
                 const roomKey = `group_${groupId}`;
                 const updatedMessages = (prev[roomKey] || []).map(msg => {
@@ -574,17 +612,45 @@ export function useChat() {
                   [roomKey]: updatedMessages,
                 };
               });
+
+              // Unread count yangilanishi
+              if (data.unread_count !== undefined) {
+                setGroups(prev => prev.map(group => {
+                  if (group.id.toString() === groupId) {
+                    return { ...group, unread: data.unread_count };
+                  }
+                  return group;
+                }));
+              }
               break;
 
-            case 'read':
+            case "message_updated":
               setMessages(prev => {
                 const roomKey = `group_${groupId}`;
                 const updatedMessages = (prev[roomKey] || []).map(msg => {
                   if (msg.id === data.message_id.toString()) {
-                    return { ...msg, is_read: true };
+                    return {
+                      ...msg,
+                      message: data.new_content,
+                      is_updated: true
+                    };
                   }
                   return msg;
                 });
+
+                return {
+                  ...prev,
+                  [roomKey]: updatedMessages,
+                };
+              });
+              break;
+
+            case "message_deleted":
+              setMessages(prev => {
+                const roomKey = `group_${groupId}`;
+                const updatedMessages = (prev[roomKey] || []).filter(
+                  msg => msg.id !== data.message_id.toString()
+                );
 
                 return {
                   ...prev,
@@ -606,7 +672,7 @@ export function useChat() {
                 message: data.message?.content || data.message || "",
                 timestamp: data.timestamp || new Date().toISOString(),
                 isOwn: data.sender_id === currentUser?.id,
-                is_read: data.sender_id === currentUser?.id,
+                is_read: data.sender_id === currentUser?.id, // O'z xabari avtomatik o'qilgan
                 is_updated: false,
                 type: data.message_type || "text",
                 reply_to: data.reply_to,
@@ -615,8 +681,6 @@ export function useChat() {
                 file_type: data.file_type,
                 file_size: data.file_size?.toString(),
               }
-
-              console.log("[Chat] New group message received:", newMessage)
 
               setMessages(prev => {
                 const roomKey = `group_${groupId}`;
@@ -627,7 +691,9 @@ export function useChat() {
                 }
 
                 const updatedMessages = [...currentMessages, newMessage];
-                updatedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                updatedMessages.sort((a, b) =>
+                  new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+                );
 
                 return {
                   ...prev,
@@ -636,78 +702,8 @@ export function useChat() {
               });
               break;
 
-            case "file_uploaded":
-              if (data.id) {
-                const fileMessage: Message = {
-                  id: data.id.toString(),
-                  group_id: parseInt(groupId),
-                  sender: {
-                    id: data.user?.id?.toString() || data.sender_id?.toString(),
-                    email: "",
-                    fullname: data.user?.fullname || data.sender_name || "Unknown",
-                    full_name: data.user?.fullname || data.sender_name || "Unknown",
-                  },
-                  message: data.file_name || "File",
-                  timestamp: data.uploaded_at || data.timestamp || new Date().toISOString(),
-                  isOwn: (data.user?.id || data.sender_id) === currentUser?.id,
-                  is_read: (data.user?.id || data.sender_id) === currentUser?.id,
-                  is_updated: false,
-                  type: "file",
-                  file_name: data.file_name,
-                  file_url: data.file_url,
-                  file_type: data.file_type || "file",
-                  file_size: data.file_size?.toString(),
-                }
-
-                console.log("[Chat] New group file message received:", fileMessage)
-
-                addMessage(`group_${groupId}`, fileMessage)
-              }
-              break;
-
-            case 'new_message_notification':
-              if (data.sender_id !== currentUser?.id) {
-                if (currentGroupRef.current !== groupId) {
-                  setGroups(prev => prev.map(group => {
-                    if (group.id.toString() === groupId) {
-                      return { ...group, unread: (group.unread || 0) + 1 };
-                    }
-                    return group;
-                  }));
-                }
-              }
-              break;
-
-            case 'initial_unread_count':
-              setGroups(prev => prev.map(group => {
-                if (group.id.toString() === groupId) {
-                  return { ...group, unread: data.count };
-                }
-                return group;
-              }));
-              break;
-
-            case 'unread_count_increment':
-              if (currentGroupRef.current !== groupId) {
-                setGroups(prev => prev.map(group => {
-                  if (group.id.toString() === groupId) {
-                    return { ...group, unread: (group.unread || 0) + data.count };
-                  }
-                  return group;
-                }));
-              }
-              break;
-
-            case 'unread_count_decrement':
-              setGroups(prev => prev.map(group => {
-                if (group.id.toString() === groupId) {
-                  return { ...group, unread: Math.max(0, (group.unread || 0) - data.count) };
-                }
-                return group;
-              }));
-              break;
-
-            case 'unread_count':
+            case "unread_count":
+              // Har bir foydalanuvchi o'zining unread count'ini oladi
               setGroups(prev => prev.map(group => {
                 if (group.id.toString() === groupId) {
                   return { ...group, unread: data.count };
@@ -817,11 +813,13 @@ export function useChat() {
 
   const markGroupMessageAsRead = useCallback((groupId: string, messageId: string) => {
     if (groupWsRef.current && groupWsRef.current.readyState === WebSocket.OPEN) {
+      // Backendga xabarni o'qilgan deb belgilash so'rovi
       groupWsRef.current.send(JSON.stringify({
         type: "mark_as_read",
         message_id: messageId
       }));
 
+      // Optimistic update - darhol UI'ni yangilash
       setMessages(prev => {
         const roomKey = `group_${groupId}`;
         const updatedMessages = (prev[roomKey] || []).map(msg => {
@@ -837,6 +835,7 @@ export function useChat() {
         };
       });
 
+      // Unread count kamayadi
       setGroups(prev => prev.map(group => {
         if (group.id.toString() === groupId && group.unread > 0) {
           return { ...group, unread: Math.max(0, group.unread - 1) };
@@ -1086,13 +1085,48 @@ export function useChat() {
                 file_url: msg.file?.url,
                 file_type: msg.file?.type,
                 file_size: msg.file?.size?.toString(),
-              })).reverse()
+              }))
 
               setMessages(prev => ({
                 ...prev,
                 [`channel_${channelId}`]: formattedMessages,
               }))
             }
+            break;
+
+          case "message_updated":
+            setMessages(prev => {
+              const roomKey = `channel_${channelId}`;
+              const updatedMessages = (prev[roomKey] || []).map(msg => {
+                if (msg.id === data.message_id.toString()) {
+                  return {
+                    ...msg,
+                    message: data.new_content,
+                    is_updated: true
+                  };
+                }
+                return msg;
+              });
+
+              return {
+                ...prev,
+                [roomKey]: updatedMessages,
+              };
+            });
+            break;
+
+          case "message_deleted":
+            setMessages(prev => {
+              const roomKey = `channel_${channelId}`;
+              const updatedMessages = (prev[roomKey] || []).filter(
+                msg => msg.id !== data.message_id.toString()
+              );
+
+              return {
+                ...prev,
+                [roomKey]: updatedMessages,
+              };
+            });
             break;
 
           case "chat_message":
@@ -1248,70 +1282,93 @@ export function useChat() {
     }
   }, [currentUser])
 
-  // Kanallarni yuklash
-const loadChannels = useCallback(async () => {
-  try {
-    const channelsData = await apiClient.getChannels()
-    const currentUserData = await apiClient.getMe() 
-    
-    const formattedChannels: Chat[] = channelsData.map((channel: any) => ({
-      id: channel.id,
-      name: channel.name,
-      sender: channel.owner_name || "Unknown",
-      sender_id: channel.owner,
-      last_message: channel.last_message || "",
-      timestamp: channel.updated_at,
-      unread: channel.unread_count || 0,
-      avatar: "/channel-avatar.png",
-      message_type: "text",
-      room_id: `channel_${channel.id}`,
-      type: "channel",
-      description: channel.description,
-      memberCount: channel.member_count || 0,
-      isAdmin: channel.owner === currentUserData?.id, 
-      isOwner: channel.owner === currentUserData?.id, 
-    }))
-    setChannels(formattedChannels)
-  } catch (error) {
-    console.error("[Chat] Failed to load channels:", error)
-  }
-}, [currentUser])
+  const loadChannels = useCallback(async () => {
+    try {
+      const channelsData = await apiClient.getChannels()
+      const currentUserData = await apiClient.getMe()
 
-  
+      console.log("[DEBUG] Channels from API:", channelsData)
+      console.log("[DEBUG] Current user ID:", currentUserData?.id)
+
+      const formattedChannels: Chat[] = channelsData.map((channel: any) => {
+        const isOwner = channel.owner === currentUserData?.id
+        const isMember = Array.isArray(channel.members) && channel.members.includes(currentUserData?.id)
+        const isSubscribed = isOwner || isMember
+
+        console.log(`[DEBUG] Channel "${channel.name}": owner=${channel.owner}, isOwner=${isOwner}, isMember=${isMember}, isSubscribed=${isSubscribed}`)
+
+        return {
+          id: channel.id,
+          name: channel.name,
+          sender: channel.owner_name || "Unknown",
+          sender_id: channel.owner,
+          last_message: channel.last_message || "",
+          timestamp: channel.updated_at || channel.created_at,
+          unread: channel.unread_count || 0,
+          avatar: "/channel-avatar.png",
+          message_type: "text",
+          room_id: `channel_${channel.id}`,
+          type: "channel",
+          description: channel.description || "",
+          memberCount: Array.isArray(channel.members) ? channel.members.length : 0,
+          isAdmin: isOwner,
+          isOwner: isOwner,
+          isSubscribed: isSubscribed,
+          username: channel.username || channel.name.toLowerCase().replace(/\s+/g, '_')
+        }
+      })
+
+      console.log("[DEBUG] Formatted channels count:", formattedChannels.length)
+      console.log("[DEBUG] Formatted channels:", formattedChannels)
+
+      setChannels(formattedChannels)
+
+      // Background listeners
+      formattedChannels.forEach(channel => {
+        if (channel.isSubscribed) {
+          initializeChannelBackgroundListener(channel.id.toString())
+        }
+      })
+    } catch (error) {
+      console.error("[Chat] Failed to load channels:", error)
+    }
+  }, [currentUser])
+
+
 
   return {
     chats,
-    setChannels,
     groups,
+    channels,
     messages,
     apiClient,
     chatWsRef,
     groupWsRef,
     isConnected,
     currentUser,
+    channelWsRef,
     setGroups,
     loadGroups,
     markAsRead,
+    setChannels,
     sendMessage,
     createGroup,
+    loadChannels,
+    createChannel,
     sendGroupFile,
     updateMessage,
     removeMessage,
     connectToGroup,
     addGroupMember,
     getGroupMembers,
+    sendChannelFile,
     sendGroupMessage,
+    connectToChannel,
     connectToChatRoom,
+    sendChannelMessage,
     getGroupUnreadCount,
     updateChatUnreadCount,
     markGroupMessageAsRead,
-    channels,
-    channelWsRef,
-    loadChannels,
-    createChannel,
-    connectToChannel,
-    sendChannelMessage,
-    sendChannelFile,
     markChannelMessageAsRead,
   }
 }

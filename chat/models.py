@@ -65,21 +65,17 @@ class Notification(models.Model):
 
 class FileUpload(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='uploaded_files')
-    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='files', null=True)
-    recipient = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='received_files', null=True)
-    group = models.ForeignKey('groups.Group', on_delete=models.CASCADE, related_name='files', null=True)
-    channel = models.ForeignKey('channel.Channel', on_delete=models.CASCADE, related_name='files', null=True)
-    file = models.FileField(upload_to='chat_files/', null=True)
+    room = models.ForeignKey('chat.Room', on_delete=models.CASCADE, related_name='files', null=True, blank=True)
+    recipient = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='received_files', null=True, blank=True)
+    group = models.ForeignKey('groups.Group', on_delete=models.CASCADE, related_name='group_uploaded_files', null=True, blank=True)
+    channel = models.ForeignKey('channel.Channel', on_delete=models.CASCADE, related_name='channel_uploaded_files', null=True, blank=True)
+    file = models.FileField(upload_to='chat_files/%Y/%m/%d/', null=True)
     original_filename = models.CharField(max_length=255, null=True)  
     uploaded_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
 
     def __str__(self):
-        return f'File uploaded by {self.user}'
-
-
-    def __str__(self):
-        return f'File uploaded by {self.user}'
+        return f'File uploaded by {self.user.username if self.user else "Unknown"}'
     
     def get_absolute_url(self):
         from django.urls import reverse
@@ -91,3 +87,13 @@ class FileUpload(models.Model):
             from django.conf import settings
             return f"{settings.BASE_URL}{self.file.url}"
         return None
+    
+    class Meta:
+        db_table = 'file_uploads'
+        ordering = ['-uploaded_at']
+        indexes = [
+            models.Index(fields=['user', 'uploaded_at']),
+            models.Index(fields=['room', 'uploaded_at']),
+            models.Index(fields=['group', 'uploaded_at']),
+            models.Index(fields=['channel', 'uploaded_at']),
+        ]

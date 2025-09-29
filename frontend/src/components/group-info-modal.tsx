@@ -62,7 +62,7 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
   const [selectedRole, setSelectedRole] = useState<'member' | 'admin'>('member');
   const [, setUserExists] = useState<boolean | null>(null);
   const [foundUser, setFoundUser] = useState<any>(null);
-  const [username, setUsername] = useState<any>(null);
+  const [phoneNumber, setPhoneNumber] = useState<any>(null);
   const [editData, setEditData] = useState({
     name: group.name,
     description: group.description,
@@ -98,21 +98,20 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
     }
   }
 
-  const checkUsername = async () => {
-    if (!username) {
+  const checkPhoneNumber = async () => {
+    if (!phoneNumber) {
       setUserExists(null);
       setFoundUser(null);
       return;
     }
 
     try {
-      const users = await apiClient.searchUser(username);
+      const cleanPhone = phoneNumber.replace(/\D/g, '');
 
-      const user = users.find((u: any) =>
-        u.username.toLowerCase() === username.toLowerCase().trim()
-      );
+      const users = await apiClient.searchUser(cleanPhone);
 
-      if (user) {
+      if (users && users.length > 0) {
+        const user = users[0];
         const isAlreadyMember = members.some((member: GroupMember) => member.user === user.id);
 
         if (isAlreadyMember) {
@@ -128,7 +127,7 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
         setFoundUser(null);
       }
     } catch (error) {
-      console.error("Failed to check username:", error);
+      console.error("Failed to check phone number:", error);
       setUserExists(false);
       setFoundUser(null);
     }
@@ -136,11 +135,16 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      checkUsername();
+      if (phoneNumber && phoneNumber.length >= 9) {
+        checkPhoneNumber();
+      } else {
+        setUserExists(null);
+        setFoundUser(null);
+      }
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [username]);
+  }, [phoneNumber]);
 
   const handleSave = async () => {
     try {
@@ -219,19 +223,37 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
 
       await apiClient.addGroupMember(addData);
 
-      setUsername("");
+      setPhoneNumber("");
       setSelectedRole('member');
       setUserExists(null);
       setFoundUser(null);
 
       await loadGroupMembers();
 
-      alert(`${foundUser.username} guruhga muvaffaqiyatli qo'shildi`);
+      alert(`${foundUser.fullname || foundUser.username} guruhga muvaffaqiyatli qo'shildi`);
 
     } catch (error: any) {
       console.error("Failed to add member:", error);
       alert(error.message || "Foydalanuvchi qo'shishda xatolik yuz berdi");
     }
+  };
+
+  const formatPhoneNumber = (value: string) => {
+    // Faqat raqamlarni qoldirish
+    const numbers = value.replace(/\D/g, '');
+
+    // Formatlash: +998 XX XXX-XX-XX
+    if (numbers.length === 0) return '';
+    if (numbers.length <= 3) return `+${numbers}`;
+    if (numbers.length <= 5) return `+${numbers.slice(0, 3)} ${numbers.slice(3)}`;
+    if (numbers.length <= 8) return `+${numbers.slice(0, 3)} ${numbers.slice(3, 5)} ${numbers.slice(5)}`;
+    if (numbers.length <= 10) return `+${numbers.slice(0, 3)} ${numbers.slice(3, 5)} ${numbers.slice(5, 8)}-${numbers.slice(8)}`;
+    return `+${numbers.slice(0, 3)} ${numbers.slice(3, 5)} ${numbers.slice(5, 8)}-${numbers.slice(8, 10)}-${numbers.slice(10, 12)}`;
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    setPhoneNumber(formatted);
   };
 
   const getRoleBadge = (role: string, isOwner: boolean) => {
@@ -440,19 +462,26 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
                   <DialogHeader>
                     <DialogTitle>Add members to group</DialogTitle>
                     <DialogDescription>
-                      Enter username and role
+                      Enter phone number and role
                     </DialogDescription>
                   </DialogHeader>
 
                   <div className="space-y-4">
                     <div>
-                      <Label htmlFor="username">Username</Label>
+                      <Label htmlFor="phone">Phone number</Label>
                       <Input
-                        id="username"
-                        placeholder="enter username..."
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
+                        id="phone"
+                        placeholder="+998 XX XXX-XX-XX"
+                        value={phoneNumber}
+                        onChange={handlePhoneChange}
                       />
+                      {foundUser && (
+                        <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                          <p className="text-sm text-green-800">
+                            Found: {foundUser.fullname || foundUser.username} (@{foundUser.username})
+                          </p>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="role-select">Role</Label>
@@ -473,7 +502,7 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
                         variant="outline"
                         onClick={() => {
                           setShowAddMemberModal(false);
-                          setUsername("");
+                          setPhoneNumber("");
                           setSelectedRole('member');
                           setUserExists(null);
                           setFoundUser(null);

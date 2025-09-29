@@ -1,3 +1,4 @@
+import json
 import base64
 import logging
 
@@ -321,7 +322,7 @@ class P2PChatConsumer(BaseChatConsumer):
         if not message_id:
             await self.send_error("message_id required", 'id_required')
             return
-        
+    
         success = await self.delete_message(message_id)
         if success:
             await self.send_success('Message deleted successfully')
@@ -330,6 +331,7 @@ class P2PChatConsumer(BaseChatConsumer):
                 {
                     "type": "message_deleted",
                     "message_id": message_id,
+                    "room_id": self.room_id,
                     "user_id": self.user.id
                 }
             )
@@ -350,10 +352,10 @@ class P2PChatConsumer(BaseChatConsumer):
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
-                    "type": "chat_message_updated", 
+                    "type": "message_updated",
                     "message_id": message_id,
                     "new_content": new_content,
-                    "is_updated": True
+                    "room_id": self.room_id
                 }
             )
             await self.send_success('Message updated successfully')
@@ -361,11 +363,12 @@ class P2PChatConsumer(BaseChatConsumer):
             await self.send_error('You cannot edit this message or message not found', 'permission_error')
 
 
-    async def chat_message_updated(self, event):
+    async def message_updated(self, event):
         await self.send_json({
             'type': 'message_updated',
             'message_id': event['message_id'],
             'new_content': event['new_content'],
+            'room_id': event['room_id']
         })
 
 
@@ -441,17 +444,6 @@ class P2PChatConsumer(BaseChatConsumer):
             'user_id': event['user_id']
         })
             
-            
-    async def message_updated(self, event):
-        await self.send_json({
-            'type': 'message_updated',
-            'id': event['id'],
-            'message': event['message'],
-            'sender': event['sender'],
-            'is_updated': event['is_updated'],
-            'is_read': event['is_read'],
-            'timestamp': event['timestamp']
-        })
 
 
     async def chat_message(self, event):
@@ -475,6 +467,7 @@ class P2PChatConsumer(BaseChatConsumer):
         await self.send_json({
             'type': 'message_deleted',
             'message_id': event['message_id'],
+            'room_id': event['room_id'],
             'user_id': event['user_id']
         })
 
@@ -1450,3 +1443,189 @@ class FilesConsumer(AsyncJsonWebsocketConsumer):
             size_bytes /= 1024.0
             i += 1
         return f"{size_bytes:.1f}{size_names[i]}"
+    
+    
+class VideoCallConsumer(AsyncJsonWebsocketConsumer):
+    async def connect(self):
+        self.room_id = self.scope['url_route']['kwargs']['room_id']
+        self.room_group_name = f'videocall_{self.room_id}'
+        self.user = self.scope['user']
+
+        if isinstance(self.user, AnonymousUser):
+            await self.close()
+            return
+
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        try:
+            # Foydalanuvchi ma'lumotlarini xavfsiz olish
+            if hasattr(self.user, 'id') and not isinstance(self.user, AnonymousUser):
+                user_name = getattr(self.user, 'fullname', None) or getattr(self.user, 'username', 'Unknown User')
+                
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type': 'user_left',
+                        'user_id': self.user.id,
+                        'user_name': user_name
+                    }
+                )
+        except Exception as e:
+            print(f"[VideoCall] Error in disconnect: {e}")
+        
+        finally:
+            # Har doim group dan chiqish
+            await self.channel_layer.group_discard(
+                self.room_group_name,
+                self.channel_name
+            )
+
+    async def receive(self, text_data):
+        try:
+            data = json.loads(text_data)
+            message_type = data.get('type')
+
+            # Foydalanuvchi ma'lumotlarini xavfsiz olish
+            user_name = getattr(self.user, 'fullname', None) or getattr(self.user, 'username', 'Unknown User')
+
+            if message_type == 'offer':
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type': 'offer',
+                        'offer': data['offer'],
+                        'from_user_id': self.user.id,
+                        'from_user_name': user_name
+                    }
+                )
+            elif message_type == 'answer':
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type': 'answer',
+                        'answer': data['answer'],
+                        'from_user_id': self.user.id
+                    }
+                )
+            elif message_type == 'ice_candidate':
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type': 'ice_candidate',
+                        'candidate': data['candidate'],
+                        'from_user_id': self.user.id
+                    }
+                )
+            elif message_type == 'join_call':
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type': 'user_joined',
+                        'user_id': self.user.id,
+                        'user_name': user_name
+                    }
+                )
+            elif message_type == 'leave_call':
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type': 'user_left',
+                        'user_id': self.user.id,
+                        'user_name': user_name
+                    }
+                )
+                
+            elif message_type == 'call_invitation':
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type': 'call_invitation',
+                        'room_id': data['room_id'],
+                        'from_user_id': self.user.id,
+                        'from_user_name': user_name,
+                        'call_type': data.get('call_type', 'video')
+                    }
+                )
+            elif message_type == 'call_response':
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type': 'call_response',
+                        'room_id': data['room_id'],
+                        'from_user_id': self.user.id,
+                        'from_user_name': user_name,
+                        'accepted': data['accepted']
+                    }
+                )
+                
+        except json.JSONDecodeError:
+            print("[VideoCall] Error decoding JSON")
+        except Exception as e:
+            print(f"[VideoCall] Error in receive: {e}")
+
+    async def offer(self, event):
+        if self.user.id != event['from_user_id']:
+            await self.send(text_data=json.dumps({
+                'type': 'offer',
+                'offer': event['offer'],
+                'from_user_id': event['from_user_id'],
+                'from_user_name': event['from_user_name']
+            }))
+
+    async def answer(self, event):
+        if self.user.id != event['from_user_id']:
+            await self.send(text_data=json.dumps({
+                'type': 'answer',
+                'answer': event['answer'],
+                'from_user_id': event['from_user_id']
+            }))
+
+    async def ice_candidate(self, event):
+        if self.user.id != event['from_user_id']:
+            await self.send(text_data=json.dumps({
+                'type': 'ice_candidate',
+                'candidate': event['candidate'],
+                'from_user_id': event['from_user_id']
+            }))
+
+    async def user_joined(self, event):
+        if self.user.id != event['user_id']:
+            await self.send(text_data=json.dumps({
+                'type': 'user_joined',
+                'user_id': event['user_id'],
+                'user_name': event['user_name']
+            }))
+
+    async def user_left(self, event):
+        if self.user.id != event['user_id']:
+            await self.send(text_data=json.dumps({
+                'type': 'user_left',
+                'user_id': event['user_id'],
+                'user_name': event['user_name']
+            }))
+            
+            
+    async def call_invitation(self, event):
+        if self.user.id != event['from_user_id']:
+            await self.send(text_data=json.dumps({
+                'type': 'call_invitation',
+                'room_id': event['room_id'],
+                'from_user_id': event['from_user_id'],
+                'from_user_name': event['from_user_name'],
+                'call_type': event['call_type']
+            }))
+
+    async def call_response(self, event):
+        if self.user.id != event['from_user_id']:
+            await self.send(text_data=json.dumps({
+                'type': 'call_response',
+                'room_id': event['room_id'],
+                'from_user_id': event['from_user_id'],
+                'from_user_name': event['from_user_name'],
+                'accepted': event['accepted']
+            }))

@@ -2,7 +2,7 @@ from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 
 from groups.models import Group, GroupMember, GroupMessage
-from groups.permissions import IsGroupOwner, IsGroupAdmin
+from groups.permissions import IsGroupOwner, IsGroupAdmin, IsGroupOwnerOrAdmin
 from groups.serializers import GroupSerializer, GroupMemberSerialzer, GroupMessageSerializer, GroupMembersSerializer, GroupUpdateSerializer
 
 
@@ -35,7 +35,7 @@ class GroupDeleteApiView(generics.GenericAPIView):
 
 class GroupUpdateApiView(generics.GenericAPIView):
     serializer_class = GroupUpdateSerializer
-    permission_classes = [IsGroupAdmin] 
+    permission_classes = [IsGroupOwnerOrAdmin] 
     
     def put(self, request, id):
         try:
@@ -74,6 +74,7 @@ class GroupDetailApiView(generics.GenericAPIView):
             
 class GroupMemberAddApiView(generics.GenericAPIView):
     serializer_class = GroupMemberSerialzer
+    permission_classes = [IsGroupOwnerOrAdmin]
     
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -97,7 +98,7 @@ class GroupMemberAddApiView(generics.GenericAPIView):
 
 class GroupMemberDeleteApiView(generics.GenericAPIView):
     serializer_class = GroupMemberSerialzer
-    permission_classes = [IsGroupOwner, IsGroupAdmin]
+    permission_classes = [IsGroupOwnerOrAdmin]
     
     def delete(self, request, group_id, user_id):
         try:

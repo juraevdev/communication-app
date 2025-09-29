@@ -21,3 +21,8 @@ class IsGroupAdmin(BasePermission):
                 role='admin'
             ).exists()
         return False
+
+class IsGroupOwnerOrAdmin(BasePermission):
+    def has_object_permission(self, request, view, obj):
+        return (IsGroupOwner().has_object_permission(request, view, obj) or 
+                IsGroupAdmin().has_object_permission(request, view, obj))
