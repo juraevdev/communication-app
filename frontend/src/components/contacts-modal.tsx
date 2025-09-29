@@ -4,15 +4,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, MessageSquare, Phone, MoreVertical } from "lucide-react"
+import { Search, MessageSquare, UserPlus, X, Save, Edit } from "lucide-react"
 import { UserProfileModal } from "./user-profile-modal"
 import { apiClient } from "@/lib/api"
+import { Label } from "./ui/label"
 
 interface ContactsModalProps {
   isOpen: boolean
   onClose: () => void
+  onStartChat: (userId: number) => void
 }
 
 interface Contact {
@@ -26,7 +27,7 @@ interface Contact {
   bio: string;
   isContact: boolean;
   isOnline: boolean;
-  avatar: string
+  avatar: string;
   is_online: boolean;
   unread_count: number;
   name: string;
@@ -35,14 +36,37 @@ interface Contact {
   role: string;
 }
 
+interface User {
+  id: number;
+  name: string;
+  username: string;
+  email: string;
+  avatar: string;
+  phone_number: string;
+  is_online: boolean;
+  last_seen: string;
+  role?: string;
+}
 
-export function ContactsModal({ isOpen, onClose }: ContactsModalProps) {
+export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedUser, setSelectedUser] = useState<Contact | null>(null)
   const [showUserProfile, setShowUserProfile] = useState(false)
   const [contacts, setContacts] = useState<Contact[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  const [newUsername, setNewUsername] = useState("")
+  const [newAlias, setNewAlias] = useState("")
+  const [isAddingContact, setIsAddingContact] = useState(false)
+  const [addContactMessage, setAddContactMessage] = useState({ type: "", text: "" })
+  const [searchResults, setSearchResults] = useState<User[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+
+  // Tahrirlash uchun yangi state'lar
+  const [editingContact, setEditingContact] = useState<Contact | null>(null)
+  const [editAlias, setEditAlias] = useState("")
+  const [isEditing, setIsEditing] = useState(false)
 
   useEffect(() => {
     const fetchContacts = async () => {
@@ -52,7 +76,7 @@ export function ContactsModal({ isOpen, onClose }: ContactsModalProps) {
       setError(null)
       try {
         const contactsData = await apiClient.getContacts()
-        console.log("API dan kelgan kontaktlar:", contactsData); 
+        console.log("API dan kelgan kontaktlar:", contactsData)
         setContacts(Array.isArray(contactsData) ? contactsData : [])
       } catch (err) {
         setError("Kontaktlarni yuklab bo'lmadi")
@@ -66,17 +90,123 @@ export function ContactsModal({ isOpen, onClose }: ContactsModalProps) {
     fetchContacts()
   }, [isOpen])
 
-  const filteredContacts = (contacts || []).filter((contact) => {
+  useEffect(() => {
+    const searchUsers = async () => {
+      if (!newUsername.trim()) {
+        setSearchResults([])
+        return
+      }
+
+      setIsSearching(true)
+      try {
+        const results = await apiClient.searchUsers(newUsername)
+        setSearchResults(Array.isArray(results) ? results : [])
+      } catch (error) {
+        console.error("Search error:", error)
+        setSearchResults([])
+      } finally {
+        setIsSearching(false)
+      }
+    }
+
+    const timeoutId = setTimeout(searchUsers, 500) 
+    return () => clearTimeout(timeoutId)
+  }, [newUsername])
+
+  const filteredContacts = contacts.filter((contact) => {
     if (!contact) return false;
     
-    const alias = contact.alias || "";
-    const username = contact.alias || ""; 
+    const alias = contact.alias || contact.name || ""
+    const username = contact.username || ""
     
     return (
       alias.toLowerCase().includes(searchQuery.toLowerCase()) ||
       username.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  });
+    )
+  })
+
+  const handleAddContact = async (user?: User) => {
+    const targetUser = user || searchResults[0]
+    const usernameToUse = user ? user.username : newUsername
+
+    if (!usernameToUse.trim()) {
+      setAddContactMessage({ type: "error", text: "Username is required" })
+      return
+    }
+
+    if (!targetUser && !user) {
+      setAddContactMessage({ type: "error", text: "Please select a user first" })
+      return
+    }
+
+    setIsAddingContact(true)
+    setAddContactMessage({ type: "", text: "" })
+
+    try {
+      await apiClient.addContact(
+        targetUser.id,
+        newAlias || targetUser.name || targetUser.username
+      )
+
+      setAddContactMessage({ type: "success", text: "Contact added successfully" })
+      setNewUsername("")
+      setNewAlias("")
+      setSearchResults([])
+      
+      const contactsData = await apiClient.getContacts()
+      setContacts(Array.isArray(contactsData) ? contactsData : [])
+      
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || 
+                          error.message || 
+                          "Failed to add contact"
+      setAddContactMessage({ type: "error", text: errorMessage })
+    } finally {
+      setIsAddingContact(false)
+    }
+  }
+
+  const handleRemoveContact = async (contactId: number) => {
+    try {
+      await apiClient.removeContact(contactId)
+      
+      const contactsData = await apiClient.getContacts()
+      setContacts(Array.isArray(contactsData) ? contactsData : [])
+      
+    } catch (error) {
+      console.error("Failed to remove contact:", error)
+      alert("Failed to remove contact")
+    }
+  }
+
+  // Kontaktni tahrirlash funksiyasi
+  const handleEditContact = (contact: Contact) => {
+    setEditingContact(contact)
+    setEditAlias(contact.alias || contact.name || "")
+  }
+
+  // Tahrirlashni saqlash funksiyasi
+  const handleSaveEdit = async () => {
+    if (!editingContact || !editAlias.trim()) return
+
+    setIsEditing(true)
+    try {
+      await apiClient.updateContact(editingContact.id, editAlias)
+      
+      // Kontaktlar ro'yxatini yangilash
+      const contactsData = await apiClient.getContacts()
+      setContacts(Array.isArray(contactsData) ? contactsData : [])
+      
+      setEditingContact(null)
+      setEditAlias("")
+      
+    } catch (error) {
+      console.error("Failed to update contact:", error)
+      alert("Failed to update contact")
+    } finally {
+      setIsEditing(false)
+    }
+  }
 
   const handleUserClick = (user: Contact) => {
     setSelectedUser(user)
@@ -85,12 +215,24 @@ export function ContactsModal({ isOpen, onClose }: ContactsModalProps) {
 
   const handleStartChat = (user: Contact) => {
     console.log("Starting chat with:", user.id)
+    onStartChat(user.contact_user || user.id)
+    onClose()
+  }
+
+  const handleClose = () => {
+    setSearchQuery("")
+    setNewUsername("")
+    setNewAlias("")
+    setAddContactMessage({ type: "", text: ""})
+    setSearchResults([])
+    setEditingContact(null)
+    setEditAlias("")
     onClose()
   }
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={onClose}>
+      <Dialog open={isOpen} onOpenChange={handleClose}>
         <DialogContent className="max-w-2xl max-h-[80vh] bg-gray-300">
           <DialogHeader>
             <DialogTitle>Contacts</DialogTitle>
@@ -100,7 +242,7 @@ export function ContactsModal({ isOpen, onClose }: ContactsModalProps) {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search..."
+                placeholder="Search contacts..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
@@ -109,14 +251,19 @@ export function ContactsModal({ isOpen, onClose }: ContactsModalProps) {
 
             <Tabs defaultValue="contacts" className="w-full">
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger className="cursor-pointer" value="contacts">Contact</TabsTrigger>
+                <TabsTrigger className="cursor-pointer" value="contacts">
+                  Contacts ({contacts.length})
+                </TabsTrigger>
+                <TabsTrigger className="cursor-pointer" value="add-contacts">
+                  Add Contact
+                </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="contacts">
+              <TabsContent value="contacts" className="space-y-4">
                 <ScrollArea className="h-96">
                   {isLoading ? (
                     <div className="flex justify-center items-center h-40">
-                      <p>Loading...</p>
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                     </div>
                   ) : error ? (
                     <div className="flex justify-center items-center h-40">
@@ -128,38 +275,71 @@ export function ContactsModal({ isOpen, onClose }: ContactsModalProps) {
                         <div
                           key={contact.id}
                           className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent cursor-pointer transition-colors"
-                        >
-                          <div className="relative">
-                            <Avatar className="h-10 w-10">
-                              <AvatarImage src={contact.image || "/placeholder.svg"} />
-                              <AvatarFallback>{(contact.alias || "U").charAt(0)}</AvatarFallback>
-                            </Avatar> 
-                          </div>
-                          <div className="flex-1 min-w-0" onClick={() => handleUserClick(contact)}>
+                        > 
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={contact.avatar || contact.image || "/placeholder.svg"} />
+                            <AvatarFallback>
+                              {(contact.alias || contact.name || "U").charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          
+                          <div 
+                            className="flex-1 min-w-0" 
+                            onClick={() => handleUserClick(contact)}
+                          >
                             <div className="flex items-center gap-2">
-                              <h3 className="font-medium text-sm truncate">{contact.alias || "Unknown"}</h3>
-                              {contact.role && (
-                                <Badge variant="secondary" className="text-xs">
-                                  {contact.role}
-                                </Badge>
+                              <h3 className="font-medium text-sm truncate">
+                                {contact.alias || contact.name || "Unknown"}
+                              </h3>
+                              {contact.is_online && (
+                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                               )}
                             </div>
-                            <p className="text-sm text-muted-foreground truncate">@{contact.alias || "user"}</p>
+                            <p className="text-sm text-muted-foreground truncate">
+                              @{contact.username || "user"}
+                            </p>
                           </div>
+                          
                           <div className="flex items-center gap-1">
                             <Button 
                               className="cursor-pointer" 
                               variant="ghost" 
                               size="sm" 
-                              onClick={() => handleStartChat(contact)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleStartChat(contact)
+                              }}
+                              title="Start chat"
                             >
                               <MessageSquare className="h-4 w-4" />
                             </Button>
-                            <Button className="cursor-pointer" variant="ghost" size="sm">
-                              <Phone className="h-4 w-4" />
+                            
+                            <Button 
+                              className="cursor-pointer" 
+                              variant="ghost" 
+                              size="sm"
+                              title="Edit contact"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleEditContact(contact)
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
                             </Button>
-                            <Button className="cursor-pointer" variant="ghost" size="sm">
-                              <MoreVertical className="h-4 w-4" />
+                            
+                            <Button 
+                              className="cursor-pointer" 
+                              variant="ghost" 
+                              size="sm"
+                              title="Remove contact"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (confirm("Are you sure you want to remove this contact?")) {
+                                  handleRemoveContact(contact.id)
+                                }
+                              }}
+                            >
+                              <X className="h-4 w-4" />
                             </Button>
                           </div>
                         </div>
@@ -167,20 +347,178 @@ export function ContactsModal({ isOpen, onClose }: ContactsModalProps) {
                       
                       {filteredContacts.length === 0 && searchQuery && (
                         <div className="text-center py-8">
-                          <p>No contacts</p>
+                          <p className="text-muted-foreground">No contacts found</p>
                         </div>
                       )}
                       
                       {filteredContacts.length === 0 && !searchQuery && !isLoading && (
                         <div className="text-center py-8">
-                          <p>Not found</p>
+                          <p className="text-muted-foreground">No contacts yet</p>
                         </div>
                       )}
                     </div>
                   )}
                 </ScrollArea>
               </TabsContent>
+
+              <TabsContent value="add-contacts" className="space-y-4">
+                <div className="space-y-4 p-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="username">Username *</Label>
+                    <Input
+                      id="username"
+                      placeholder="Enter username to search"
+                      value={newUsername}
+                      onChange={(e) => setNewUsername(e.target.value)}
+                    />
+                    {isSearching && (
+                      <p className="text-sm text-muted-foreground">Searching...</p>
+                    )}
+                  </div>
+                  
+                  {searchResults.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>Search Results:</Label>
+                      <div className="space-y-2">
+                        {searchResults.map((user) => (
+                          <div
+                            key={user.id}
+                            className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-accent"
+                            onClick={() => {
+                              setNewUsername(user.username)
+                              setNewAlias(user.name || user.username)
+                            }}
+                          >
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={user.avatar || "/placeholder.svg"} />
+                              <AvatarFallback>{user.name?.charAt(0) || user.username?.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1">
+                              <p className="font-medium text-sm">{user.name || user.username}</p>
+                              <p className="text-xs text-muted-foreground">@{user.username}</p>
+                            </div>
+                            <Button
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleAddContact(user)
+                              }}
+                            >
+                              <UserPlus className="h-3 w-3 mr-1" />
+                              Add
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="alias">Alias (Optional)</Label>
+                    <Input
+                      id="alias"
+                      placeholder="Custom name for this contact"
+                      value={newAlias}
+                      onChange={(e) => setNewAlias(e.target.value)}
+                    />
+                  </div>
+
+                  {addContactMessage.text && (
+                    <div className={`p-3 rounded text-sm ${
+                      addContactMessage.type === "error" 
+                        ? "bg-red-100 text-red-700 border border-red-200" 
+                        : "bg-green-100 text-green-700 border border-green-200"
+                    }`}>
+                      {addContactMessage.text}
+                    </div>
+                  )}
+
+                  <Button 
+                    onClick={() => handleAddContact()}
+                    disabled={isAddingContact || !newUsername.trim() || searchResults.length === 0}
+                    className="w-full"
+                  >
+                    {isAddingContact ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Adding...
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Add Contact
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </TabsContent>
             </Tabs>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Kontaktni tahrirlash modali */}
+      <Dialog open={!!editingContact} onOpenChange={() => setEditingContact(null)}>
+        <DialogContent className="max-w-md bg-gray-300">
+          <DialogHeader>
+            <DialogTitle>Edit Contact</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {editingContact && (
+              <div className="flex items-center gap-3 p-3 rounded-lg">
+                <Avatar className="h-12 w-12">
+                  <AvatarImage src={editingContact.avatar || editingContact.image || "/placeholder.svg"} />
+                  <AvatarFallback>
+                    {(editingContact.alias || editingContact.name || "U").charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-medium">@{editingContact.username || "user"}</p>
+                  <p className="text-sm text-muted-foreground">{editingContact.email}</p>
+                </div>
+              </div>
+            )}
+            
+            <div className="space-y-2">
+              <Label htmlFor="edit-alias">Alias *</Label>
+              <Input
+                id="edit-alias"
+                value={editAlias}
+                onChange={(e) => setEditAlias(e.target.value)}
+                placeholder="Enter contact alias"
+                disabled={isEditing}
+              />
+              <p className="text-xs text-muted-foreground">
+              </p>
+            </div>
+            
+            <div className="flex gap-2 justify-end pt-4">
+              <Button 
+                variant="outline" 
+                onClick={() => setEditingContact(null)}
+                disabled={isEditing}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleSaveEdit}
+                disabled={isEditing || !editAlias.trim()}
+                className="cursor-pointer"
+              >
+                {isEditing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Changes
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -192,7 +530,19 @@ export function ContactsModal({ isOpen, onClose }: ContactsModalProps) {
             setShowUserProfile(false)
             setSelectedUser(null)
           }}
-          user={selectedUser}
+          user={{
+            id: selectedUser.id,
+            fullname: selectedUser.alias || selectedUser.name || "Unknown",
+            username: selectedUser.username || selectedUser.name || "user",
+            email: selectedUser.email || "",
+            avatar: selectedUser.image || selectedUser.avatar || "",
+            phone_number: selectedUser.phone_number || "",
+            isContact: true,
+            isOnline: selectedUser.is_online,
+            lastSeen: selectedUser.lastSeen,
+            role: selectedUser.role
+          }}
+          isOwnProfile={false}
         />
       )}
     </>

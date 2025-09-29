@@ -27,6 +27,8 @@ export interface Message {
 }
 
 export interface Chat {
+  isOwner: boolean
+  isSubscribed: boolean
   id: number
   name: string
   sender: string
@@ -1230,11 +1232,12 @@ export function useChat() {
   }, [])
 
   // Kanal yaratish
-  const createChannel = useCallback(async (name: string, description?: string) => {
+  const createChannel = useCallback(async (name: string, username: string, description?: string,) => {
     try {
       const response = await apiClient.createChannel({
         name,
         description,
+        username,
         owner: currentUser.id
       })
       await loadChannels()
@@ -1278,6 +1281,7 @@ const loadChannels = useCallback(async () => {
 
   return {
     chats,
+    setChannels,
     groups,
     messages,
     apiClient,

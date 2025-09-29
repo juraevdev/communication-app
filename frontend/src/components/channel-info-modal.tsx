@@ -43,7 +43,7 @@ interface User {
 
 export function ChannelInfoModal({ isOpen, onClose, channel }: ChannelInfoModalProps) {
   const [isEditing, setIsEditing] = useState(false)
-  const [currentUser, setCurrentUser] = useState<User | null>(null) // Changed from array to single user
+  const [currentUser, setCurrentUser] = useState<User | null>(null) 
   const [editData, setEditData] = useState({
     name: channel.name,
     description: channel.description,
@@ -52,12 +52,10 @@ export function ChannelInfoModal({ isOpen, onClose, channel }: ChannelInfoModalP
   })
   const [isSubscribed, setIsSubscribed] = useState(channel.isSubscribed)
 
-  // Add useEffect to get current user
   useEffect(() => {
     const getCurrentUser = async () => {
       try {
-        // Adjust this based on how your app gets the current user
-        const user = await apiClient.getMe(); // or from localStorage/context
+        const user = await apiClient.getMe();
         setCurrentUser(user);
       } catch (error) {
         console.error("Error getting current user:", error);
@@ -98,10 +96,10 @@ export function ChannelInfoModal({ isOpen, onClose, channel }: ChannelInfoModalP
 
     try {
       if (isSubscribed) {
-        await apiClient.removeChannelMember(channel.id, currentUser.id);
+        await apiClient.unfollowChannel(channel.id, currentUser.id);
         console.log("Unsubscribed from", channel.id);
       } else {
-        await apiClient.addChannelMember(channel.id, currentUser.id);
+        await apiClient.followChannel(channel.id, currentUser.id);
         console.log("Subscribed to", channel.id);
       }
       
@@ -119,7 +117,7 @@ export function ChannelInfoModal({ isOpen, onClose, channel }: ChannelInfoModalP
     }
 
     try {
-      await apiClient.removeChannelMember(channel.id, currentUser.id);
+      await apiClient.unfollowChannel(channel.id, currentUser.id);
       console.log("Left channel:", channel.id);
       onClose();
     } catch (error) {
@@ -127,7 +125,6 @@ export function ChannelInfoModal({ isOpen, onClose, channel }: ChannelInfoModalP
     }
   }
 
-  // Update the button to use handleSubscribe for both join/leave
   const handleSubscribeButtonClick = () => {
     if (isSubscribed) {
       handleLeaveChannel();
@@ -222,7 +219,7 @@ export function ChannelInfoModal({ isOpen, onClose, channel }: ChannelInfoModalP
             <div>
               <Label className="text-sm font-medium">Username</Label>
               <p className="text-sm text-muted-foreground">
-                @{channel.username || "channel"} {/* Fixed: was channel.name */}
+                @{channel.username || "channel"} 
               </p>
             </div>
           </Tabs>

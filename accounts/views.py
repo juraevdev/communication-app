@@ -10,12 +10,13 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from chat.models import Message
 
 from accounts.services import get_or_create_room
-from accounts.models import CustomUser, Contact, UserProfile, BlockedUser
+from accounts.models import CustomUser, Contact
 from accounts.serializers import (
     RegisterSerializer, LoginSerializer,
-    UserProfileSerializer, ContactSerializer,
-    ContactSearchSerializer, ContactListSerializer,
-    UserSerializer, UserUpdateSerializer, ChangePasswordSerializer
+    ContactSerializer, ContactSearchSerializer, 
+    ContactListSerializer, ContactUpdateSerializer,
+    UserSerializer, UserUpdateSerializer, 
+    ChangePasswordSerializer
 )
 
 
@@ -58,45 +59,26 @@ class LoginApiView(generics.GenericAPIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 
-
-class UserUpdateApiView(generics.RetrieveUpdateAPIView):
-    serializer_class = UserUpdateSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_object(self):
-        return self.request.user
-    
-    
-
 class UserSearchApiView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         search_term = request.query_params.get('search', '')
         contact_user_ids = Contact.objects.filter(owner=request.user).values_list('contact_user_id', flat=True)
-        blocked_user_ids = BlockedUser.objects.filter(blocker=request.user).values_list('blocked_id', flat=True)
 
         users = CustomUser.objects.exclude(id=request.user.id)\
-                                  .exclude(id__in=contact_user_ids)\
-                                  .exclude(id__in=blocked_user_ids)
+                                  .exclude(id__in=contact_user_ids)
 
         if search_term:
             users = users.filter(
                 Q(username__icontains=search_term) |
                 Q(fullname__icontains=search_term) |
+                Q(phone_number__icontains=search_term) |
                 Q(email__icontains=search_term)
             )
 
         user_data = []
         for user in users:
-            try:
-                profile = user.profile
-                image_url = profile.image.url if profile.image else None
-                phone_number = profile.phone_number
-            except UserProfile.DoesNotExist:
-                image_url = None
-                phone_number = None
-
             unread_count = Message.objects.filter(
                 sender=user,
                 recipient=request.user,
@@ -113,8 +95,7 @@ class UserSearchApiView(APIView):
                 'username': user.username,
                 'full_name': user.fullname,
                 'email': user.email,
-                'image': image_url,
-                'phone_number': phone_number,
+                'phone_number': user.phone_number,
                 'is_online': user.is_online,
                 'last_seen': user.last_seen,
                 'unread_count': unread_count,
@@ -125,43 +106,35 @@ class UserSearchApiView(APIView):
         return Response(user_data, status=status.HTTP_200_OK)
 
 
-
 class UserFilterApiView(generics.ListAPIView):
     serializer_class = UserSerializer
     filter_backends = [filters.SearchFilter]
-    search_fields = ['username']
+    search_fields = ['phone_number']
     permission_classes = [permissions.IsAuthenticated]
     queryset = CustomUser.objects.all()
 
 
+class UserUpdateApiView(generics.GenericAPIView):
+    serializer_class = UserUpdateSerializer
 
-class UserProfileApiView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get(self, request):
-        profile, created = UserProfile.objects.get_or_create(user=request.user)
-        serializer = UserProfileSerializer(profile)
-        return Response(serializer.data)
-    
-    def patch(self, request):
-        profile, created = UserProfile.objects.get_or_create(user=request.user)
-        serializer = UserProfileSerializer(profile, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    
-    def post(self, request):
-        return self.patch(request)
+    def put(self, request):
+        try:
+            user = request.user
+            serializer = self.get_serializer(user, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except CustomUser.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)        
 
 
+class GetUserApiView(generics.GenericAPIView):
+    serializer_class = UserSerializer
 
-class ProfileListApiView(generics.GenericAPIView):
-    serializer_class = UserProfileSerializer
-
-    def get(self, request):
-        profile = UserProfile.objects.all()
-        serializer = self.get_serializer(profile, many=True)
+    def get(self, request, id):
+        user = CustomUser.objects.get(id=id)
+        serializer = self.get_serializer(user)
         return Response(serializer.data, status=status.HTTP_200_OK)    
 
 
@@ -190,7 +163,7 @@ class ContactSearchApiView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Contact.objects.filter(owner=self.request.user).select_related('contact_user', 'contact_user__profile')
+        return Contact.objects.filter(owner=self.request.user).select_related('contact_user')
 
 
 
@@ -201,6 +174,34 @@ class ContactListApiView(generics.GenericAPIView):
         contact = Contact.objects.all()
         serializer = self.get_serializer(contact, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+
+class ContactDeleteApiView(generics.GenericAPIView):
+    serializer_class = ContactSerializer
+
+    def delete(self, request, id):
+        try:
+            contact = Contact.objects.get(id=id)
+            contact.delete()
+            return Response({'message': 'Contact deleted'}, status=status.HTTP_200_OK)
+        except Contact.DoesNotExist:
+            return Response({'error': 'Contact not found'}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+
+class ContactUpdateApiView(generics.GenericAPIView):
+    serializer_class = ContactUpdateSerializer
+
+    def put(self, request, id):
+        try:
+            contact = Contact.objects.get(id=id)
+            serializer = self.get_serializer(contact, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Contact.DoesNotExist:
+            return Response({'error': 'Contact not found'}, status=status.HTTP_404_NOT_FOUND)
     
     
 

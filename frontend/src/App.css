@@ -40,3 +40,35 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Browser autocomplete va password manager-ni o'chirish */
+input[data-form-type="password"] {
+  -webkit-text-security: none !important;
+  -webkit-autofill: none !important;
+  background: transparent !important;
+}
+
+input[data-form-type="password"]::-webkit-autofill,
+input[data-form-type="password"]::-webkit-autofill:hover,
+input[data-form-type="password"]::-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px transparent inset !important;
+  background-color: transparent !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+input[data-form-type="search"] {
+  -webkit-autofill: none !important;
+}
+
+input[data-form-type="search"]::-webkit-autofill,
+input[data-form-type="search"]::-webkit-autofill:hover,
+input[data-form-type="search"]::-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px transparent inset !important;
+  background-color: transparent !important;
+}
+
+/* Password manager dropdown-ni yashirish */
+input[data-form-type="password"]::-webkit-credentials-auto-fill-button {
+  display: none !important;
+  visibility: hidden !important;
+}

@@ -76,31 +76,43 @@ export const apiClient = {
 
 
   async updateUserProfile(data: {
-    name: string;
+    fullname?: string;
     username: string;
+    email: string;
+    phone_number: string;
   }) {
-    const response = await api.put('/accounts/user/', data);
+    const response = await api.put('/accounts/user/edit/', data);
     return response.data
   },
 
-  async updateProfile(data: {
-    phone_number: string;
-  }) {
-    const response = await fetch('/api/v1/accounts/profile/', {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-      },
-      body: JSON.stringify(data),
-    });
+  // async updateProfile(data: {
+  //   phone_number: string;
+  // }) {
+  //   const response = await fetch('/api/v1/accounts/profile/', {
+  //     method: 'PATCH',
+  //     headers: {
+  //       'Content-Type': 'application/json',
+  //       'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+  //     },
+  //     body: JSON.stringify(data),
+  //   });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Profile update failed');
-    }
+  //   if (!response.ok) {
+  //     const errorData = await response.json();
+  //     throw new Error(errorData.message || 'Profile update failed');
+  //   }
 
-    return response.json();
+  //   return response.json();
+  // },
+
+  async getUserProfile(contactUserId: any) {
+    const response = await api.get(`accounts/user/${contactUserId}`)
+    return response.data
+  },
+
+  async getProfile() {
+    const response = await api.get('accounts/me/');
+    return response.data;
   },
 
   async changePassword(passwordData: any) {
@@ -143,6 +155,18 @@ export const apiClient = {
 
   async getContacts() {
     const response = await api.get('/accounts/contact/filter/');
+    return response.data;
+  },
+
+  async removeContact(contactId: number) {
+    const response = await api.delete(`/accounts/contact/delete/${contactId}/`);
+    return response.data;
+  },
+
+  async updateContact(contactId: number, alias: string) {
+    const response = await api.put(`accounts/contact/edit/${contactId}/`, {
+      alias: alias
+    });
     return response.data;
   },
 
@@ -397,6 +421,11 @@ export const apiClient = {
     return this.handleResponse(response);
   },
 
+  async getChannelsFilter() {
+    const response = await api.get('channels/filter/');
+    return response.data;
+  },
+
   async getChannelDetail(channelId: number) {
     const response = await fetch(`${BASE_URL}/api/v1/channels/${channelId}/`, {
       method: 'GET',
@@ -422,19 +451,27 @@ export const apiClient = {
     return this.handleResponse(response);
   },
 
-  async addChannelMember(channelId: number, userId: number) {
+
+  async followChannel(channelId: number, userId: number) {
     const response = await fetch(`${BASE_URL}/api/v1/channels/follow/`, {
       method: 'POST',
       headers: this.getHeaders(),
-      body: JSON.stringify({ channel: channelId, user: userId }),
+      body: JSON.stringify({
+        channel_id: channelId,
+        user_id: userId
+      }),
     });
     return this.handleResponse(response);
   },
 
-  async removeChannelMember(channelId: number, memberId: number) {
-    const response = await fetch(`${BASE_URL}/api/v1/channels/unfollow/${channelId}/${memberId}/`, {
-      method: 'DELETE',
+  async unfollowChannel(channelId: number, userId: number) {
+    const response = await fetch(`${BASE_URL}/api/v1/channels/unfollow/`, {
+      method: 'POST', 
       headers: this.getHeaders(),
+      body: JSON.stringify({
+        channel_id: channelId,
+        user_id: userId
+      }),
     });
     return this.handleResponse(response);
   },

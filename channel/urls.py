@@ -3,8 +3,8 @@ from django.urls import path
 from channel.views import (
     ChannelApiView, ChannelListApiView,
     ChannelDetailApiView, ChannelUpdateApiView,
-    ChannelDeleteApiView, FollowChannelApiView,
-    UnFollowChannelApiView
+    ChannelDeleteApiView, ChannelFilterApiView,
+    FollowChannelApiView, UnFollowChannelApiView
 )
 
 urlpatterns = [
@@ -13,6 +13,7 @@ urlpatterns = [
     path('<int:id>/', ChannelDetailApiView.as_view()),
     path('edit/<int:id>/', ChannelUpdateApiView.as_view()),
     path('delete/<int:id>/', ChannelDeleteApiView.as_view()),
+    path('filter/', ChannelFilterApiView.as_view()),
     path('follow/', FollowChannelApiView.as_view()),
     path('unfollow/', UnFollowChannelApiView.as_view()),
 ]

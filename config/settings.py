@@ -157,7 +157,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'accounts.CustomUser'
 
 
-from config.packages.swagger import *
+# from config.packages.swagger import *
 from config.packages.jazzmin import *
 from config.packages.channels import *
 from config.packages.simplejwt import *

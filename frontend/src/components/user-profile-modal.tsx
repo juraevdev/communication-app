@@ -1,9 +1,8 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Edit, Save, X, Eye, EyeOff } from "lucide-react"
 import { apiClient } from "@/lib/api"
@@ -13,7 +12,7 @@ interface UserProfileModalProps {
   onClose: () => void
   user: {
     id: number
-    name: string
+    fullname?: string
     username: string
     email: string
     avatar: string
@@ -29,14 +28,14 @@ interface UserProfileModalProps {
 export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }: UserProfileModalProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState({
-    name: user.name,
+    fullname: user.fullname,
     username: user.username,
-    phone: user.phone_number,
+    email: user.email,
+    phone_number: user.phone_number,
   })
   const [isSaving, setIsSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState({ type: "", text: "" })
 
-  // Password change states
   const [passwordData, setPasswordData] = useState({
     current_password: "",
     new_password: "",
@@ -47,10 +46,74 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isChangingPassword, setIsChangingPassword] = useState(false)
   const [passwordMessage, setPasswordMessage] = useState({ type: "", text: "" })
+  const [currentUserPhone, setCurrentUserPhone] = useState(user.phone_number)
+
+  useEffect(() => {
+    if (isOpen) {
+      // Barcha password inputlarni tozalash
+      setTimeout(() => {
+        const inputs = document.querySelectorAll('[data-form-type="password"]');
+        inputs.forEach(input => {
+          if (input instanceof HTMLInputElement) {
+            input.value = '';
+            // Browser autocomplete cache-ni tozalash
+            input.autocomplete = 'new-password';
+          }
+        });
+
+        // Search input maydonini ham tozalash (agar mavjud bo'lsa)
+        const searchInput = document.getElementById('chat-search-users-input');
+        if (searchInput instanceof HTMLInputElement) {
+          // Agar search maydonida password ma'lumotlari qolgan bo'lsa
+          const currentValue = searchInput.value;
+          if (currentValue && (currentValue.includes('@') || currentValue.length > 20)) {
+            searchInput.value = '';
+            // React state-ni ham yangilash uchun event dispatch qilish
+            const event = new Event('input', { bubbles: true });
+            searchInput.dispatchEvent(event);
+          }
+        }
+      }, 100);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setEditData({
+        fullname: user.fullname,
+        username: user.username,
+        email: user.email,
+        phone_number: user.phone_number,
+      })
+      setCurrentUserPhone(user.phone_number)
+    }
+  }, [isOpen, user])
+
+  useEffect(() => {
+    const fetchCurrentUserProfile = async () => {
+      if (!isOwnProfile || !isOpen || !isEditing) return;
+
+      try {
+        const profileData = await apiClient.getProfile()
+        console.log("Profil ma'lumotlari:", profileData)
+
+        if (profileData.phone_number) {
+          setCurrentUserPhone(profileData.phone_number)
+          setEditData(prev => ({
+            ...prev,
+            phone: profileData.phone_number
+          }))
+        }
+      } catch (error) {
+        console.error("Profil ma'lumotlarini olishda xato:", error)
+      }
+    }
+
+    fetchCurrentUserProfile()
+  }, [isOpen, isOwnProfile, isEditing])
 
   const handleSave = async () => {
-    // Validatsiya
-    if (!editData.name.trim()) {
+    if (!editData.fullname?.trim()) {
       setSaveMessage({ type: "error", text: "Name is required" })
       return
     }
@@ -64,27 +127,24 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
     setSaveMessage({ type: "", text: "" })
 
     try {
-      // User ma'lumotlarini yangilash
-      await apiClient.updateUserProfile({
-        name: editData.name,
-        username: editData.username,
-      })
+      if (isOwnProfile) {
+        await apiClient.updateUserProfile({
+          fullname: editData.fullname,
+          username: editData.username,
+          email: editData.email,
+          phone_number: editData.phone_number
+        })
 
-      // Profile ma'lumotlarini yangilash (telefon raqam)
-      await apiClient.updateProfile({
-        phone_number: editData.phone,
-      })
+        setCurrentUserPhone(editData.phone_number)
+      }
 
       setSaveMessage({ type: "success", text: "Profile updated successfully" })
       setIsEditing(false)
-      
-      // Ma'lumotlarni yangilash uchun parent componentga signal yuborish kerak bo'lsa
-      // onProfileUpdate?.() 
-      
+
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 
-                          error.message || 
-                          "Failed to update profile"
+      const errorMessage = error.response?.data?.message ||
+        error.message ||
+        "Failed to update profile"
       setSaveMessage({ type: "error", text: errorMessage })
     } finally {
       setIsSaving(false)
@@ -103,6 +163,14 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
       })
       setPasswordMessage({ type: "", text: "" })
       setSaveMessage({ type: "", text: "" })
+      // Edit data'ni ham reset qilish
+      setEditData({
+        fullname: user.fullname,
+        username: user.username,
+        email: user.email,
+        phone_number: user.phone_number,
+      })
+      setCurrentUserPhone(user.phone_number)
     }
   }
 
@@ -137,20 +205,20 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
         confirm_password: passwordData.confirm_password
       })
 
-      setPasswordMessage({ 
-        type: "success", 
-        text: response.message || "Password changed successfully" 
+      setPasswordMessage({
+        type: "success",
+        text: response.message || "Password changed successfully"
       })
-      
+
       setPasswordData({
         current_password: "",
         new_password: "",
         confirm_password: ""
       })
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 
-                          error.message || 
-                          "Failed to change password"
+      const errorMessage = error.response?.data?.message ||
+        error.message ||
+        "Failed to change password"
       setPasswordMessage({ type: "error", text: errorMessage })
     } finally {
       setIsChangingPassword(false)
@@ -177,6 +245,36 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
     }
   }
 
+  // Modal ochilganda va yopilganda input maydonlarini tozalash
+  useEffect(() => {
+    if (isOpen) {
+      // Barcha password inputlarni tozalash
+      setTimeout(() => {
+        const inputs = document.querySelectorAll('[data-form-type="password"]');
+        inputs.forEach(input => {
+          if (input instanceof HTMLInputElement) {
+            input.value = '';
+            // Browser autocomplete cache-ni tozalash
+            input.autocomplete = 'new-password';
+          }
+        });
+
+        // Search input maydonini ham tozalash (agar mavjud bo'lsa)
+        const searchInput = document.getElementById('chat-search-users-input');
+        if (searchInput instanceof HTMLInputElement) {
+          // Agar search maydonida password ma'lumotlari qolgan bo'lsa
+          const currentValue = searchInput.value;
+          if (currentValue && (currentValue.includes('@') || currentValue.length > 20)) {
+            searchInput.value = '';
+            // React state-ni ham yangilash uchun event dispatch qilish
+            const event = new Event('input', { bubbles: true });
+            searchInput.dispatchEvent(event);
+          }
+        }
+      }, 100);
+    }
+  }, [isOpen]);
+
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md bg-gray-300">
@@ -198,56 +296,62 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
 
         <div className="space-y-6">
           <div className="flex flex-col items-center text-center space-y-4">
-            <div className="relative">
-              <Avatar className="h-20 w-20">
-                <AvatarImage src={user.avatar || "/placeholder.svg"} />
-                <AvatarFallback className="text-lg">{user.name}</AvatarFallback>
-              </Avatar>
-            </div>
-
             {isEditing ? (
               <div className="w-full space-y-3">
                 <div>
-                  <Label htmlFor="edit-name">Full Name *</Label>
+                  <Label htmlFor="user-profile-edit-name">Full Name *</Label>
                   <Input
-                    id="edit-name"
-                    value={editData.name}
-                    onChange={(e) => handleEditChange("name", e.target.value)}
+                    id="user-profile-edit-name"
+                    value={editData.fullname}
+                    onChange={(e) => handleEditChange("fullname", e.target.value)}
                     disabled={isSaving}
+                    autoComplete="name"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="edit-username">Username *</Label>
+                  <Label htmlFor="user-profile-edit-username">Username *</Label>
                   <Input
-                    id="edit-username"
+                    id="user-profile-edit-username"
                     value={editData.username}
                     onChange={(e) => handleEditChange("username", e.target.value)}
                     placeholder="@username"
                     disabled={isSaving}
+                    autoComplete="username"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="edit-phone">Phone Number</Label>
+                  <Label htmlFor="user-profile-edit-email">Email *</Label>
                   <Input
-                    id="edit-phone"
-                    value={editData.phone}
-                    onChange={(e) => handleEditChange("phone", e.target.value)}
+                    id="user-profile-edit-email"
+                    value={editData.email}
+                    onChange={(e) => handleEditChange("email", e.target.value)}
+                    placeholder="@email"
+                    disabled={isSaving}
+                    autoComplete="email"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="user-profile-edit-phone">Phone Number</Label>
+                  <Input
+                    id="user-profile-edit-phone"
+                    value={editData.phone_number}
+                    onChange={(e) => handleEditChange("phone_number", e.target.value)}
                     placeholder="+1 (555) 123-4567"
                     disabled={isSaving}
+                    autoComplete="tel"
                   />
                 </div>
 
                 {saveMessage.text && (
-                  <div className={`p-2 rounded text-sm ${
-                    saveMessage.type === "error" 
-                      ? "bg-red-100 text-red-700 border border-red-200" 
-                      : "bg-green-100 text-green-700 border border-green-200"
-                  }`}>
+                  <div className={`p-2 rounded text-sm ${saveMessage.type === "error"
+                    ? "bg-red-100 text-red-700 border border-red-200"
+                    : "bg-green-100 text-green-700 border border-green-200"
+                    }`}>
                     {saveMessage.text}
                   </div>
                 )}
 
-                <Button 
+                <Button
                   onClick={handleSave}
                   disabled={isSaving}
                   className="w-full cursor-pointer hover:scale-105 transition duration-300"
@@ -267,11 +371,10 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
               </div>
             ) : (
               <div className="w-full space-y-2">
-                <h3 className="text-xl font-semibold">{user.name}</h3>
-                <p className="text-muted-foreground">@{user.username}</p>
-                {user.phone_number && (
+                <p className="text-muted-foreground">@{user.fullname}</p>
+                {/* {user.phone_number && (
                   <p className="text-sm text-muted-foreground">{user.phone_number}</p>
-                )}
+                )} */}
               </div>
             )}
           </div>
@@ -293,22 +396,10 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
                     <Label className="text-sm font-medium">Username</Label>
                     <p className="text-sm text-muted-foreground">@{user.username}</p>
                   </div>
-                  {user.phone_number && (
-                    <div>
-                      <Label className="text-sm font-medium">Phone</Label>
-                      <p className="text-sm text-muted-foreground">{user.phone_number}</p>
-                    </div>
-                  )}
-                  {user.role && (
-                    <div>
-                      <Label className="text-sm font-medium">Role</Label>
-                      <p className="text-sm text-muted-foreground">{user.role}</p>
-                    </div>
-                  )}
                   <div>
-                    <Label className="text-sm font-medium">Status</Label>
+                    <Label className="text-sm font-medium">Phone</Label>
                     <p className="text-sm text-muted-foreground">
-                      {user.isOnline ? "Online" : `Last seen ${new Date(user.lastSeen).toLocaleString()}`}
+                      {isOwnProfile ? (currentUserPhone || "Not provided") : (user.phone_number || "Not provided")}
                     </p>
                   </div>
                 </div>
@@ -318,16 +409,19 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
                 {isOwnProfile ? (
                   <>
                     <div className="space-y-2">
-                      <Label htmlFor="current_password">Current Password *</Label>
+                      <Label htmlFor="user-profile-current-password">Current Password *</Label>
                       <div className="relative">
                         <Input
-                          id="current_password"
+                          id="user-profile-current-password"
+                          name="user-profile-current-password"
                           type={showCurrentPassword ? "text" : "password"}
                           value={passwordData.current_password}
                           onChange={(e) => handlePasswordChange("current_password", e.target.value)}
                           className="pr-10"
                           placeholder="Enter your current password"
                           disabled={isChangingPassword}
+                          autoComplete="new-password"
+                          data-form-type="password" // <-- Yangi atribut qo'shildi
                         />
                         <Button
                           type="button"
@@ -343,16 +437,19 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="new_password">New Password *</Label>
+                      <Label htmlFor="user-profile-new-password">New Password *</Label>
                       <div className="relative">
                         <Input
-                          id="new_password"
+                          id="user-profile-new-password"
+                          name="user-profile-new-password"
                           type={showNewPassword ? "text" : "password"}
                           value={passwordData.new_password}
                           onChange={(e) => handlePasswordChange("new_password", e.target.value)}
                           className="pr-10"
                           placeholder="Enter your new password"
                           disabled={isChangingPassword}
+                          autoComplete="new-password"
+                          data-form-type="password" // <-- Yangi atribut qo'shildi
                         />
                         <Button
                           type="button"
@@ -368,16 +465,19 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="confirm_password">Confirm New Password *</Label>
+                      <Label htmlFor="user-profile-confirm-password">Confirm New Password *</Label>
                       <div className="relative">
                         <Input
-                          id="confirm_password"
+                          id="user-profile-confirm-password"
+                          name="user-profile-confirm-password"
                           type={showConfirmPassword ? "text" : "password"}
                           value={passwordData.confirm_password}
                           onChange={(e) => handlePasswordChange("confirm_password", e.target.value)}
                           className="pr-10"
                           placeholder="Confirm your new password"
                           disabled={isChangingPassword}
+                          autoComplete="new-password"
+                          data-form-type="password" // <-- Yangi atribut qo'shildi
                         />
                         <Button
                           type="button"
@@ -393,16 +493,15 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
                     </div>
 
                     {passwordMessage.text && (
-                      <div className={`p-3 rounded text-sm ${
-                        passwordMessage.type === "error" 
-                          ? "bg-red-100 text-red-700 border border-red-200" 
-                          : "bg-green-100 text-green-700 border border-green-200"
-                      }`}>
+                      <div className={`p-3 rounded text-sm ${passwordMessage.type === "error"
+                        ? "bg-red-100 text-red-700 border border-red-200"
+                        : "bg-green-100 text-green-700 border border-green-200"
+                        }`}>
                         {passwordMessage.text}
                       </div>
                     )}
 
-                    <Button 
+                    <Button
                       onClick={changePassword}
                       disabled={isChangingPassword || !passwordData.current_password || !passwordData.new_password}
                       className="w-full cursor-pointer hover:scale-105 transition duration-300"

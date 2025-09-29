@@ -1,4 +1,4 @@
-from rest_framework import generics, status, permissions
+from rest_framework import generics, status, permissions, filters
 from rest_framework.response import Response
 
 from channel.permissions import IsOwner
@@ -6,7 +6,7 @@ from channel.models import Channel, ChannelMessage
 from channel.serializers import (
     ChannelSerializer, ChannelMessageSerializer,
     FollowChannelSerializer, ChannelUpdateSerializer,
-    ChannelCreateSerializer
+    ChannelCreateSerializer, ChannelListSerializer
 )
 
 from django.db.models import Q
@@ -27,21 +27,41 @@ class ChannelApiView(generics.GenericAPIView):
     
     
     
+# class ChannelListApiView(generics.GenericAPIView):
+#     serializer_class = ChannelSerializer
+#     permission_classes = [permissions.IsAuthenticated] 
+    
+#     def get(self, request):
+#         try:
+#             user_channels = Channel.objects.filter(
+#                 Q(members=request.user) | Q(owner=request.user)
+#             ).distinct()
+            
+#             serializer = self.get_serializer(user_channels, many=True)
+#             return Response(serializer.data, status=status.HTTP_200_OK)
+#         except Exception as e:
+#             return Response({'message': 'Error retrieving channels', 'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
 class ChannelListApiView(generics.GenericAPIView):
     serializer_class = ChannelSerializer
     permission_classes = [permissions.IsAuthenticated] 
     
     def get(self, request):
         try:
-            user_channels = Channel.objects.filter(
-                Q(members=request.user) | Q(owner=request.user)
-            ).distinct()
+            # Barcha kanallarni olish (faqat foydalanuvchi kanallarini emas)
+            all_channels = Channel.objects.all()
             
-            serializer = self.get_serializer(user_channels, many=True)
+            # Serializer da context yuborish
+            serializer = self.get_serializer(
+                all_channels, 
+                many=True, 
+                context={'request': request}  # Bu muhim!
+            )
+            
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'message': 'Error retrieving channels', 'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    
+            
     
 
 class ChannelDeleteApiView(generics.GenericAPIView):
@@ -91,6 +111,15 @@ class ChannelDetailApiView(generics.GenericAPIView):
         serializer = self.get_serializer(channel)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
+
+
+class ChannelFilterApiView(generics.ListAPIView):
+    serializer_class = ChannelSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['username']
+    permission_classes = [permissions.IsAuthenticated]
+    queryset = Channel.objects.all()
+    
     
     
 class FollowChannelApiView(generics.GenericAPIView):
@@ -98,40 +127,68 @@ class FollowChannelApiView(generics.GenericAPIView):
     
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid()
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
         channel_id = serializer.validated_data['channel_id']
         user_id = serializer.validated_data['user_id']
         
         try:
             channel = Channel.objects.get(id=channel_id)
             user = request.user
-        except:
-            if Channel.DoesNotExist():
-                return Response({'error': 'Channel not found'}, status=status.HTTP_404_NOT_FOUND)
-            elif CustomUser.DoesNotExist():
-                return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            # Security check: ensure user can only follow for themselves
+            if user.id != user_id:
+                return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+                
+        except Channel.DoesNotExist:
+            return Response({'error': 'Channel not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if user in channel.members.all():
+            return Response({
+                'message': 'Already following this channel',
+                'is_subscribed': True
+            }, status=status.HTTP_200_OK)
+            
         channel.members.add(user)
         
-        return Response({'message': f'{user.fullname} followed to {channel.name}!'}, status=status.HTTP_200_OK)
-    
-    
+        return Response({
+            'message': f'{user.fullname} followed {channel.name}!',
+            'is_subscribed': True
+        }, status=status.HTTP_200_OK)
+
+
 class UnFollowChannelApiView(generics.GenericAPIView):
     serializer_class = FollowChannelSerializer
     
-    def post(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):  # Using POST since URL has no parameters
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid()
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
         channel_id = serializer.validated_data['channel_id']
         user_id = serializer.validated_data['user_id']
         
         try:
             channel = Channel.objects.get(id=channel_id)
             user = request.user
-        except:
-            if Channel.DoesNotExist():
-                return Response({'error': 'Channel not found'}, status=status.HTTP_404_NOT_FOUND)
-            elif CustomUser.DoesNotExist():
-                return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            # Security check: ensure user can only unfollow for themselves
+            if user.id != user_id:
+                return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+                
+        except Channel.DoesNotExist:
+            return Response({'error': 'Channel not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if user not in channel.members.all():
+            return Response({
+                'message': 'Not following this channel',
+                'is_subscribed': False
+            }, status=status.HTTP_200_OK)
+            
         channel.members.remove(user)
         
-        return Response({'message': f'{user.fullname} unfollowed from {channel.name}!'}, status=status.HTTP_200_OK)
+        return Response({
+            'message': f'{user.fullname} unfollowed from {channel.name}!',
+            'is_subscribed': False
+        }, status=status.HTTP_200_OK)

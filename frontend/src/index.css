@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Shadcn theme (agar v0.dev keltirgan bo‘lsa qo‘shing) */
+/* Shadcn theme (agar v0.dev keltirgan bo'lsa qo'shing) */
 @layer base {
   :root {
     --radius: 0.5rem;
@@ -9,4 +9,32 @@
 
 body {
   font-family: 'Inter', sans-serif;
+}
+
+/* Browser autocomplete va password manager-ni o'chirish */
+input[data-form-type="password"] {
+  -webkit-text-security: none !important;
+  -webkit-autofill: none !important;
+  background: transparent !important;
+}
+
+input[data-form-type="password"]::-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px transparent inset !important;
+  background-color: transparent !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+input[data-form-type="search"] {
+  -webkit-autofill: none !important;
+}
+
+input[data-form-type="search"]::-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px transparent inset !important;
+  background-color: transparent !important;
+}
+
+/* Password manager dropdown-ni yashirish */
+input[data-form-type="password"]::-webkit-credentials-auto-fill-button {
+  display: none !important;
+  visibility: hidden !important;
 }

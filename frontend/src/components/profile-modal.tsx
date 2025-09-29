@@ -15,7 +15,7 @@ interface ProfileModalProps {
     email: string
     avatar: string
     bio: string
-    phone: string
+    phone_number?: string
     isContact: boolean
     isOnline: boolean
     lastSeen: string

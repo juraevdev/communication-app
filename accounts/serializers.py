@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from accounts.models import CustomUser, UserProfile, Contact
+from accounts.models import CustomUser, Contact
 
 from chat.models import Message
 
@@ -9,48 +9,17 @@ class UserSerializer(serializers.ModelSerializer):
         model = CustomUser
         fields = '__all__'
 
-
-class UserProfileSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserProfile
-        fields = '__all__'
-
-
-class UserProfileUpdateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserProfile
-        fields = ["id", "phone_number", "image"]
-
-
 class UserUpdateSerializer(serializers.ModelSerializer):
-    profile = UserProfileUpdateSerializer(required=False)
-
     class Meta:
         model = CustomUser
-        fields = ["username", "fullname", "email", "profile", "password"]
-
-    def update(self, instance, validated_data):
-        profile_data = validated_data.pop("profile", None)
-
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-
-        if profile_data:
-            profile = instance.profile.first()
-            if profile:
-                for attr, value in profile_data.items():
-                    setattr(profile, attr, value)
-                profile.save()
-            else:
-                UserProfile.objects.create(user=instance, **profile_data)
-
-        return instance
+        fields = ['fullname', 'username', 'email', 'phone_number']
 
 
 class RegisterSerializer(serializers.Serializer):
     fullname = serializers.CharField()
+    username = serializers.CharField()
     email = serializers.EmailField()
+    phone_number = serializers.CharField()
     password = serializers.CharField()
     confirm_password = serializers.CharField()
 
@@ -64,7 +33,9 @@ class RegisterSerializer(serializers.Serializer):
     def create(self, validated_data):
         user = CustomUser.objects.create_user(
             fullname = validated_data['fullname'],
+            username = validated_data['username'],
             email = validated_data['email'],
+            phone_number = validated_data['phone_number'],
             password = validated_data['password'],
         )
         return {
@@ -94,22 +65,17 @@ class ContactSerializer(serializers.ModelSerializer):
 
 
 class ContactSearchSerializer(serializers.ModelSerializer):
-    image = serializers.SerializerMethodField()
-    is_online = serializers.SerializerMethodField()
-    unread_count = serializers.SerializerMethodField()
+    username = serializers.CharField(source='contact_user.username', read_only=True)
+    name = serializers.CharField(source='contact_user.fullname', read_only=True)
+    email = serializers.CharField(source='contact_user.email', read_only=True)
+    phone_number = serializers.CharField(source='contact_user.phone_number', read_only=True)
 
     class Meta:
         model = Contact
-        fields = ['id', 'alias', 'image', 'owner', 'contact_user', 'is_online', 'unread_count']
-
-    def get_image(self, obj):
-        profile = getattr(obj.contact_user, 'profile')
-        if profile and profile.image:
-            return self.context['request'].build_absolute_uri(profile.image.url)
-        return None
-
-    def get_is_online(self, obj):
-        return getattr(obj.contact_user, 'is_online', False)
+        fields = [
+            'id', 'alias', 'owner', 'contact_user',
+            'username', 'name', 'email', 'phone_number'
+        ]
     
     def get_unread_count(self, obj):
         request = self.context.get("request")
@@ -126,6 +92,13 @@ class ContactListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contact
         fields = ['id', 'owner', 'contact_user', 'alias']
+
+
+
+class ContactUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Contact
+        fields = ['alias']
 
 
 

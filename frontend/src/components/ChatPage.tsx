@@ -19,7 +19,6 @@ import {
   MessageSquare,
   Users,
   Hash,
-  // Settings,
   UserPlus,
   LogOut,
   Send,
@@ -33,7 +32,9 @@ import {
   Music,
   FileText,
   X,
-  Reply
+  Reply,
+  UserCheck,
+  UserMinus
 } from "lucide-react"
 
 import { ProfileModal } from "./profile-modal"
@@ -51,14 +52,15 @@ export default function ChatPage() {
   const {
     chats,
     groups,
-    channels, // channels ni qo'shing
+    channels,
     messages,
     chatWsRef,
     groupWsRef,
-    channelWsRef, // channelWsRef ni qo'shing
+    channelWsRef,
     currentUser,
     isConnected,
     setGroups,
+    setChannels,
     markAsRead,
     sendMessage,
     connectToGroup,
@@ -66,8 +68,8 @@ export default function ChatPage() {
     sendGroupMessage,
     connectToChatRoom,
     markGroupMessageAsRead,
-    connectToChannel, // connectToChannel ni qo'shing
-    sendChannelMessage, // sendChannelMessage ni qo'shing
+    connectToChannel,
+    sendChannelMessage,
   } = useChat();
 
   const [selectedChat, setSelectedChat] = useState<any>(null)
@@ -87,6 +89,7 @@ export default function ChatPage() {
   const [activeTab, setActiveTab] = useState<"private" | "groups" | "channels">("private")
   const [, setGroupMembers] = useState<any[]>([])
   const [replyingTo, setReplyingTo] = useState<any>(null)
+  const [isChannelActionLoading, setIsChannelActionLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [fileUpload, setFileUpload] = useState<{
     file: File | null;
@@ -103,12 +106,10 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, selectedChat?.id])
 
-  // Mark messages as read when chat is selected
   useEffect(() => {
     if (selectedChat && selectedChat.unread > 0 && selectedChat.type !== "group") {
       const roomId = selectedChat.room_id || selectedChat.id?.toString()
@@ -150,6 +151,50 @@ export default function ChatPage() {
     setReplyingTo(null)
   }
 
+  const handleChannelAction = async () => {
+    if (!selectedChat || selectedChat.type !== "channel" || !currentUser) return
+
+    setIsChannelActionLoading(true)
+    try {
+      const response = selectedChat.isSubscribed 
+        ? await apiClient.unfollowChannel(selectedChat.id, currentUser.id)
+        : await apiClient.followChannel(selectedChat.id, currentUser.id);
+      
+      // Get the new subscription status from the response
+      const newSubscriptionStatus = response.is_subscribed;
+      
+      // Update the selected chat state
+      setSelectedChat((prev: any) => ({
+        ...prev,
+        isSubscribed: newSubscriptionStatus
+      }))
+
+      // Update channels list
+      setChannels(prev => prev.map(channel =>
+        channel.id === selectedChat.id 
+          ? { ...channel, isSubscribed: newSubscriptionStatus }
+          : channel
+      ))
+
+      // Connect to channel after joining, disconnect after leaving
+      if (newSubscriptionStatus) {
+        const channelId = selectedChat.id.toString()
+        connectToChannel(channelId)
+      } else {
+        // Optionally disconnect from channel WebSocket
+        if (channelWsRef.current) {
+          channelWsRef.current.close()
+        }
+      }
+      
+    } catch (error) {
+      console.error("Failed to perform channel action:", error)
+      alert("Failed to perform channel action. Please try again.")
+    } finally {
+      setIsChannelActionLoading(false)
+    }
+  }
+
   const handleReply = (msg: any) => {
     setReplyingTo(msg)
   }
@@ -187,7 +232,6 @@ export default function ChatPage() {
     }
   }
 
-  // Cleanup typing timeout
   useEffect(() => {
     return () => {
       if (isTypingTimeoutRef.current) {
@@ -238,6 +282,10 @@ export default function ChatPage() {
 
 
   const handleChatSelect = async (chat: any) => {
+    console.log("Selected chat:", chat); // Debug
+    console.log("Chat isSubscribed:", chat.isSubscribed); // Debug
+    console.log("Chat isOwner:", chat.isOwner); // Debug
+    
     setSelectedChat(chat)
     setLoadingMessages(true)
     setReplyingTo(null)
@@ -245,7 +293,6 @@ export default function ChatPage() {
     setSearchResults([])
 
     if (chat.type === "group") {
-      // Guruh unread count'ni 0 qilish
       setGroups(prev => prev.map(g =>
         g.id === chat.id ? { ...g, unread: 0 } : g
       ));
@@ -253,11 +300,12 @@ export default function ChatPage() {
       const groupId = chat.id.toString()
       connectToGroup(groupId)
     } else if (chat.type === "channel") {
-      // Kanalga ulanish
       const channelId = chat.id.toString()
-      connectToChannel(channelId)
+      // Only connect to channel if user is subscribed OR is owner
+      if (chat.isSubscribed || chat.isOwner) {
+        connectToChannel(channelId)
+      }
     } else {
-      // Shaxsiy chat
       const roomId = chat.room_id || chat.id?.toString()
       if (roomId) {
         connectToChatRoom(roomId)
@@ -278,12 +326,44 @@ export default function ChatPage() {
     setLoadingMessages(false)
   }
 
-  // Handle search user selection
+  const handleStartChatFromContacts = async (contactUserId: number) => {
+    try {
+      setLoadingMessages(true);
+
+      const userData = await apiClient.getUserProfile(contactUserId);
+
+      const response = await apiClient.startChat(contactUserId);
+      if (response.room_id) {
+        const newChat = {
+          id: contactUserId,
+          sender_id: contactUserId,
+          sender: userData.fullname || userData.username || "User",
+          name: userData.fullname || userData.username || "User",
+          email: userData.email || "",
+          avatar: userData.avatar || "",
+          type: "private",
+          unread: 0,
+          last_message: "",
+          timestamp: new Date().toISOString(),
+          room_id: response.room_id.toString()
+        };
+
+        setSelectedChat(newChat);
+        connectToChatRoom(response.room_id.toString());
+      }
+
+      setShowContacts(false);
+      setLoadingMessages(false);
+    } catch (error) {
+      console.error("Failed to start chat from contacts:", error);
+      setLoadingMessages(false);
+    }
+  };
+
   const handleSearchUserSelect = async (user: any) => {
     try {
-      setLoadingMessages(true)
+      setLoadingMessages(true);
 
-      // Create a chat object similar to existing chats
       const newChat = {
         id: user.id,
         sender_id: user.id,
@@ -297,23 +377,21 @@ export default function ChatPage() {
         timestamp: new Date().toISOString()
       }
 
-      // Start chat with this user
-      const response = await apiClient.startChat(user.id)
+      const response = await apiClient.startChat(user.id);
       if (response.room_id) {
-        const updatedChat = { ...newChat, room_id: response.room_id.toString() }
-        setSelectedChat(updatedChat)
-        connectToChatRoom(response.room_id.toString())
+        const updatedChat = { ...newChat, room_id: response.room_id.toString() };
+        setSelectedChat(updatedChat);
+        connectToChatRoom(response.room_id.toString());
       }
 
-      // Clear search
-      setSearchQuery("")
-      setSearchResults([])
-      setLoadingMessages(false)
+      setSearchQuery("");
+      setSearchResults([]);
+      setLoadingMessages(false);
     } catch (error) {
-      console.error("Failed to start chat:", error)
-      setLoadingMessages(false)
+      console.error("Failed to start chat:", error);
+      setLoadingMessages(false);
     }
-  }
+  };
 
   const handleCreateGroup = async (groupData: { name: string; description?: string }) => {
     try {
@@ -351,16 +429,42 @@ export default function ChatPage() {
   }
 
   const formatMessageTime = (timestamp: string) => {
-    if (!timestamp) return ""
+    if (!timestamp) return "";
     try {
-      return new Date(timestamp).toLocaleTimeString("uz-UZ", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+      const date = new Date(timestamp);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+      // Agar bugungi sana bo'lsa, faqat vaqtni ko'rsat
+      if (messageDate.getTime() === today.getTime()) {
+        return date.toLocaleTimeString("uz-UZ", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+      // Agar kechagi sana bo'lsa
+      else if (messageDate.getTime() === yesterday.getTime()) {
+        return "Kecha";
+      }
+      // Agar 7 kundan kam bo'lsa, hafta kunini ko'rsat
+      else if (now.getTime() - date.getTime() < 7 * 24 * 60 * 60 * 1000) {
+        return date.toLocaleDateString("uz-UZ", { weekday: "long" });
+      }
+      // Aks holda to'liq sanani ko'rsat
+      else {
+        return date.toLocaleDateString("uz-UZ", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "2-digit",
+        });
+      }
     } catch {
-      return timestamp
+      return timestamp;
     }
-  }
+  };
 
   const formatChatTime = (timestamp: string): string => {
     if (!timestamp) return ""
@@ -387,6 +491,47 @@ export default function ChatPage() {
       return timestamp || ""
     }
   }
+
+  const groupMessagesByDate = (messages: any[]) => {
+    const grouped: { [key: string]: any[] } = {};
+
+    messages.forEach((msg) => {
+      if (!msg.timestamp) return;
+
+      const date = new Date(msg.timestamp);
+      const dateKey = date.toDateString(); // Unique key for each date
+
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = [];
+      }
+      grouped[dateKey].push(msg);
+    });
+
+    return grouped;
+  };
+
+  const formatDateHeader = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+    if (messageDate.getTime() === today.getTime()) {
+      return "Bugun";
+    } else if (messageDate.getTime() === yesterday.getTime()) {
+      return "Kecha";
+    } else if (now.getTime() - date.getTime() < 7 * 24 * 60 * 60 * 1000) {
+      return date.toLocaleDateString("uz-UZ", { weekday: "long" });
+    } else {
+      return date.toLocaleDateString("uz-UZ", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      });
+    }
+  };
 
   const isFileMessage = (msg: any): boolean => {
     if (msg.message_type === "file") return true;
@@ -444,7 +589,10 @@ export default function ChatPage() {
         chatsToFilter = groups
         break
       case "channels":
-        chatsToFilter = channels // Kanal qo'shildi
+        // Faqat a'zo bo'lgan yoki ega bo'lgan kanallarni ko'rsatish
+        chatsToFilter = channels.filter(channel => 
+          channel.isSubscribed === true || channel.isOwner === true
+        )
         break
       default:
         chatsToFilter = chats
@@ -457,7 +605,6 @@ export default function ChatPage() {
     })
   }
 
-  // Show search results if searching, otherwise show filtered chats
   const displayChats = searchQuery.trim() ? searchResults : getFilteredChats()
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -492,14 +639,12 @@ export default function ChatPage() {
       const isChannel = selectedChat.type === "channel";
 
       if (isGroup || isChannel) {
-        // Guruh yoki kanal uchun fayl yuklash
         const reader = new FileReader();
 
         reader.onload = (e) => {
           const base64Data = e.target?.result as string;
           const base64Content = base64Data.split(';base64,')[1];
 
-          // Kanal uchun WebSocket
           if (isChannel && channelWsRef.current?.readyState === WebSocket.OPEN) {
             channelWsRef.current.send(JSON.stringify({
               type: "file_upload",
@@ -509,7 +654,6 @@ export default function ChatPage() {
               file_size: fileUpload.file!.size
             }));
           }
-          // Guruh uchun WebSocket
           else if (isGroup && groupWsRef.current?.readyState === WebSocket.OPEN) {
             groupWsRef.current.send(JSON.stringify({
               type: "file_upload",
@@ -662,7 +806,6 @@ export default function ChatPage() {
     }
   }
 
-
   const currentMessages = getCurrentMessages()
 
   const safeCurrentUser = currentUser || {
@@ -685,11 +828,36 @@ export default function ChatPage() {
     email: selectedChat.email || "",
     avatar: selectedChat.avatar || "",
     bio: selectedChat.bio || "",
-    phone: selectedChat.phone || "",
+    phone: selectedChat.phone_number || "",
     isContact: selectedChat.isContact || false,
     isOnline: selectedChat.isOnline || false,
     lastSeen: selectedChat.lastSeen || new Date().toISOString()
   } : safeCurrentUser
+
+  // Check if current user can send messages to channel
+  const canSendMessage = () => {
+    if (!selectedChat) return false
+    
+    if (selectedChat.type === "channel") {
+      // Only channel owner can send messages
+      return selectedChat.isOwner === true || selectedChat.owner_id === currentUser?.id
+    }
+    
+    return true
+  }
+
+  // Check if user should see join/leave buttons
+  const shouldShowChannelActions = () => {
+    if (!selectedChat || selectedChat.type !== "channel") return false
+    
+    // Channel owner doesn't need join/leave buttons
+    if (selectedChat.isOwner === true || selectedChat.owner_id === currentUser?.id) {
+      return false
+    }
+    
+    // Regular users see join/leave buttons
+    return true
+  }
 
   useEffect(() => {
     console.log("[UI Debug] Messages updated:", messages)
@@ -744,12 +912,15 @@ export default function ChatPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
+              id="chat-search-users-input"
+              name="chat-search-users"
               placeholder="Search users..."
               value={searchQuery}
+              autoComplete="new-password"
+              data-form-type="search"
               onChange={async (e) => {
                 const value = e.target.value
                 setSearchQuery(value)
-
                 if (value.trim()) {
                   setIsSearching(true)
                   try {
@@ -956,7 +1127,7 @@ export default function ChatPage() {
                   <div className="text-gray-400">Loading messages...</div>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {currentMessages.length === 0 ? (
                     <div className="text-center py-8">
                       <MessageSquare className="h-8 w-8 text-gray-400 mx-auto mb-2" />
@@ -964,99 +1135,112 @@ export default function ChatPage() {
                       <p className="text-xs text-gray-500 mt-1">Send the first message!</p>
                     </div>
                   ) : (
-                    currentMessages.map((msg) => (
-                      <div
-                        key={msg.id || Math.random()}
-                        className={`group flex gap-3 ${msg.isOwn ? "flex-row-reverse" : ""}`}
-                        style={{ cursor: !msg.isOwn && !msg.is_read ? 'pointer' : 'default' }}
-                      >
-                        {!msg.isOwn && (
-                          <Avatar className="h-8 w-8 flex-shrink-0">
-                            <AvatarImage src="/diverse-group.png" />
-                            <AvatarFallback className="bg-gray-600 text-white">
-                              {getAvatarLetter(getSenderName(msg.sender))}
-                            </AvatarFallback>
-                          </Avatar>
-                        )}
-                        <div className={`max-w-xs lg:max-w-md ${msg.isOwn ? "text-right" : ""}`}>
-                          {!msg.isOwn && (
-                            <p className="text-sm font-medium text-white mb-1">
-                              {getSenderName(msg.sender)}
-                            </p>
-                          )}
-                          <div className="relative">
-                            {/* Reply button */}
-                            {!msg.isOwn && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="absolute -left-8 top-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-gray-400 hover:text-white hover:bg-gray-700 p-1 h-6 w-6"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleReply(msg);
-                                }}
-                              >
-                                <Reply className="h-3 w-3" />
-                              </Button>
-                            )}
-
-                            {/* Message content */}
-                            <div
-                              className={`rounded-lg px-3 py-2 ${msg.isOwn
-                                ? "bg-blue-600 text-white"
-                                : "bg-gray-700 text-white"
-                                }`}
-                            >
-                              {/* Reply preview */}
-                              {msg.reply_to && (
-                                <div className="mb-2 p-2 bg-blue-800 bg-opacity-20 rounded border-l-2 border-blue-400">
-                                  <p className="text-xs opacity-70 mb-1">
-                                    Replying to {msg.reply_to.sender || "Unknown"}
-                                  </p>
-                                  <p className="text-sm opacity-90 truncate">
-                                    {msg.reply_to.content || msg.reply_to.message || "Message"}
-                                  </p>
-                                </div>
-                              )}
-
-                              {isFileMessage(msg) ? (
-                                <div
-                                  className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:opacity-80 ${msg.isOwn ? "bg-blue-700" : "bg-gray-600"}`}
-                                  onClick={() => handleDownload(msg.file_url || "", msg.file_name || msg.message?.replace("File: ", "") || "file")}
-                                >
-                                  {getFileIcon(msg.file_type || msg.type)}
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium truncate">
-                                      {msg.file_name || msg.message?.replace("File: ", "") || "File"}
-                                    </p>
-                                    {msg.file_size && (
-                                      <p className="text-xs opacity-70">
-                                        {formatFileSize(Number(msg.file_size))}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                              ) : (
-                                <p className="text-sm break-words whitespace-pre-wrap overflow-wrap-anywhere max-w-full">
-                                  {msg.message || ""}
-                                </p>
-                              )}
-                              {msg.is_updated && (
-                                <p className="text-xs opacity-70 mt-1">edited</p>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-1 mt-1">
-                              <p className="text-xs text-gray-400">
-                                {formatMessageTime(msg.timestamp)}
-                              </p>
-                              {selectedChat.type !== "group" && (
-                                <MessageStatus status={getMessageStatus(msg)} isOwn={msg.isOwn} />
-                              )}
-
-                            </div>
+                    Object.entries(groupMessagesByDate(currentMessages)).map(([dateKey, dateMessages]) => (
+                      <div key={dateKey}>
+                        {/* Date header */}
+                        <div className="flex justify-center my-4">
+                          <div className="bg-gray-800 px-3 py-1 rounded-full">
+                            <span className="text-xs text-gray-300 font-medium">
+                              {formatDateHeader(dateKey)}
+                            </span>
                           </div>
                         </div>
+
+                        {/* Messages for this date */}
+                        {dateMessages.map((msg) => (
+                          <div
+                            key={msg.id || Math.random()}
+                            className={`group flex gap-3 mb-4 ${msg.isOwn ? "flex-row-reverse" : ""}`}
+                            style={{ cursor: !msg.isOwn && !msg.is_read ? 'pointer' : 'default' }}
+                          >
+                            {!msg.isOwn && (
+                              <Avatar className="h-8 w-8 flex-shrink-0">
+                                <AvatarImage src="/diverse-group.png" />
+                                <AvatarFallback className="bg-gray-600 text-white">
+                                  {getAvatarLetter(getSenderName(msg.sender))}
+                                </AvatarFallback>
+                              </Avatar>
+                            )}
+                            <div className={`max-w-xs lg:max-w-md ${msg.isOwn ? "text-right" : ""}`}>
+                              {!msg.isOwn && (
+                                <p className="text-sm font-medium text-white mb-1">
+                                  {getSenderName(msg.sender)}
+                                </p>
+                              )}
+                              <div className="relative">
+                                {/* Reply button */}
+                                {!msg.isOwn && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="absolute -left-8 top-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-gray-400 hover:text-white hover:bg-gray-700 p-1 h-6 w-6"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleReply(msg);
+                                    }}
+                                  >
+                                    <Reply className="h-3 w-3" />
+                                  </Button>
+                                )}
+
+                                {/* Message content */}
+                                <div
+                                  className={`rounded-lg px-3 py-2 ${msg.isOwn
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-gray-700 text-white"
+                                    }`}
+                                >
+                                  {/* Reply preview */}
+                                  {msg.reply_to && (
+                                    <div className="mb-2 p-2 bg-blue-800 bg-opacity-20 rounded border-l-2 border-blue-400">
+                                      <p className="text-xs opacity-70 mb-1">
+                                        Replying to {msg.reply_to.sender || "Unknown"}
+                                      </p>
+                                      <p className="text-sm opacity-90 truncate">
+                                        {msg.reply_to.content || msg.reply_to.message || "Message"}
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {isFileMessage(msg) ? (
+                                    <div
+                                      className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:opacity-80 ${msg.isOwn ? "bg-blue-700" : "bg-gray-600"}`}
+                                      onClick={() => handleDownload(msg.file_url || "", msg.file_name || msg.message?.replace("File: ", "") || "file")}
+                                    >
+                                      {getFileIcon(msg.file_type || msg.type)}
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate">
+                                          {msg.file_name || msg.message?.replace("File: ", "") || "File"}
+                                        </p>
+                                        {msg.file_size && (
+                                          <p className="text-xs opacity-70">
+                                            {formatFileSize(Number(msg.file_size))}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm break-words whitespace-pre-wrap overflow-wrap-anywhere max-w-full">
+                                      {msg.message || ""}
+                                    </p>
+                                  )}
+                                  {msg.is_updated && (
+                                    <p className="text-xs opacity-70 mt-1">edited</p>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-1 mt-1">
+                                  <p className="text-xs text-gray-400">
+                                    {formatMessageTime(msg.timestamp)}
+                                  </p>
+                                  {selectedChat.type !== "group" && (
+                                    <MessageStatus status={getMessageStatus(msg)} isOwn={msg.isOwn} />
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     ))
                   )}
@@ -1154,40 +1338,75 @@ export default function ChatPage() {
 
             {/* Message input */}
             <div className="p-4 border-t border-gray-500 bg-gray-900">
-              <form onSubmit={handleSendMessage} className="flex items-center gap-2">
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileSelect}
-                  accept="*/*"
-                  className="hidden"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-white hover:bg-gray-800"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={!isConnected}
-                >
-                  <Paperclip className="h-4 w-4" />
-                </Button>
-                <div className="flex-1 relative">
-                  <Input
-                    placeholder={replyingTo ? `Reply to ${getSenderName(replyingTo.sender)}...` : "Type a message..."}
-                    value={message}
-                    onChange={handleMessageChange}
-                    className="pr-10 bg-gray-800 border-gray-600 text-white"
-                    disabled={!isConnected}
-                  />
-                  <Button type="button" variant="ghost" size="sm" className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:bg-gray-700">
-                    <Smile className="h-4 w-4" />
+              {shouldShowChannelActions() ? (
+                // Channel join/leave button for non-owners
+                <div className="flex justify-center">
+                  <Button
+                    onClick={handleChannelAction}
+                    disabled={isChannelActionLoading}
+                    className={`flex items-center gap-2 ${
+                      selectedChat.isSubscribed 
+                        ? "bg-red-600 hover:bg-red-700 text-white" 
+                        : "bg-blue-600 hover:bg-blue-700 text-white"
+                    }`}
+                  >
+                    {isChannelActionLoading ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    ) : selectedChat.isSubscribed ? (
+                      <>
+                        <UserMinus className="h-4 w-4" />
+                        Leave Channel
+                      </>
+                    ) : (
+                      <>
+                        <UserCheck className="h-4 w-4" />
+                        Join Channel
+                      </>
+                    )}
                   </Button>
                 </div>
-                <Button type="submit" size="sm" disabled={!isConnected || !message.trim()} className="bg-blue-600 hover:bg-blue-700">
-                  <Send className="h-4 w-4" />
-                </Button>
-              </form>
+              ) : canSendMessage() ? (
+                // Normal message input for owners and non-channel chats
+                <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                    accept="*/*"
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-white hover:bg-gray-800"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={!isConnected}
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
+                  <div className="flex-1 relative">
+                    <Input
+                      placeholder={replyingTo ? `Reply to ${getSenderName(replyingTo.sender)}...` : "Type a message..."}
+                      value={message}
+                      onChange={handleMessageChange}
+                      className="pr-10 bg-gray-800 border-gray-600 text-white"
+                      disabled={!isConnected}
+                    />
+                    <Button type="button" variant="ghost" size="sm" className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:bg-gray-700">
+                      <Smile className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <Button type="submit" size="sm" disabled={!isConnected || !message.trim()} className="bg-blue-600 hover:bg-blue-700">
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </form>
+              ) : (
+                // Disabled state for non-subscribed channels (shouldn't normally show)
+                <div className="flex justify-center">
+                  <p className="text-gray-400 text-sm">You cannot send messages to this channel</p>
+                </div>
+              )}
             </div>
           </>
         ) : (
@@ -1216,7 +1435,11 @@ export default function ChatPage() {
         isOwnProfile={false}
       />
 
-      <ContactsModal isOpen={showContacts} onClose={() => setShowContacts(false)} />
+      <ContactsModal
+        isOpen={showContacts}
+        onClose={() => setShowContacts(false)}
+        onStartChat={handleStartChatFromContacts}
+      />
 
       <CreateGroupModal
         isOpen={showCreateGroup}
