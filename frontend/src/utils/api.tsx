@@ -31,7 +31,7 @@ export const registerUser = (data: RegisterData) =>
 
 
 export const getCurrentUserInfo = async (token: string) => {
-  return axios.get("http://127.0.0.1:8000/api/v1/accounts/me/", {
+  return axios.get("http://172.16.8.92:8000/api/v1/accounts/me/", {
     headers: {
       Authorization: `Bearer ${token}`,
     },
