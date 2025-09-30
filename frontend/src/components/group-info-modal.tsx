@@ -40,6 +40,7 @@ interface GroupInfoModalProps {
     avatar: string
     memberCount: number
   }
+  onGroupUpdate?: () => void  
 }
 
 interface GroupMember {
@@ -53,7 +54,7 @@ interface GroupMember {
   is_online?: boolean
 }
 
-export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) {
+export function GroupInfoModal({ isOpen, onClose, group, onGroupUpdate }: GroupInfoModalProps) {
   const [userRole, setUserRole] = useState<"owner" | "admin" | "member">("member");
   const [isAdmin, setIsAdmin] = useState(false);
   const [isEditing, setIsEditing] = useState(false)
@@ -150,6 +151,11 @@ export function GroupInfoModal({ isOpen, onClose, group }: GroupInfoModalProps) 
     try {
       await apiClient.updateGroup(group.id, editData)
       setIsEditing(false)
+      
+      if (onGroupUpdate) {
+        onGroupUpdate()
+      }
+      
     } catch (error) {
       console.error("Failed to update group:", error)
     }

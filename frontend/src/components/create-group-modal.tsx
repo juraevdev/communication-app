@@ -15,6 +15,7 @@ interface CreateGroupModalProps {
   isOpen: boolean
   onClose: () => void
   onCreateGroup?: (groupData: { name: string; description?: string; members: number[] }) => Promise<any> | any
+  onGroupCreated?: () => void // <- Yangi prop: guruh yaratilgandan keyin chaqiriladi
 }
 
 interface User {
@@ -26,7 +27,7 @@ interface User {
   is_online?: boolean
 }
 
-export function CreateGroupModal({ isOpen, onClose, onCreateGroup }: CreateGroupModalProps) {
+export function CreateGroupModal({ isOpen, onClose, onCreateGroup, onGroupCreated }: CreateGroupModalProps) {
   const [step, setStep] = useState(1)
   const [groupData, setGroupData] = useState({
     name: "",
@@ -63,15 +64,15 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup }: CreateGroup
   }
 
   const handleUserToggle = (userId: number) => {
-    setSelectedUsers((prev) => 
-      prev.includes(userId) 
-        ? prev.filter((id) => id !== userId) 
+    setSelectedUsers((prev) =>
+      prev.includes(userId)
+        ? prev.filter((id) => id !== userId)
         : [...prev, userId]
     )
   }
 
   const addMembersToGroup = async (groupId: number, memberIds: number[]) => {
-    const addMemberPromises = memberIds.map(userId => 
+    const addMemberPromises = memberIds.map(userId =>
       apiClient.addGroupMember({
         group: groupId,
         user: userId,
@@ -96,7 +97,7 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup }: CreateGroup
     }
 
     setIsCreating(true)
-    
+
     try {
       if (onCreateGroup) {
         const result = await onCreateGroup({
@@ -111,16 +112,16 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup }: CreateGroup
 
         // Turli xil return formatlarini tekshirish
         let groupId = null
-        
+
         if (result && typeof result === 'object') {
           // Ko'proq mumkin bo'lgan formatlarni tekshiramiz
-          groupId = result.id || 
-                   result.group_id || 
-                   result.groupId || 
-                   result.data?.id || 
-                   result.data?.group_id ||
-                   result.response?.id ||
-                   result.result?.id
+          groupId = result.id ||
+            result.group_id ||
+            result.groupId ||
+            result.data?.id ||
+            result.data?.group_id ||
+            result.response?.id ||
+            result.result?.id
         } else if (typeof result === 'number') {
           groupId = result
         } else if (typeof result === 'string' && !isNaN(Number(result))) {
@@ -130,6 +131,11 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup }: CreateGroup
         if (groupId) {
           setGroupData(prev => ({ ...prev, id: groupId }))
           console.log("Group created with ID:", groupId)
+
+          // Guruh yaratilgandan so'ng callback chaqiramiz
+          if (onGroupCreated) {
+            onGroupCreated();
+          }
         } else {
           console.warn("No group ID found in result:", result)
           // Foydalanuvchiga aniqroq ma'lumot beramiz
@@ -141,7 +147,7 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup }: CreateGroup
 
       // Har qanday holatda ham Step 2 ga o'tamiz
       setStep(2)
-      
+
     } catch (error) {
       console.error("Failed to create group:", error)
       alert("Error while creating group: " + (error))
@@ -169,9 +175,15 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup }: CreateGroup
     }
 
     setIsCreating(true)
-    
+
     try {
       await addMembersToGroup(groupData.id, selectedUsers)
+
+      // A'zolar qo'shilgandan so'ng callback chaqiramiz
+      if (onGroupCreated) {
+        onGroupCreated();
+      }
+
       resetModal()
       onClose()
     } catch (error) {
@@ -202,7 +214,7 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup }: CreateGroup
 
   const handleSearch = async (query: string) => {
     setSearchQuery(query)
-    
+
     if (query.trim()) {
       setIsSearching(true)
       try {
@@ -235,9 +247,11 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup }: CreateGroup
   const displayUsers = searchQuery.trim() ? searchResults : allUsers
 
   return (
-    <Dialog open={isOpen} onOpenChange={() => {
-      // Modal yopilishini to'liq bloklaymiz
-      // Faqat bizning tugmalarimiz orqali yopish
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!open) {
+        resetModal()
+        onClose()
+      }
     }}>
       <DialogContent className="max-w-md bg-gray-300">
         <DialogHeader>
@@ -245,8 +259,8 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup }: CreateGroup
             {step === 1 ? "New group" : "A'zolarni tanlash"}
           </DialogTitle>
           <DialogDescription>
-            {step === 1 
-              ? "Guruh nomi va tavsifini kiriting" 
+            {step === 1
+              ? "Guruh nomi va tavsifini kiriting"
               : "Guruhga qo'shmoqchi bo'lgan a'zolarni tanlang"}
           </DialogDescription>
         </DialogHeader>
@@ -278,8 +292,8 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup }: CreateGroup
             </div>
 
             <div className="flex justify-end gap-2 pt-4">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => {
                   resetModal()
                   onClose()
@@ -289,7 +303,7 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup }: CreateGroup
               >
                 Cancel
               </Button>
-              <Button 
+              <Button
                 onClick={handleSaveGroup}
                 disabled={!groupData.name.trim() || isCreating}
                 className="cursor-pointer hover:scale-105 transition duration-300"
@@ -331,9 +345,9 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup }: CreateGroup
                     return user ? (
                       <Badge key={userId} variant="secondary" className="flex items-center gap-1 bg-blue-100 text-blue-800">
                         {getUserName(user)}
-                        <X 
-                          className="h-3 w-3 cursor-pointer hover:text-red-600" 
-                          onClick={() => !isCreating && removeSelectedUser(userId)} 
+                        <X
+                          className="h-3 w-3 cursor-pointer hover:text-red-600"
+                          onClick={() => !isCreating && removeSelectedUser(userId)}
                         />
                       </Badge>
                     ) : null
@@ -360,13 +374,12 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup }: CreateGroup
                     displayUsers.map((user) => (
                       <div
                         key={user.id}
-                        className={`flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors ${
-                          isCreating ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
+                        className={`flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors ${isCreating ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
                         onClick={() => !isCreating && handleUserToggle(user.id)}
                       >
-                        <Checkbox 
-                          checked={selectedUsers.includes(user.id)} 
+                        <Checkbox
+                          checked={selectedUsers.includes(user.id)}
                           onCheckedChange={() => !isCreating && handleUserToggle(user.id)}
                           disabled={isCreating}
                         />
@@ -403,18 +416,18 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup }: CreateGroup
 
             {/* Tugmalar */}
             <div className="flex justify-between pt-4 border-t">
-              <Button 
-                className="cursor-pointer hover:scale-105 transition duration-300" 
-                variant="outline" 
+              <Button
+                className="cursor-pointer hover:scale-105 transition duration-300"
+                variant="outline"
                 onClick={handleBack}
                 disabled={isCreating}
               >
                 Back
               </Button>
               <div className="flex gap-2">
-                <Button 
-                  className="cursor-pointer hover:scale-105 transition duration-300" 
-                  variant="outline" 
+                <Button
+                  className="cursor-pointer hover:scale-105 transition duration-300"
+                  variant="outline"
                   onClick={() => {
                     resetModal()
                     onClose()
@@ -423,7 +436,7 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup }: CreateGroup
                 >
                   Cancel
                 </Button>
-                <Button 
+                <Button
                   onClick={handleAddMembers}
                   disabled={isCreating}
                   className="cursor-pointer hover:scale-105 transition duration-300"

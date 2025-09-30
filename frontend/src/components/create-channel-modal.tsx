@@ -11,13 +11,15 @@ interface CreateChannelModalProps {
   onClose: () => void
   onCreateChannel: (data: { name: string; description?: string; username: string; owner?: string }) => Promise<void>
   currentUserId: string
+  onChannelCreated?: () => void // <- Yangi prop: kanal yaratilgandan keyin chaqiriladi
 }
 
 export function CreateChannelModal({ 
   isOpen, 
   onClose, 
   onCreateChannel, 
-  currentUserId 
+  currentUserId,
+  onChannelCreated // <- Yangi prop
 }: CreateChannelModalProps) {
   const [channelData, setChannelData] = useState({
     name: "",
@@ -38,6 +40,11 @@ export function CreateChannelModal({
         username: channelData.username,
         owner: currentUserId 
       })
+      
+      // Kanal yaratilgandan so'ng callback chaqiramiz
+      if (onChannelCreated) {
+        onChannelCreated();
+      }
       
       onClose()
       setChannelData({
@@ -62,9 +69,20 @@ export function CreateChannelModal({
     setChannelData(prev => ({ ...prev, username }))
   }
 
+  // Modal yopilganda reset qilish
+  const handleClose = () => {
+    setChannelData({
+      name: "",
+      description: "",
+      isPrivate: false,
+      username: "",
+    })
+    onClose()
+  }
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="max-w-md bg-gray-300">
         <DialogHeader>
           <DialogTitle>New channel</DialogTitle>
         </DialogHeader>
@@ -83,6 +101,7 @@ export function CreateChannelModal({
                 }
               }}
               required
+              disabled={isLoading}
             />
           </div>
 
@@ -94,6 +113,7 @@ export function CreateChannelModal({
                 placeholder="invite link"
                 value={channelData.username}
                 onChange={(e) => setChannelData(prev => ({ ...prev, username: e.target.value }))}
+                disabled={isLoading}
               />
             </div>
           </div>
@@ -106,6 +126,7 @@ export function CreateChannelModal({
               value={channelData.description}
               onChange={(e) => setChannelData(prev => ({ ...prev, description: e.target.value }))}
               rows={3}
+              disabled={isLoading}
             />
           </div>
 
@@ -113,7 +134,7 @@ export function CreateChannelModal({
             <Button 
               className="cursor-pointer hover:scale-105 transition duration-300" 
               variant="outline" 
-              onClick={onClose}
+              onClick={handleClose}
               disabled={isLoading}
             >
               Cancel
@@ -123,8 +144,17 @@ export function CreateChannelModal({
               onClick={handleCreateChannel} 
               disabled={!channelData.name.trim() || isLoading}
             >
-              <Hash className="mr-2 h-4 w-4" />
-              {isLoading ? "Creating..." : "Save"}
+              {isLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Hash className="mr-2 h-4 w-4" />
+                  Save
+                </>
+              )}
             </Button>
           </div>
         </div>

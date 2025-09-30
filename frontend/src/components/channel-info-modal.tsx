@@ -30,6 +30,7 @@ interface ChannelInfoModalProps {
     isSubscribed: boolean
     isMuted: boolean
   }
+  onChannelUpdate?: () => void  
 }
 
 interface User {
@@ -41,7 +42,7 @@ interface User {
   is_online?: boolean
 }
 
-export function ChannelInfoModal({ isOpen, onClose, channel }: ChannelInfoModalProps) {
+export function ChannelInfoModal({ isOpen, onClose, channel, onChannelUpdate }: ChannelInfoModalProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [currentUser, setCurrentUser] = useState<User | null>(null) 
   const [editData, setEditData] = useState({
@@ -81,6 +82,10 @@ export function ChannelInfoModal({ isOpen, onClose, channel }: ChannelInfoModalP
         description: editData.description
       })
       setIsEditing(false)
+      
+      if (onChannelUpdate) {
+        onChannelUpdate()
+      }
     } catch (error) {
       console.error("Kanal ma'lumotlarini saqlashda xatolik:", error)
       alert("Kanal ma'lumotlarini saqlash muvaffaqiyatsiz tugadi")

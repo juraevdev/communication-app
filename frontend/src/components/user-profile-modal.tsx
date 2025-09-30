@@ -23,9 +23,16 @@ interface UserProfileModalProps {
     role?: string
   }
   isOwnProfile?: boolean
+  onProfileUpdate?: (updatedUser: any) => void // Yangi prop
 }
 
-export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }: UserProfileModalProps) {
+export function UserProfileModal({ 
+  isOpen, 
+  onClose, 
+  user, 
+  isOwnProfile = false,
+  onProfileUpdate 
+}: UserProfileModalProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState({
     fullname: user.fullname,
@@ -48,6 +55,7 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
   const [passwordMessage, setPasswordMessage] = useState({ type: "", text: "" })
   const [currentUserPhone, setCurrentUserPhone] = useState(user.phone_number)
 
+  // Modal ochilganda va yopilganda input maydonlarini tozalash
   useEffect(() => {
     if (isOpen) {
       // Barcha password inputlarni tozalash
@@ -77,6 +85,7 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
     }
   }, [isOpen]);
 
+  // User ma'lumotlari o'zgarganda editData ni yangilash
   useEffect(() => {
     if (isOpen) {
       setEditData({
@@ -89,6 +98,7 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
     }
   }, [isOpen, user])
 
+  // Joriy user profilini olish
   useEffect(() => {
     const fetchCurrentUserProfile = async () => {
       if (!isOwnProfile || !isOpen || !isEditing) return;
@@ -128,12 +138,24 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
 
     try {
       if (isOwnProfile) {
-        await apiClient.updateUserProfile({
+        // API chaqiruvi
+        const updatedUser = await apiClient.updateUserProfile({
           fullname: editData.fullname,
           username: editData.username,
           email: editData.email,
           phone_number: editData.phone_number
         })
+
+        // Parent komponentga yangilangan ma'lumotlarni uzatish
+        if (onProfileUpdate) {
+          onProfileUpdate({
+            ...user,
+            fullname: editData.fullname,
+            username: editData.username,
+            email: editData.email,
+            phone_number: editData.phone_number
+          })
+        }
 
         setCurrentUserPhone(editData.phone_number)
       }
@@ -245,36 +267,6 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
     }
   }
 
-  // Modal ochilganda va yopilganda input maydonlarini tozalash
-  useEffect(() => {
-    if (isOpen) {
-      // Barcha password inputlarni tozalash
-      setTimeout(() => {
-        const inputs = document.querySelectorAll('[data-form-type="password"]');
-        inputs.forEach(input => {
-          if (input instanceof HTMLInputElement) {
-            input.value = '';
-            // Browser autocomplete cache-ni tozalash
-            input.autocomplete = 'new-password';
-          }
-        });
-
-        // Search input maydonini ham tozalash (agar mavjud bo'lsa)
-        const searchInput = document.getElementById('chat-search-users-input');
-        if (searchInput instanceof HTMLInputElement) {
-          // Agar search maydonida password ma'lumotlari qolgan bo'lsa
-          const currentValue = searchInput.value;
-          if (currentValue && (currentValue.includes('@') || currentValue.length > 20)) {
-            searchInput.value = '';
-            // React state-ni ham yangilash uchun event dispatch qilish
-            const event = new Event('input', { bubbles: true });
-            searchInput.dispatchEvent(event);
-          }
-        }
-      }, 100);
-    }
-  }, [isOpen]);
-
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md bg-gray-300">
@@ -372,9 +364,6 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
             ) : (
               <div className="w-full space-y-2">
                 <p className="text-muted-foreground">@{user.fullname}</p>
-                {/* {user.phone_number && (
-                  <p className="text-sm text-muted-foreground">{user.phone_number}</p>
-                )} */}
               </div>
             )}
           </div>
@@ -421,7 +410,7 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
                           placeholder="Enter your current password"
                           disabled={isChangingPassword}
                           autoComplete="new-password"
-                          data-form-type="password" // <-- Yangi atribut qo'shildi
+                          data-form-type="password"
                         />
                         <Button
                           type="button"
@@ -449,7 +438,7 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
                           placeholder="Enter your new password"
                           disabled={isChangingPassword}
                           autoComplete="new-password"
-                          data-form-type="password" // <-- Yangi atribut qo'shildi
+                          data-form-type="password"
                         />
                         <Button
                           type="button"
@@ -477,7 +466,7 @@ export function UserProfileModal({ isOpen, onClose, user, isOwnProfile = false }
                           placeholder="Confirm your new password"
                           disabled={isChangingPassword}
                           autoComplete="new-password"
-                          data-form-type="password" // <-- Yangi atribut qo'shildi
+                          data-form-type="password"
                         />
                         <Button
                           type="button"

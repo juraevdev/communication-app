@@ -396,13 +396,15 @@ class ChannelConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def get_channel_messages(self):
         from channel.models import ChannelMessage
-        
+    
         messages = ChannelMessage.objects.filter(
             channel_id=self.channel_id
-        ).select_related('user', 'file').order_by('-created_at')
+        ).prefetch_related('read_by').select_related('user', 'file').order_by('created_at')
 
         result = []
         for msg in messages:
+            is_read_by_user = self.user in msg.read_by.all() or msg.user == self.user
+        
             message_data = {
                 'id': msg.id,
                 'content': msg.content,
@@ -414,7 +416,7 @@ class ChannelConsumer(AsyncWebsocketConsumer):
                 'created_at': msg.created_at.isoformat(),
                 'message_type': msg.message_type,
                 'is_updated': msg.is_updated,
-                'is_read': msg.is_read,
+                'is_read': is_read_by_user,  # Har bir foydalanuvchi uchun alohida
             }
 
             if msg.file:
@@ -450,8 +452,11 @@ class ChannelConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def get_unread_count(self):
         from channel.models import ChannelMessage
-        
+    
         return ChannelMessage.objects.filter(
-            channel_id=self.channel_id,
-            is_read=False
-        ).exclude(user=self.user).count()
+            channel_id=self.channel_id
+        ).exclude(
+            user=self.user  
+        ).exclude(
+            read_by=self.user   
+        ).count()

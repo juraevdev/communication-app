@@ -35,6 +35,7 @@ class ChannelMessage(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     is_updated = models.BooleanField(default=False, null=True)
     is_read = models.BooleanField(default=False)
+    read_by = models.ManyToManyField(CustomUser, related_name='read_channel_messages', blank=True)
     
     def __str__(self):
         return f'{self.user} - {self.content or "File message"}'
@@ -43,6 +44,12 @@ class ChannelMessage(models.Model):
         if self.file:
             self.message_type = 'file'
         super().save(*args, **kwargs)
+        
+    def mark_as_read_by(self, user):
+        if self.user != user and user not in self.read_by.all():
+            self.read_by.add(user)
+            return True
+        return False
     
     class Meta:
         db_table = 'channel_messages'

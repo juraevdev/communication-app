@@ -53,12 +53,12 @@ import { VideoCallModal } from "./video-call-modal"
 import { useVideoCall } from "@/hooks/use-videocall"
 
 // Incoming Call Modal komponenti
-const IncomingCallModal = ({ 
-  isOpen, 
-  onAccept, 
-  onReject, 
-  callInfo 
-}: { 
+const IncomingCallModal = ({
+  isOpen,
+  onAccept,
+  onReject,
+  callInfo
+}: {
   isOpen: boolean;
   onAccept: () => void;
   onReject: () => void;
@@ -73,11 +73,11 @@ const IncomingCallModal = ({
           <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
             <Video className="h-10 w-10 text-white" />
           </div>
-          
+
           <h2 className="text-2xl font-bold text-white mb-2">
             Kelayotgan {callInfo.callType === 'video' ? 'Video' : 'Audio'} Qo'ng'iroq
           </h2>
-          
+
           <p className="text-gray-300 mb-6">
             {callInfo.fromUserName} sizga qo'ng'iroq qilmoqda...
           </p>
@@ -90,7 +90,7 @@ const IncomingCallModal = ({
               <Phone className="h-5 w-5 mr-2" />
               Rad etish
             </Button>
-            
+
             <Button
               onClick={onAccept}
               className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-full font-semibold"
@@ -116,10 +116,12 @@ export default function ChatPage() {
     channelWsRef,
     currentUser,
     isConnected,
+    setChats,
     setGroups,
     setChannels,
     markAsRead,
     sendMessage,
+    setMessages,
     connectToGroup,
     getGroupMembers,
     sendGroupMessage,
@@ -127,6 +129,9 @@ export default function ChatPage() {
     markGroupMessageAsRead,
     connectToChannel,
     sendChannelMessage,
+    updateCurrentUserProfile,
+    loadGroups,
+    loadChannels,
   } = useChat();
 
   // Video call state
@@ -163,6 +168,8 @@ export default function ChatPage() {
   const [replyingTo, setReplyingTo] = useState<any>(null)
   const [isChannelActionLoading, setIsChannelActionLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [refreshGroupsTrigger, setRefreshGroupsTrigger] = useState(0)
+  const [refreshChannelsTrigger, setRefreshChannelsTrigger] = useState(0)
   const [fileUpload, setFileUpload] = useState<{
     file: File | null;
     preview: string | null;
@@ -183,37 +190,71 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
+  const handleProfileUpdate = (updatedUser: any) => {
+    console.log("Profil yangilandi:", updatedUser);
+
+    // useChat hook orqali currentUser ni yangilash
+    if (updateCurrentUserProfile) {
+      updateCurrentUserProfile(updatedUser);
+    }
+
+    // Agar selectedChat o'z profilimiz bo'lsa, uni ham yangilash
+    if (selectedChat && selectedChat.type === "private" && selectedChat.id === currentUser?.id) {
+      setSelectedChat((prev: any) => prev ? { ...prev, ...updatedUser } : prev);
+    }
+  };
+
+  const refreshGroupsList = () => {
+    setRefreshGroupsTrigger(prev => prev + 1)
+  }
+
+  const refreshChannelsList = () => {
+    setRefreshChannelsTrigger(prev => prev + 1)
+  }
+
+  useEffect(() => {
+    if (refreshGroupsTrigger > 0) {
+      loadGroups()
+    }
+  }, [refreshGroupsTrigger])
+
+  useEffect(() => {
+    if (refreshChannelsTrigger > 0) {
+      loadChannels()
+    }
+  }, [refreshChannelsTrigger])
+
   // Video call funksiyalari
   const handleStartVideoCall = async () => {
-  if (!selectedChat || !currentUser) return;
+    if (!selectedChat || !currentUser) return;
 
-  try {
-    const roomId = `videocall_${selectedChat.id}_${Date.now()}`;
+    try {
+      const roomId = `videocall_${selectedChat.id}_${Date.now()}`;
 
-    setVideoCallInfo({
-      roomId,
-      type: selectedChat.type === 'group' ? 'group' : 'private',
-      name: getChatName(selectedChat)
-    });
+      setVideoCallInfo({
+        roomId,
+        type: selectedChat.type === 'group' ? 'group' : 'private',
+        name: getChatName(selectedChat)
+      });
 
-    // Avvalo call ni boshlash
-    await videoCall.startCall(roomId);
-    
-    // Keyin taklif yuborish
-    if (selectedChat.type === 'private') {
-      // ✅ To'g'ri foydalanuvchi ID sini yuborish
-      const targetUserId = selectedChat.id; // yoki selectedChat.sender_id
-      videoCall.sendCallInvitation(roomId, targetUserId, 'video');
+      // Avvalo call ni boshlash
+      await videoCall.startCall(roomId);
+
+      // Keyin taklif yuborish
+      if (selectedChat.type === 'private') {
+        // ✅ To'g'ri foydalanuvchi ID sini yuborish
+        const targetUserId = selectedChat.id; // yoki selectedChat.sender_id
+        videoCall.sendCallInvitation(roomId, targetUserId, 'video');
+      }
+
+      setVideoCallModalOpen(true);
+      console.log('[ChatPage] Video call started and invitation sent');
+
+    } catch (error) {
+      console.error('Failed to start video call:', error);
+      alert('Video qo\'ng\'iroqni boshlash muvaffaqiyatsiz. Kamera/mikron ruxsatlarini tekshiring.');
     }
-    
-    setVideoCallModalOpen(true);
-    console.log('[ChatPage] Video call started and invitation sent');
-
-  } catch (error) {
-    console.error('Failed to start video call:', error);
-    alert('Video qo\'ng\'iroqni boshlash muvaffaqiyatsiz. Kamera/mikron ruxsatlarini tekshiring.');
-  }
-};
+  };
   const handleEndVideoCall = () => {
     videoCall.endCall();
     setVideoCallModalOpen(false);
@@ -226,6 +267,7 @@ export default function ChatPage() {
   }, [messages, selectedChat?.id])
 
   // Mark as read effect
+  // Mark as read effect
   useEffect(() => {
     if (selectedChat && selectedChat.unread > 0 && selectedChat.type !== "group") {
       const roomId = selectedChat.room_id || selectedChat.id?.toString()
@@ -235,6 +277,9 @@ export default function ChatPage() {
         const unreadMessages = currentMessages.filter(msg => !msg.is_read && !msg.isOwn)
 
         if (unreadMessages.length > 0) {
+          console.log(`[UI] Marking ${unreadMessages.length} messages as read in room ${roomId}`);
+
+          // Bir vaqtning o'zida barcha o'qilmagan xabarlarni belgilash
           unreadMessages.forEach(msg => {
             if (msg.type === "file") {
               markAsRead(roomId, undefined, msg.id)
@@ -242,6 +287,15 @@ export default function ChatPage() {
               markAsRead(roomId, msg.id)
             }
           })
+
+          // Chat ro'yxatidagi unread count ni yangilash
+          setChats(prev => prev.map(chat => {
+            const chatRoomId = chat.room_id || chat.id?.toString();
+            if (chatRoomId === roomId) {
+              return { ...chat, unread: 0 };
+            }
+            return chat;
+          }));
         }
       }
     }
@@ -543,14 +597,26 @@ export default function ChatPage() {
   // Create group handler
   const handleCreateGroup = async (groupData: { name: string; description?: string }) => {
     try {
-      await apiClient.createGroup({
+      const response = await apiClient.createGroup({
         ...groupData,
         created_by: currentUser.id
       })
-      setShowCreateGroup(false)
+
+      // Guruh yaratilgandan so'ng guruhlar ro'yxatini yangilash
+      await loadGroups();
+
+      return response;
     } catch (error) {
       console.error("Failed to create group:", error)
+      throw error;
     }
+  }
+
+  // Guruh yaratilgandan keyin chaqiriladigan funksiya
+  const handleGroupCreated = () => {
+    console.log("Group created, refreshing groups list...");
+    // Guruhlar ro'yxatini yangilash
+    loadGroups();
   }
 
   // Create channel handler
@@ -558,18 +624,29 @@ export default function ChatPage() {
     name: string;
     description?: string;
     username: string;
-    owner?: string
+    owner?: string;
   }) => {
     try {
       await apiClient.createChannel({
         ...channelData,
         owner: currentUser.id
-      })
-      setShowCreateChannel(false)
+      });
+
+      // Kanal yaratilgandan so'ng kanallar ro'yxatini yangilash
+      await loadChannels();
+
     } catch (error) {
-      console.error("Failed to create channel:", error)
+      console.error("Failed to create channel:", error);
+      throw error;
     }
-  }
+  };
+
+  // Kanal yaratilgandan keyin chaqiriladigan funksiya
+  const handleChannelCreated = () => {
+    console.log("Channel created, refreshing channels list...");
+    // Kanallar ro'yxatini yangilash
+    loadChannels();
+  };
 
   // Logout handler
   const handleLogout = () => {
@@ -704,9 +781,20 @@ export default function ChatPage() {
     if (!selectedChat || !isConnected) return;
 
     const isFile = isFileMessage(msg);
+    console.log("[UI] Deleting message:", { messageId, isFile, msg });
 
     try {
       if (selectedChat.type === "group") {
+        // Optimistic update - darhol UI dan o'chirish
+        setMessages(prev => {
+          const roomKey = `group_${selectedChat.id}`;
+          const updatedMessages = (prev[roomKey] || []).filter(m => m.id !== messageId);
+          return {
+            ...prev,
+            [roomKey]: updatedMessages,
+          };
+        });
+
         if (groupWsRef.current?.readyState === WebSocket.OPEN) {
           groupWsRef.current.send(JSON.stringify({
             action: isFile ? "delete_file" : "delete_message",
@@ -714,6 +802,16 @@ export default function ChatPage() {
           }));
         }
       } else if (selectedChat.type === "channel") {
+        // Optimistic update - darhol UI dan o'chirish
+        setMessages(prev => {
+          const roomKey = `channel_${selectedChat.id}`;
+          const updatedMessages = (prev[roomKey] || []).filter(m => m.id !== messageId);
+          return {
+            ...prev,
+            [roomKey]: updatedMessages,
+          };
+        });
+
         if (channelWsRef.current?.readyState === WebSocket.OPEN) {
           channelWsRef.current.send(JSON.stringify({
             action: isFile ? "delete_file" : "delete_message",
@@ -722,6 +820,18 @@ export default function ChatPage() {
         }
       } else {
         const roomId = selectedChat.room_id || selectedChat.id?.toString();
+
+        // Optimistic update - darhol UI dan o'chirish
+        if (roomId) {
+          setMessages(prev => {
+            const updatedMessages = (prev[roomId] || []).filter(m => m.id !== messageId);
+            return {
+              ...prev,
+              [roomId]: updatedMessages,
+            };
+          });
+        }
+
         if (roomId && chatWsRef.current?.readyState === WebSocket.OPEN) {
           chatWsRef.current.send(JSON.stringify({
             action: isFile ? "delete_file" : "delete_message",
@@ -732,6 +842,20 @@ export default function ChatPage() {
     } catch (error) {
       console.error("Failed to delete message:", error);
       alert("Xabarni o'chirish muvaffaqiyatsiz. Iltimos, qayta urinib ko'ring.");
+
+      // Agar xatolik bo'lsa, UI ni qayta yuklash
+      if (selectedChat.type === "group") {
+        const groupId = selectedChat.id.toString();
+        connectToGroup(groupId);
+      } else if (selectedChat.type === "channel") {
+        const channelId = selectedChat.id.toString();
+        connectToChannel(channelId);
+      } else {
+        const roomId = selectedChat.room_id || selectedChat.id?.toString();
+        if (roomId) {
+          connectToChatRoom(roomId);
+        }
+      }
     }
   };
 
@@ -759,12 +883,16 @@ export default function ChatPage() {
     }
   };
 
-  // File message checker
   const isFileMessage = (msg: any): boolean => {
+    if (!msg) return false;
+
     if (msg.message_type === "file") return true;
     if (msg.type === "file") return true;
     if (msg.file_url || msg.file_name) return true;
     if (msg.file_name && msg.file_url) return true;
+    if (msg.message?.startsWith("File: ")) return true;
+    if (msg.file_size) return true;
+
     return false;
   };
 
@@ -1518,6 +1646,41 @@ export default function ChatPage() {
                                     </Button>
                                   </div>
                                 )}
+                                {msg.isOwn && selectedChat.type === "channel" && (
+                                  <div className="absolute -left-8 top-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col gap-1">
+                                    {/* Edit button */}
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 w-6 p-0 text-gray-400 hover:text-blue-400 hover:bg-gray-700"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingMessage({
+                                          id: msg.id,
+                                          content: msg.message,
+                                          type: isFileMessage(msg) ? "file" : "text"
+                                        });
+                                      }}
+                                    >
+                                      <Edit className="h-3 w-3" />
+                                    </Button>
+
+                                    {/* Delete button */}
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 w-6 p-0 text-gray-400 hover:text-red-400 hover:bg-gray-700"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (confirm("Bu xabarni o'chirishni istaysizmi?")) {
+                                          handleDeleteMessage(msg.id, msg);
+                                        }
+                                      }}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                )}
 
                                 {/* Message content */}
                                 <div
@@ -1782,6 +1945,7 @@ export default function ChatPage() {
         onClose={() => setShowOwnProfile(false)}
         user={safeCurrentUser}
         isOwnProfile={true}
+        onProfileUpdate={handleProfileUpdate}
       />
 
       <ProfileModal
@@ -1801,6 +1965,7 @@ export default function ChatPage() {
         isOpen={showCreateGroup}
         onClose={() => setShowCreateGroup(false)}
         onCreateGroup={handleCreateGroup}
+        onGroupCreated={handleGroupCreated} // <- Yangi prop
       />
 
       <CreateChannelModal
@@ -1808,6 +1973,7 @@ export default function ChatPage() {
         onClose={() => setShowCreateChannel(false)}
         onCreateChannel={handleCreateChannel}
         currentUserId={currentUser?.id?.toString() || ""}
+        onChannelCreated={handleChannelCreated} // <- Yangi prop
       />
 
       {selectedChat?.type === "group" && (
@@ -1821,6 +1987,7 @@ export default function ChatPage() {
             avatar: selectedChat.avatar || "",
             memberCount: selectedChat.memberCount || 0,
           }}
+          onGroupUpdate={refreshGroupsList}
         />
       )}
 
@@ -1840,6 +2007,7 @@ export default function ChatPage() {
             isSubscribed: selectedChat.isSubscribed || false,
             isMuted: selectedChat.isMuted || false,
           }}
+          onChannelUpdate={refreshChannelsList}
         />
       )}
 

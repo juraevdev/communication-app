@@ -90,6 +90,40 @@ export function useChat() {
   const currentChannelRef = useRef<string | null>(null)
   const channelConnectionsRef = useRef<Map<string, WebSocket>>(new Map())
 
+
+  const updateCurrentUserProfile = useCallback((updatedData: any) => {
+    console.log("[Chat] Updating current user profile:", updatedData);
+
+    // currentUser state ni yangilash
+    setCurrentUser((prev: any) => {
+      if (!prev) return prev;
+      return { ...prev, ...updatedData };
+    });
+
+    // localStorage ni yangilash
+    const userData = localStorage.getItem('user_data');
+    if (userData) {
+      try {
+        const parsedData = JSON.parse(userData);
+        localStorage.setItem('user_data', JSON.stringify({ ...parsedData, ...updatedData }));
+      } catch (error) {
+        console.error('[Chat] Failed to update user data in localStorage:', error);
+      }
+    }
+
+    // Agar kerak bo'lsa, chats ro'yxatidagi o'z xabarlarimizni yangilash
+    setChats(prev => prev.map(chat => {
+      if (chat.sender_id === currentUser?.id) {
+        return {
+          ...chat,
+          name: updatedData.fullname || updatedData.username || chat.name,
+          sender: updatedData.fullname || updatedData.username || chat.sender
+        };
+      }
+      return chat;
+    }));
+  }, [currentUser]);
+
   useEffect(() => {
     const initializeUser = async () => {
       try {
@@ -416,13 +450,16 @@ export function useChat() {
 
 
             case "message_deleted":
+              console.log("[Chat] Message deleted:", data);
               setMessages(prev => {
                 const roomId = data.room_id?.toString();
                 if (!roomId) return prev;
 
-                const updatedRoomMessages = (prev[roomId] || []).filter(
-                  msg => msg.id !== data.message_id.toString()
-                );
+                const updatedRoomMessages = (prev[roomId] || []).filter(msg => {
+                  const isTargetMessage = msg.id === data.message_id?.toString() ||
+                    msg.id === data.file_id?.toString();
+                  return !isTargetMessage;
+                });
 
                 return {
                   ...prev,
@@ -459,6 +496,7 @@ export function useChat() {
               }
               break
 
+            // Chat WebSocket handler
             case "read":
               setMessages(prev => {
                 const roomId = data.room_id?.toString();
@@ -480,15 +518,12 @@ export function useChat() {
                 };
               });
 
+              // Chat ro'yxatini ham yangilash
               if (data.room_id) {
                 setChats(prev => prev.map(chat => {
                   const chatRoomId = chat.room_id || chat.id?.toString();
                   if (chatRoomId === data.room_id.toString()) {
-                    if (data.unread_count !== undefined) {
-                      return { ...chat, unread: data.unread_count };
-                    } else {
-                      return { ...chat, unread: Math.max(0, chat.unread - 1) };
-                    }
+                    return { ...chat, unread: data.unread_count || 0 };
                   }
                   return chat;
                 }));
@@ -642,11 +677,14 @@ export function useChat() {
               break;
 
             case "message_deleted":
+              console.log("[Chat] Channel message deleted:", data);
               setMessages(prev => {
                 const roomKey = `group_${groupId}`;
-                const updatedMessages = (prev[roomKey] || []).filter(
-                  msg => msg.id !== data.message_id.toString()
-                );
+                const updatedMessages = (prev[roomKey] || []).filter(msg => {
+                  const isTargetMessage = msg.id === data.message_id?.toString() ||
+                    msg.id === data.file_id?.toString();
+                  return !isTargetMessage;
+                });
 
                 return {
                   ...prev,
@@ -850,9 +888,34 @@ export function useChat() {
 
   const markAsRead = useCallback(
     (roomId: string, messageId?: string, fileId?: string) => {
-      if (chatWsRef.current && chatWsRef.current.readyState === WebSocket.OPEN) {
-        console.log("[Chat] Marking as read:", { messageId, fileId });
+      console.log("[Chat] Marking as read:", { roomId, messageId, fileId });
 
+      // Optimistic update - darhol UI ni yangilash
+      setMessages(prev => {
+        const updatedRoomMessages = (prev[roomId] || []).map(msg => {
+          if ((messageId && msg.id === messageId) || (fileId && msg.id === fileId)) {
+            return { ...msg, is_read: true };
+          }
+          return msg;
+        });
+
+        return {
+          ...prev,
+          [roomId]: updatedRoomMessages,
+        };
+      });
+
+      // Chat ro'yxatidagi unread count ni yangilash
+      setChats(prev => prev.map(chat => {
+        const chatRoomId = chat.room_id || chat.id?.toString();
+        if (chatRoomId === roomId && chat.unread > 0) {
+          return { ...chat, unread: Math.max(0, chat.unread - 1) };
+        }
+        return chat;
+      }));
+
+      // WebSocket orqali backendga xabar berish
+      if (chatWsRef.current && chatWsRef.current.readyState === WebSocket.OPEN) {
         const payload: any = {
           action: "read",
         };
@@ -866,28 +929,6 @@ export function useChat() {
         }
 
         chatWsRef.current.send(JSON.stringify(payload));
-
-        setMessages(prev => {
-          const updatedRoomMessages = (prev[roomId] || []).map(msg => {
-            if ((messageId && msg.id === messageId) || (fileId && msg.id === fileId)) {
-              return { ...msg, is_read: true };
-            }
-            return msg;
-          });
-
-          return {
-            ...prev,
-            [roomId]: updatedRoomMessages,
-          };
-        });
-
-        setChats(prev => prev.map(chat => {
-          const chatRoomId = chat.room_id || chat.id?.toString();
-          if (chatRoomId === roomId && chat.unread > 0) {
-            return { ...chat, unread: Math.max(0, chat.unread - 1) };
-          }
-          return chat;
-        }));
       }
     },
     [],
@@ -1251,7 +1292,7 @@ export function useChat() {
   }, [])
 
   const markChannelMessageAsRead = useCallback((_channelId: string, messageId: string) => {
-    if (channelWsRef.current && channelWsRef.current.readyState === WebSocket.OPEN ) {
+    if (channelWsRef.current && channelWsRef.current.readyState === WebSocket.OPEN) {
       channelWsRef.current.send(JSON.stringify({
         action: "mark_as_read",
         message_id: messageId
@@ -1340,10 +1381,12 @@ export function useChat() {
     isConnected,
     currentUser,
     channelWsRef,
+    setChats,
     setGroups,
     loadGroups,
     markAsRead,
     setChannels,
+    setMessages,
     sendMessage,
     createGroup,
     loadChannels,
@@ -1363,5 +1406,6 @@ export function useChat() {
     updateChatUnreadCount,
     markGroupMessageAsRead,
     markChannelMessageAsRead,
+    updateCurrentUserProfile,
   }
 }
