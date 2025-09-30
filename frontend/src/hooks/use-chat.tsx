@@ -226,10 +226,6 @@ export function useChat() {
         setIsConnected(true)
       }
 
-      statusWs.onmessage = (event) => {
-        const data = JSON.parse(event.data)
-      }
-
       statusWs.onclose = () => {
         console.log("[Chat] Status WebSocket disconnected")
         setIsConnected(false)
@@ -732,7 +728,6 @@ export function useChat() {
   )
 
   const sendGroupFile = useCallback((
-    groupId: string,
     fileData: string,
     fileName: string,
     fileType: string
@@ -845,7 +840,7 @@ export function useChat() {
     }
   }, []);
 
-  const getGroupUnreadCount = useCallback((groupId: string) => {
+  const getGroupUnreadCount = useCallback(() => {
     if (groupWsRef.current && groupWsRef.current.readyState === WebSocket.OPEN) {
       groupWsRef.current.send(JSON.stringify({
         type: "get_unread_count"
@@ -1230,7 +1225,7 @@ export function useChat() {
 
   // Kanal xabari yuborish
   const sendChannelMessage = useCallback((channelId: string, content: string) => {
-    if (!channelWsRef.current || channelWsRef.current.readyState !== WebSocket.OPEN || !content.trim()) {
+    if (!channelWsRef.current || channelWsRef.current.readyState !== WebSocket.OPEN || !content.trim() || !channelId) {
       return
     }
 
@@ -1243,7 +1238,7 @@ export function useChat() {
 
   // Kanal fayli yuborish
   const sendChannelFile = useCallback((channelId: string, fileData: string, fileName: string, fileType: string) => {
-    if (!channelWsRef.current || channelWsRef.current.readyState !== WebSocket.OPEN) {
+    if (!channelWsRef.current || channelWsRef.current.readyState !== WebSocket.OPEN || !channelId) {
       return
     }
 
@@ -1255,9 +1250,8 @@ export function useChat() {
     }))
   }, [])
 
-  // Kanal xabarini o'qilgan deb belgilash
-  const markChannelMessageAsRead = useCallback((channelId: string, messageId: string) => {
-    if (channelWsRef.current && channelWsRef.current.readyState === WebSocket.OPEN) {
+  const markChannelMessageAsRead = useCallback((_channelId: string, messageId: string) => {
+    if (channelWsRef.current && channelWsRef.current.readyState === WebSocket.OPEN ) {
       channelWsRef.current.send(JSON.stringify({
         action: "mark_as_read",
         message_id: messageId
@@ -1265,7 +1259,6 @@ export function useChat() {
     }
   }, [])
 
-  // Kanal yaratish
   const createChannel = useCallback(async (name: string, username: string, description?: string,) => {
     try {
       const response = await apiClient.createChannel({

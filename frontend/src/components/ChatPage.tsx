@@ -36,7 +36,6 @@ import {
   UserMinus,
   Edit,
   Trash2,
-  MoreVertical
 } from "lucide-react"
 
 import { ProfileModal } from "./profile-modal"
@@ -215,25 +214,6 @@ export default function ChatPage() {
     alert('Video qo\'ng\'iroqni boshlash muvaffaqiyatsiz. Kamera/mikron ruxsatlarini tekshiring.');
   }
 };
-
-
-
-  const handleJoinVideoCall = async (roomId: string) => {
-    try {
-      setVideoCallInfo({
-        roomId,
-        type: selectedChat?.type === 'group' ? 'group' : 'private',
-        name: selectedChat ? getChatName(selectedChat) : 'Qo\'ng\'iroq'
-      });
-
-      await videoCall.joinCall(roomId);
-      setVideoCallModalOpen(true);
-    } catch (error) {
-      console.error('Failed to join video call:', error);
-      alert('Video qo\'ng\'iroqqa qo\'shilish muvaffaqiyatsiz. Kamera/mikron ruxsatlarini tekshiring.');
-    }
-  };
-
   const handleEndVideoCall = () => {
     videoCall.endCall();
     setVideoCallModalOpen(false);

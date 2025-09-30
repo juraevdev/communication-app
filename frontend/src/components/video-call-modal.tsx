@@ -11,7 +11,6 @@ import {
   VideoOff, 
   X,
   Users,
-  Share
 } from "lucide-react";
 import type { VideoCallState, VideoCallControls } from '@/types/video-call';
 
@@ -33,7 +32,6 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
   videoCall
 }) => {
   const {
-    isInCall,
     localStream,
     remoteStreams,
     callStatus,
@@ -43,7 +41,6 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
     endCall,
     toggleAudio,
     toggleVideo,
-    shareScreen,
     localVideoRef
   } = videoCall;
 

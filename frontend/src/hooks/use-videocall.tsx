@@ -545,7 +545,7 @@ const rejectCall = useCallback((): void => {
 
       const videoTrack = screenStream.getVideoTracks()[0];
       
-      peerConnections.current.forEach((pc, userId) => {
+      peerConnections.current.forEach((pc, _userId) => {
         const sender = pc.getSenders().find(s => 
           s.track && s.track.kind === 'video'
         );
@@ -557,7 +557,7 @@ const rejectCall = useCallback((): void => {
       videoTrack.onended = (): void => {
         if (state.localStream) {
           const cameraTrack = state.localStream.getVideoTracks()[0];
-          peerConnections.current.forEach((pc, userId) => {
+          peerConnections.current.forEach((pc, _userId) => {
             const sender = pc.getSenders().find(s => 
               s.track && s.track.kind === 'video'
             );
