@@ -347,31 +347,33 @@ export const useVideoCall = ({
   }, [createPeerConnection, sendWebSocketMessage, currentUserId]);
 
   // ✅ Yangilangan call invitation function
-  const sendCallInvitation = useCallback((roomId: string, callType: 'video' | 'audio' = 'video'): void => {
-    const invitationMessage = {
-      type: 'call_invitation',
-      room_id: roomId,
-      call_type: callType,
-      from_user_id: currentUserId,
-      user_name: currentUserName
-    };
+  const sendCallInvitation = useCallback((roomId: string, toUserId: number, callType: 'video' | 'audio' = 'video'): void => {
+  const invitationMessage = {
+    type: 'call_invitation',
+    room_id: roomId,
+    call_type: callType,
+    from_user_id: currentUserId,
+    user_name: currentUserName,
+    to_user_id: toUserId  // ✅ Maqsadli foydalanuvchi ID si
+  };
 
-    console.log('[VideoCall] Sending call invitation:', invitationMessage);
-    sendWebSocketMessage(invitationMessage);
-  }, [sendWebSocketMessage, currentUserId, currentUserName]);
+  console.log('[VideoCall] Sending call invitation:', invitationMessage);
+  sendWebSocketMessage(invitationMessage);
+}, [sendWebSocketMessage, currentUserId, currentUserName]);
 
-  const sendCallResponse = useCallback((roomId: string, accepted: boolean): void => {
-    const responseMessage = {
-      type: 'call_response',
-      room_id: roomId,
-      accepted: accepted,
-      from_user_id: currentUserId,
-      user_name: currentUserName
-    };
+  const sendCallResponse = useCallback((roomId: string, toUserId: number, accepted: boolean): void => {
+  const responseMessage = {
+    type: 'call_response',
+    room_id: roomId,
+    accepted: accepted,
+    from_user_id: currentUserId,
+    user_name: currentUserName,
+    to_user_id: toUserId  // ✅ Maqsadli foydalanuvchi ID si
+  };
 
-    console.log('[VideoCall] Sending call response:', responseMessage);
-    sendWebSocketMessage(responseMessage);
-  }, [sendWebSocketMessage, currentUserId, currentUserName]);
+  console.log('[VideoCall] Sending call response:', responseMessage);
+  sendWebSocketMessage(responseMessage);
+}, [sendWebSocketMessage, currentUserId, currentUserName]);
 
   // Main call controls
   const startCall = useCallback(async (roomId: string): Promise<void> => {
@@ -441,29 +443,36 @@ export const useVideoCall = ({
   }, [initializeWebSocket]);
 
   const acceptCall = useCallback(async (): Promise<void> => {
-    if (state.incomingCall) {
-      console.log('[VideoCall] Accepting call:', state.incomingCall.roomId);
-      await joinCall(state.incomingCall.roomId);
-      sendCallResponse(state.incomingCall.roomId, true);
-      setState(prev => ({ 
-        ...prev, 
-        incomingCall: null, 
-        isRinging: false 
-      }));
-    }
-  }, [state.incomingCall, joinCall, sendCallResponse]);
+  if (state.incomingCall) {
+    console.log('[VideoCall] Accepting call:', state.incomingCall.roomId);
+    await joinCall(state.incomingCall.roomId);
+    
+    // ✅ Jo'natuvchiga javob yuborish
+    sendCallResponse(state.incomingCall.roomId, state.incomingCall.fromUserId, true);
+    
+    setState(prev => ({ 
+      ...prev, 
+      incomingCall: null, 
+      isRinging: false 
+    }));
+  }
+}, [state.incomingCall, joinCall, sendCallResponse]);
 
-  const rejectCall = useCallback((): void => {
-    if (state.incomingCall) {
-      console.log('[VideoCall] Rejecting call:', state.incomingCall.roomId);
-      sendCallResponse(state.incomingCall.roomId, false);
-      setState(prev => ({ 
-        ...prev, 
-        incomingCall: null, 
-        isRinging: false 
-      }));
-    }
-  }, [state.incomingCall, sendCallResponse]);
+// Reject call funksiyasini yangilang
+const rejectCall = useCallback((): void => {
+  if (state.incomingCall) {
+    console.log('[VideoCall] Rejecting call:', state.incomingCall.roomId);
+    
+    // ✅ Jo'natuvchiga javob yuborish
+    sendCallResponse(state.incomingCall.roomId, state.incomingCall.fromUserId, false);
+    
+    setState(prev => ({ 
+      ...prev, 
+      incomingCall: null, 
+      isRinging: false 
+    }));
+  }
+}, [state.incomingCall, sendCallResponse]);
 
   const endCall = useCallback((): void => {
     console.log('[VideoCall] Ending call');

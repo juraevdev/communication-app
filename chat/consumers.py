@@ -1490,7 +1490,6 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
             data = json.loads(text_data)
             message_type = data.get('type')
 
-            # Foydalanuvchi ma'lumotlarini xavfsiz olish
             user_name = getattr(self.user, 'fullname', None) or getattr(self.user, 'username', 'Unknown User')
 
             if message_type == 'offer':
@@ -1540,28 +1539,38 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
                     }
                 )
                 
-            elif message_type == 'call_invitation':
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'call_invitation',
-                        'room_id': data['room_id'],
-                        'from_user_id': self.user.id,
-                        'from_user_name': user_name,
-                        'call_type': data.get('call_type', 'video')
-                    }
-                )
+            if message_type == 'call_invitation':
+                to_user_id = data.get('to_user_id')
+                if to_user_id:
+                    await self.channel_layer.group_send(
+                        self.room_group_name,
+                        {
+                            'type': 'call_invitation',
+                            'room_id': data['room_id'],
+                            'from_user_id': self.user.id,
+                            'from_user_name': user_name,
+                            'call_type': data.get('call_type', 'video'),
+                            'to_user_id': to_user_id    
+                        }
+                    )
+                else:
+                    print("[VideoCall] Error: to_user_id missing in call_invitation")
             elif message_type == 'call_response':
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'call_response',
-                        'room_id': data['room_id'],
-                        'from_user_id': self.user.id,
-                        'from_user_name': user_name,
-                        'accepted': data['accepted']
-                    }
-                )
+                to_user_id = data.get('to_user_id')
+                if to_user_id:
+                    await self.channel_layer.group_send(
+                        self.room_group_name,
+                        {
+                            'type': 'call_response',
+                            'room_id': data['room_id'],
+                            'from_user_id': self.user.id,
+                            'from_user_name': user_name,
+                            'accepted': data['accepted'],
+                            'to_user_id': to_user_id    
+                        }
+                    )
+                else:
+                    print("[VideoCall] Error: to_user_id missing in call_response")
                 
         except json.JSONDecodeError:
             print("[VideoCall] Error decoding JSON")
@@ -1611,7 +1620,8 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
             
             
     async def call_invitation(self, event):
-        if self.user.id != event['from_user_id']:
+        target_user_id = event.get('to_user_id')
+        if self.user.id == target_user_id and self.user.id != event['from_user_id']:
             await self.send(text_data=json.dumps({
                 'type': 'call_invitation',
                 'room_id': event['room_id'],
@@ -1621,7 +1631,8 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
             }))
 
     async def call_response(self, event):
-        if self.user.id != event['from_user_id']:
+        target_user_id = event.get('to_user_id')
+        if self.user.id == target_user_id and self.user.id != event['from_user_id']:
             await self.send(text_data=json.dumps({
                 'type': 'call_response',
                 'room_id': event['room_id'],

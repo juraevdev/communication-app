@@ -186,33 +186,37 @@ export default function ChatPage() {
 
   // Video call funksiyalari
   const handleStartVideoCall = async () => {
-    if (!selectedChat || !currentUser) return;
+  if (!selectedChat || !currentUser) return;
 
-    try {
-      const roomId = `videocall_${selectedChat.id}_${Date.now()}`;
+  try {
+    const roomId = `videocall_${selectedChat.id}_${Date.now()}`;
 
-      setVideoCallInfo({
-        roomId,
-        type: selectedChat.type === 'group' ? 'group' : 'private',
-        name: getChatName(selectedChat)
-      });
+    setVideoCallInfo({
+      roomId,
+      type: selectedChat.type === 'group' ? 'group' : 'private',
+      name: getChatName(selectedChat)
+    });
 
-      // Avvalo call ni boshlash
-      await videoCall.startCall(roomId);
-      
-      // Keyin taklif yuborish
-      if (selectedChat.type === 'private') {
-        videoCall.sendCallInvitation(roomId, 'video');
-      }
-      
-      setVideoCallModalOpen(true);
-      console.log('[ChatPage] Video call started and invitation sent');
-
-    } catch (error) {
-      console.error('Failed to start video call:', error);
-      alert('Video qo\'ng\'iroqni boshlash muvaffaqiyatsiz. Kamera/mikron ruxsatlarini tekshiring.');
+    // Avvalo call ni boshlash
+    await videoCall.startCall(roomId);
+    
+    // Keyin taklif yuborish
+    if (selectedChat.type === 'private') {
+      // ✅ To'g'ri foydalanuvchi ID sini yuborish
+      const targetUserId = selectedChat.id; // yoki selectedChat.sender_id
+      videoCall.sendCallInvitation(roomId, targetUserId, 'video');
     }
-  };
+    
+    setVideoCallModalOpen(true);
+    console.log('[ChatPage] Video call started and invitation sent');
+
+  } catch (error) {
+    console.error('Failed to start video call:', error);
+    alert('Video qo\'ng\'iroqni boshlash muvaffaqiyatsiz. Kamera/mikron ruxsatlarini tekshiring.');
+  }
+};
+
+
 
   const handleJoinVideoCall = async (roomId: string) => {
     try {

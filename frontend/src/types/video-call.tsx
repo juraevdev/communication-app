@@ -24,7 +24,7 @@ export interface VideoCallControls {
   startCall: (roomId: string) => Promise<void>;
   joinCall: (roomId: string) => Promise<void>;
   endCall: () => void;
-  toggleAudio: () => boolean;
+  toggleAudio: () => boolean; 
   toggleVideo: () => boolean;
   shareScreen: () => Promise<void>;
   localVideoRef: RefObject<HTMLVideoElement | null>;

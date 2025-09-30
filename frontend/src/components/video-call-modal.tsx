@@ -26,7 +26,6 @@ interface VideoCallModalProps {
   videoCall: VideoCallState & VideoCallControls;
 }
 
-// components/video-call-modal.tsx
 export const VideoCallModal: React.FC<VideoCallModalProps> = ({
   isOpen,
   onClose,
