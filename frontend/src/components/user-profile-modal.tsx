@@ -139,12 +139,6 @@ export function UserProfileModal({
     try {
       if (isOwnProfile) {
         // API chaqiruvi
-        const updatedUser = await apiClient.updateUserProfile({
-          fullname: editData.fullname,
-          username: editData.username,
-          email: editData.email,
-          phone_number: editData.phone_number
-        })
 
         // Parent komponentga yangilangan ma'lumotlarni uzatish
         if (onProfileUpdate) {
