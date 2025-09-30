@@ -1051,7 +1051,7 @@ export default function ChatPage() {
 
       let downloadUrl = fileUrl;
       if (!fileUrl.startsWith('http')) {
-        downloadUrl = `http://localhost:8000${fileUrl}`;
+        downloadUrl = `http://172.16.8.92:8000${fileUrl}`;
       }
 
       console.log('Downloading file from:', downloadUrl);
