@@ -1217,32 +1217,29 @@ export function useChat() {
         switch (data.type) {
           case "message_history":
             if (data.messages && Array.isArray(data.messages)) {
-              const formattedMessages: Message[] = data.messages.map((msg: any) => {
-                console.log("[DEBUG] Raw message from backend:", msg);
-
-                return {
-                  id: msg.id.toString(),
-                  channel_id: parseInt(channelId),
-                  sender: {
-                    id: msg.user.id || msg.user_info?.id,
-                    email: "",
-                    fullname: msg.user_info?.fullname || msg.user?.fullname || "Unknown",
-                    full_name: msg.user_info?.fullname || msg.user?.fullname || "Unknown",
-                  },
-                  message: msg.content || "",
-                  timestamp: msg.created_at,
-                  isOwn: msg.is_own || msg.user?.id === currentUser?.id?.toString(),
-                  is_read: msg.is_read,
-                  is_updated: msg.is_updated,
-                  type: msg.message_type || "text",
-                  file_name: msg.file?.name,
-                  file_url: msg.file?.url,
-                  file_type: msg.file?.type,
-                  file_size: msg.file?.size?.toString(),
-                  can_edit: msg.can_edit || false,
-                  can_delete: msg.can_delete || false,
-                }
-              })
+              const formattedMessages: Message[] = data.messages.map((msg: any) => ({
+                id: msg.id.toString(),
+                channel_id: parseInt(channelId),
+                sender: {
+                  id: msg.user.id || msg.user_info?.id,
+                  email: "",
+                  fullname: msg.user_info?.fullname || msg.user?.fullname || "Unknown",
+                  full_name: msg.user_info?.fullname || msg.user?.fullname || "Unknown",
+                },
+                message: msg.content || "",
+                timestamp: msg.created_at,
+                isOwn: msg.is_own || false,
+                is_read: msg.is_read,
+                is_updated: msg.is_updated,
+                type: msg.message_type || "text",
+                file_name: msg.file?.name,
+                file_url: msg.file?.url,
+                file_type: msg.file?.type,
+                file_size: msg.file?.size?.toString(),
+                can_edit: msg.can_edit || false,
+                can_delete: msg.can_delete || false,
+                is_channel_owner: msg.is_channel_owner || false,
+              }))
 
               setMessages(prev => ({
                 ...prev,
@@ -1295,7 +1292,7 @@ export function useChat() {
               sender: data.message.user,
               message: data.message.content || "",
               timestamp: data.message.created_at,
-              isOwn: data.message.is_own || (data.message.user.id === currentUser?.id?.toString()),
+              isOwn: data.message.is_own || false,
               is_read: data.message.is_read,
               is_updated: data.message.is_updated,
               type: data.message.message_type || "text",
@@ -1303,36 +1300,12 @@ export function useChat() {
               file_url: data.message.file?.url,
               file_type: data.message.file?.type,
               file_size: data.message.file?.size?.toString(),
-              is_channel_owner: data.message.is_channel_owner || false, // ✅ Yangi field
-              can_edit: data.message.can_edit || false, // ✅ Yangi field
-              can_delete: data.message.can_delete || false, // ✅ Yangi field
+              is_channel_owner: data.message.is_channel_owner || false,
+              can_edit: data.message.can_edit || false,
+              can_delete: data.message.can_delete || false,
             }
 
             addMessage(`channel_${channelId}`, newMessage)
-
-            // ✅ Kanalni ro'yxatda yuqoriga ko'tarish
-            setChannels(prev => {
-              const updatedChannels = prev.map(channel => {
-                if (channel.id.toString() === channelId) {
-                  return {
-                    ...channel,
-                    timestamp: data.message.created_at,
-                    last_message: data.message.content || "",
-                    unread: data.unread_count !== undefined ? data.unread_count : channel.unread
-                  }
-                }
-                return channel
-              })
-
-              // So'nggi xabar bo'yicha tartiblash
-              updatedChannels.sort((a, b) => {
-                const dateA = new Date(a.timestamp).getTime()
-                const dateB = new Date(b.timestamp).getTime()
-                return dateB - dateA
-              })
-
-              return updatedChannels
-            })
             break;
 
           case "file_uploaded":

@@ -57,6 +57,10 @@ class ChannelConsumer(AsyncWebsocketConsumer):
                 await self.handle_mark_as_read(data)
             elif action == 'get_unread_count':
                 await self.send_unread_count()
+            elif action == 'message_deleted':
+                await self.handle_delete_message()
+            elif action == 'message_updated':
+                await self.handle_edit_message()
             else:
                 await self.send(text_data=json.dumps({
                     'error': 'Invalid action'
@@ -406,10 +410,10 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             'message_type': message.message_type,
             'is_updated': message.is_updated,
             'is_read': message.is_read,
-            'is_own': is_own_message,  # ✅ Xabar joriy foydalanuvchiga tegishliligi
-            'is_channel_owner': is_channel_owner,  # ✅ Joriy foydalanuvchi kanal egasimi
-            'can_edit': can_edit,  # ✅ Tahrirlash huquqi
-            'can_delete': can_delete,  # ✅ O'chirish huquqi
+            'is_own': is_own_message,   
+            'is_channel_owner': is_channel_owner,   
+            'can_edit': can_edit,   
+            'can_delete': can_delete,   
         }
     
         if message.file:
@@ -460,10 +464,10 @@ class ChannelConsumer(AsyncWebsocketConsumer):
                 'message_type': msg.message_type,
                 'is_updated': msg.is_updated,
                 'is_read': is_read_by_user,
-                'is_own': msg.user.id == self.user.id,  # ✅ Xabar egasi
-                'is_channel_owner': is_channel_owner,  # ✅ Kanal egasi
-                'can_edit': can_edit,  # ✅ Tahrirlash huquqi
-                'can_delete': can_delete,  # ✅ O'chirish huquqi
+                'is_own': msg.user.id == self.user.id,      
+                'is_channel_owner': is_channel_owner,   
+                'can_edit': can_edit,   
+                'can_delete': can_delete,   
             }
 
             if msg.file:

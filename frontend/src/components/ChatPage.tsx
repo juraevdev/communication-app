@@ -330,32 +330,21 @@ export default function ChatPage() {
   }, [selectedChat, messages, markAsRead])
 
   const getIsOwnMessage = (msg: any): boolean => {
-    // ✅ TO'G'RI: Agar kanal bo'lsa, faqat kanal egasi o'ng tomonda bo'ladi
     if (selectedChat?.type === "channel") {
-      const isChannelOwner = msg.is_channel_owner || false;
-      console.log("[DEBUG] Channel message - is_channel_owner:", isChannelOwner, "msg.is_own:", msg.is_own);
-      return isChannelOwner; // ✅ Faqat kanal egasi o'ng tomonda
+      return msg.is_channel_owner || msg.can_edit || false;
     }
 
-    // Qolgan hollarda (shaxsiy chat, guruh) odatiy tekshirish
+    // Shaxsiy chat va guruhlar uchun
     if (msg.is_own !== undefined) {
-      console.log("[DEBUG] Using is_own from backend:", msg.is_own);
       return msg.is_own;
     }
 
     if (msg.isOwn !== undefined) {
-      console.log("[DEBUG] Using isOwn from frontend:", msg.isOwn);
       return msg.isOwn;
     }
 
     const senderId = msg.sender?.id?.toString();
     const currentUserId = currentUser?.id?.toString();
-
-    console.log("[DEBUG] Manual ID comparison:", {
-      senderId,
-      currentUserId,
-      equal: senderId === currentUserId
-    });
 
     return senderId === currentUserId;
   };
@@ -1728,42 +1717,26 @@ export default function ChatPage() {
                           </div>
                         </div>
 
-                        {/* Messages for this date */}
                         {dateMessages.map((msg) => {
-                          const isOwn = getIsOwnMessage(msg);
-                          const isChannelOwner = msg.is_channel_owner || false;
+                          const isRightAligned = getIsOwnMessage(msg);
                           const canEdit = msg.can_edit || false;
                           const canDelete = msg.can_delete || false;
 
-                          console.log(`[RENDER] Message ${msg.id}: isOwn = ${isOwn}, isChannelOwner = ${isChannelOwner}, canEdit = ${canEdit}, canDelete = ${canDelete}`);
-
-                          // Kanalda: egasi o'ngda, a'zolar chapda
-                          // Boshqa chatlarda: o'z xabarlarim o'ngda, boshqalari chapda
-                          const isRightAligned = selectedChat?.type === "channel" ? isChannelOwner : isOwn;
-
                           return (
-                            <div
-                              key={msg.id || Math.random()}
-                              className={`group flex gap-3 mb-4 ${isRightAligned ? "flex-row-reverse" : "flex-row"
-                                }`}
-                            >
+                            <div key={msg.id} className={`group flex gap-3 mb-4 ${isRightAligned ? "flex-row-reverse" : "flex-row"}`}>
                               {/* Avatar - faqat chap tomondagi xabarlar uchun */}
                               {!isRightAligned && (
                                 <Avatar className="h-8 w-8 flex-shrink-0">
-                                  <AvatarImage src={
-                                    selectedChat?.type === "channel" ? "/channel-avatar.png" : "/diverse-group.png"
-                                  } />
+                                  <AvatarImage src={selectedChat?.type === "channel" ? "/channel-avatar.png" : "/diverse-group.png"} />
                                   <AvatarFallback className="bg-gray-600 text-white">
                                     {getAvatarLetter(getSenderName(msg.sender))}
                                   </AvatarFallback>
                                 </Avatar>
                               )}
 
-                              <div className={`max-w-xs lg:max-w-md ${isRightAligned ? "text-right" : "text-left"
-                                }`}>
-
-                                {/* Sender nomi - faqat chap tomondagi xabarlar uchun */}
-                                {!isRightAligned && selectedChat?.type === "channel" && (
+                              <div className={`max-w-xs lg:max-w-md ${isRightAligned ? "text-right" : "text-left"}`}>
+                                {/* Sender nomi - faqat chap tomonda */}
+                                {!isRightAligned && (selectedChat?.type === "channel" || selectedChat?.type === "group") && (
                                   <p className="text-sm font-medium text-white mb-1">
                                     {getSenderName(msg.sender)}
                                   </p>
@@ -1772,11 +1745,9 @@ export default function ChatPage() {
                                 <div className="relative">
                                   {/* Tahrirlash va o'chirish tugmalari - faqat o'ng tomondagi xabarlar uchun */}
                                   {isRightAligned && (canEdit || canDelete) && (
-                                    <div className={`absolute ${isRightAligned ? "-left-8" : "-right-8"
-                                      } top-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col gap-1`}>
-
+                                    <div className="absolute -left-8 top-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col gap-1">
                                       {/* Tahrirlash tugmasi - faqat text xabarlar uchun */}
-                                      {msg.type !== "file" && canEdit && (
+                                      {!isFileMessage(msg) && canEdit && (
                                         <Button
                                           variant="ghost"
                                           size="sm"
@@ -1786,7 +1757,7 @@ export default function ChatPage() {
                                             setEditingMessage({
                                               id: msg.id,
                                               content: msg.message,
-                                              type: isFileMessage(msg) ? "file" : "text"
+                                              type: "text"
                                             });
                                           }}
                                         >
@@ -1814,14 +1785,9 @@ export default function ChatPage() {
                                   )}
 
                                   {/* Xabar kontenti */}
-                                  <div
-                                    className={`rounded-lg px-3 py-2 ${isRightAligned ? "bg-blue-600 text-white" : "bg-gray-700 text-white"
-                                      }`}
-                                  >
+                                  <div className={`rounded-lg px-3 py-2 ${isRightAligned ? "bg-blue-600 text-white" : "bg-gray-700 text-white"}`}>
                                     {isFileMessage(msg) ? (
-                                      <div
-                                        className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:opacity-80 ${isRightAligned ? "bg-blue-700" : "bg-gray-600"
-                                          }`}
+                                      <div className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:opacity-80 ${isRightAligned ? "bg-blue-700" : "bg-gray-600"}`}
                                         onClick={() => handleDownload(msg.file_url || "", msg.file_name || msg.message?.replace("File: ", "") || "file")}
                                       >
                                         {getFileIcon(msg.file_type || msg.type)}
@@ -1847,15 +1813,10 @@ export default function ChatPage() {
                                   </div>
 
                                   {/* Vaqt va status */}
-                                  <div className={`flex items-center gap-1 mt-1 ${isRightAligned ? "justify-end" : "justify-start"
-                                    }`}>
+                                  <div className={`flex items-center gap-1 mt-1 ${isRightAligned ? "justify-end" : "justify-start"}`}>
                                     <p className="text-xs text-gray-400">
                                       {formatMessageTime(msg.timestamp)}
                                     </p>
-                                    {/* Status faqat shaxsiy chatlar uchun */}
-                                    {isOwn && selectedChat?.type === "private" && (
-                                      <MessageStatus status={getMessageStatus(msg)} isOwn={isOwn} />
-                                    )}
                                   </div>
                                 </div>
                               </div>
