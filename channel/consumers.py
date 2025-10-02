@@ -263,7 +263,7 @@ class ChannelConsumer(AsyncWebsocketConsumer):
         success = await self.delete_file_message(file_id)
         if success:
             await self.channel_layer.group_send(
-                self.channel_room_name,
+                self.channel_room_name, 
                 {   
                     'type': 'file_deleted',
                     'file_id': file_id
