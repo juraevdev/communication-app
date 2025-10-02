@@ -329,6 +329,26 @@ export default function ChatPage() {
     }
   }, [selectedChat, messages, markAsRead])
 
+  // ChatPage komponentiga qo'shing
+  const getIsOwnMessage = (msg: any): boolean => {
+    // Agar isOwn mavjud bo'lsa, undan foydalaning
+    if (msg.isOwn !== undefined) {
+      return msg.isOwn;
+    }
+
+    // Agar isOwn bo'lmasa, sender ID va currentUser ID ni solishtiring
+    const senderId = msg.sender?.id?.toString();
+    const currentUserId = currentUser?.id?.toString();
+
+    console.log("[DEBUG] Comparing IDs:", {
+      senderId,
+      currentUserId,
+      equal: senderId === currentUserId
+    });
+
+    return senderId === currentUserId;
+  };
+
   // Send message handler
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault()
@@ -1699,185 +1719,189 @@ export default function ChatPage() {
                         </div>
 
                         {/* Messages for this date */}
-                        {dateMessages.map((msg) => (
-                          <div
-                            key={msg.id || Math.random()}
-                            className={`group flex gap-3 mb-4 ${
-                              // ✅ Kanal uchun: egasi o'ngda, a'zolar chapda
-                              selectedChat?.type === "channel"
-                                ? msg.isOwn ? "flex-row-reverse" : "flex-row"
-                                : msg.isOwn ? "flex-row-reverse" : "flex-row"
-                              }`}
-                            style={{ cursor: !msg.isOwn && !msg.is_read ? 'pointer' : 'default' }}
-                          >
-                            {/* Avatar - faqat a'zolar uchun (kanalda egasi uchun avatar ko'rsatilmaydi) */}
-                            {!msg.isOwn && selectedChat?.type === "channel" && (
-                              <Avatar className="h-8 w-8 flex-shrink-0">
-                                <AvatarImage src="/diverse-group.png" />
-                                <AvatarFallback className="bg-gray-600 text-white">
-                                  {getAvatarLetter(getSenderName(msg.sender))}
-                                </AvatarFallback>
-                              </Avatar>
-                            )}
+                        {dateMessages.map((msg) => {
+                          const isOwn = getIsOwnMessage(msg);
+                          console.log(`[RENDER] Message ${msg.id}: isOwn = ${isOwn}`);
+                          return (
+                            <div
+                              key={msg.id || Math.random()}
+                              className={`group flex gap-3 mb-4 ${
+                                // ✅ Kanal uchun: egasi o'ngda, a'zolar chapda
+                                selectedChat?.type === "channel"
+                                  ? msg.isOwn ? "flex-row-reverse" : "flex-row"
+                                  : msg.isOwn ? "flex-row-reverse" : "flex-row"
+                                }`}
+                              style={{ cursor: !msg.isOwn && !msg.is_read ? 'pointer' : 'default' }}
+                            >
+                              {/* Avatar - faqat a'zolar uchun (kanalda egasi uchun avatar ko'rsatilmaydi) */}
+                              {!msg.isOwn && selectedChat?.type === "channel" && (
+                                <Avatar className="h-8 w-8 flex-shrink-0">
+                                  <AvatarImage src="/diverse-group.png" />
+                                  <AvatarFallback className="bg-gray-600 text-white">
+                                    {getAvatarLetter(getSenderName(msg.sender))}
+                                  </AvatarFallback>
+                                </Avatar>
+                              )}
 
-                            {/* Shaxsiy chatlar uchun avatar */}
-                            {!msg.isOwn && selectedChat?.type !== "channel" && (
-                              <Avatar className="h-8 w-8 flex-shrink-0">
-                                <AvatarImage src="/diverse-group.png" />
-                                <AvatarFallback className="bg-gray-600 text-white">
-                                  {getAvatarLetter(getSenderName(msg.sender))}
-                                </AvatarFallback>
-                              </Avatar>
-                            )}
+                              {/* Shaxsiy chatlar uchun avatar */}
+                              {!msg.isOwn && selectedChat?.type !== "channel" && (
+                                <Avatar className="h-8 w-8 flex-shrink-0">
+                                  <AvatarImage src="/diverse-group.png" />
+                                  <AvatarFallback className="bg-gray-600 text-white">
+                                    {getAvatarLetter(getSenderName(msg.sender))}
+                                  </AvatarFallback>
+                                </Avatar>
+                              )}
 
-                            <div className={`max-w-xs lg:max-w-md ${selectedChat?.type === "channel"
+                              <div className={`max-w-xs lg:max-w-md ${selectedChat?.type === "channel"
                                 ? msg.isOwn ? "text-right" : "text-left"
                                 : msg.isOwn ? "text-right" : "text-left"
-                              }`}>
+                                }`}>
 
-                              {/* Sender nomi - faqat a'zolar uchun */}
-                              {!msg.isOwn && selectedChat?.type === "channel" && (
-                                <p className="text-sm font-medium text-white mb-1">
-                                  {getSenderName(msg.sender)}
-                                </p>
-                              )}
-
-                              {/* Shaxsiy chatlar uchun sender nomi */}
-                              {!msg.isOwn && selectedChat?.type !== "channel" && (
-                                <p className="text-sm font-medium text-white mb-1">
-                                  {getSenderName(msg.sender)}
-                                </p>
-                              )}
-
-                              <div className="relative">
-                                {/* Reply button - faqat a'zolar xabarlari uchun */}
-                                {!msg.isOwn && selectedChat?.type !== "channel" && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="absolute -left-8 top-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-gray-400 hover:text-white hover:bg-gray-700 p-1 h-6 w-6"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleReply(msg);
-                                    }}
-                                  >
-                                    <Reply className="h-3 w-3" />
-                                  </Button>
+                                {/* Sender nomi - faqat a'zolar uchun */}
+                                {!msg.isOwn && selectedChat?.type === "channel" && (
+                                  <p className="text-sm font-medium text-white mb-1">
+                                    {getSenderName(msg.sender)}
+                                  </p>
                                 )}
 
-                                {/* Tahrirlash va o'chirish tugmalari - faqat o'z xabarlarimiz uchun */}
-                                {msg.isOwn && (
-                                  <div className={`absolute ${
-                                    // ✅ Kanalda: egasi o'ng tomonda, shuning uchun tugmalar chap tomonda
-                                    selectedChat?.type === "channel"
-                                      ? msg.isOwn ? "-left-8" : "-right-8"
-                                      : msg.isOwn ? "-left-8" : "-right-8"
-                                    } top-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col gap-1`}>
+                                {/* Shaxsiy chatlar uchun sender nomi */}
+                                {!msg.isOwn && selectedChat?.type !== "channel" && (
+                                  <p className="text-sm font-medium text-white mb-1">
+                                    {getSenderName(msg.sender)}
+                                  </p>
+                                )}
 
-                                    {/* Tahrirlash tugmasi - faqat text xabarlar uchun */}
-                                    {msg.type !== "file" && (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 w-6 p-0 text-gray-400 hover:text-blue-400 hover:bg-gray-700"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setEditingMessage({
-                                            id: msg.id,
-                                            content: msg.message,
-                                            type: isFileMessage(msg) ? "file" : "text"
-                                          });
-                                        }}
-                                      >
-                                        <Edit className="h-3 w-3" />
-                                      </Button>
-                                    )}
-
-                                    {/* O'chirish tugmasi */}
+                                <div className="relative">
+                                  {/* Reply button - faqat a'zolar xabarlari uchun */}
+                                  {!msg.isOwn && selectedChat?.type !== "channel" && (
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      className="h-6 w-6 p-0 text-gray-400 hover:text-red-400 hover:bg-gray-700"
+                                      className="absolute -left-8 top-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-gray-400 hover:text-white hover:bg-gray-700 p-1 h-6 w-6"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        if (confirm("Bu xabarni o'chirishni istaysizmi?")) {
-                                          handleDeleteMessage(msg.id, msg);
-                                        }
+                                        handleReply(msg);
                                       }}
                                     >
-                                      <Trash2 className="h-3 w-3" />
+                                      <Reply className="h-3 w-3" />
                                     </Button>
-                                  </div>
-                                )}
+                                  )}
 
-                                {/* Xabar kontenti */}
-                                <div
-                                  className={`rounded-lg px-3 py-2 ${selectedChat?.type === "channel"
+                                  {/* Tahrirlash va o'chirish tugmalari - faqat o'z xabarlarimiz uchun */}
+                                  {msg.isOwn && (
+                                    <div className={`absolute ${
+                                      // ✅ Kanalda: egasi o'ng tomonda, shuning uchun tugmalar chap tomonda
+                                      selectedChat?.type === "channel"
+                                        ? msg.isOwn ? "-left-8" : "-right-8"
+                                        : msg.isOwn ? "-left-8" : "-right-8"
+                                      } top-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col gap-1`}>
+
+                                      {/* Tahrirlash tugmasi - faqat text xabarlar uchun */}
+                                      {msg.type !== "file" && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 w-6 p-0 text-gray-400 hover:text-blue-400 hover:bg-gray-700"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditingMessage({
+                                              id: msg.id,
+                                              content: msg.message,
+                                              type: isFileMessage(msg) ? "file" : "text"
+                                            });
+                                          }}
+                                        >
+                                          <Edit className="h-3 w-3" />
+                                        </Button>
+                                      )}
+
+                                      {/* O'chirish tugmasi */}
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 p-0 text-gray-400 hover:text-red-400 hover:bg-gray-700"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (confirm("Bu xabarni o'chirishni istaysizmi?")) {
+                                            handleDeleteMessage(msg.id, msg);
+                                          }
+                                        }}
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  )}
+
+                                  {/* Xabar kontenti */}
+                                  <div
+                                    className={`rounded-lg px-3 py-2 ${selectedChat?.type === "channel"
                                       ? msg.isOwn
                                         ? "bg-blue-600 text-white"
                                         : "bg-gray-700 text-white"
                                       : msg.isOwn
                                         ? "bg-blue-600 text-white"
                                         : "bg-gray-700 text-white"
-                                    }`}
-                                >
-                                  {/* Reply preview */}
-                                  {msg.reply_to && (
-                                    <div className="mb-2 p-2 bg-blue-800 bg-opacity-20 rounded border-l-2 border-blue-400">
-                                      <p className="text-xs opacity-70 mb-1">
-                                        {msg.reply_to.sender || "Noma'lum"} ga javob
-                                      </p>
-                                      <p className="text-sm opacity-90 truncate">
-                                        {msg.reply_to.content || msg.reply_to.message || "Xabar"}
-                                      </p>
-                                    </div>
-                                  )}
-
-                                  {isFileMessage(msg) ? (
-                                    <div
-                                      className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:opacity-80 ${msg.isOwn ? "bg-blue-700" : "bg-gray-600"
-                                        }`}
-                                      onClick={() => handleDownload(msg.file_url || "", msg.file_name || msg.message?.replace("File: ", "") || "file")}
-                                    >
-                                      {getFileIcon(msg.file_type || msg.type)}
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium truncate">
-                                          {msg.file_name || msg.message?.replace("File: ", "") || "Fayl"}
+                                      }`}
+                                  >
+                                    {/* Reply preview */}
+                                    {msg.reply_to && (
+                                      <div className="mb-2 p-2 bg-blue-800 bg-opacity-20 rounded border-l-2 border-blue-400">
+                                        <p className="text-xs opacity-70 mb-1">
+                                          {msg.reply_to.sender || "Noma'lum"} ga javob
                                         </p>
-                                        {msg.file_size && (
-                                          <p className="text-xs opacity-70">
-                                            {formatFileSize(Number(msg.file_size))}
-                                          </p>
-                                        )}
+                                        <p className="text-sm opacity-90 truncate">
+                                          {msg.reply_to.content || msg.reply_to.message || "Xabar"}
+                                        </p>
                                       </div>
-                                    </div>
-                                  ) : (
-                                    <p className="text-sm break-words whitespace-pre-wrap overflow-wrap-anywhere max-w-full">
-                                      {msg.message || ""}
-                                    </p>
-                                  )}
-                                  {msg.is_updated && (
-                                    <p className="text-xs opacity-70 mt-1">tahrirlangan</p>
-                                  )}
-                                </div>
+                                    )}
 
-                                {/* Vaqt va status */}
-                                <div className={`flex items-center gap-1 mt-1 ${selectedChat?.type === "channel"
+                                    {isFileMessage(msg) ? (
+                                      <div
+                                        className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:opacity-80 ${msg.isOwn ? "bg-blue-700" : "bg-gray-600"
+                                          }`}
+                                        onClick={() => handleDownload(msg.file_url || "", msg.file_name || msg.message?.replace("File: ", "") || "file")}
+                                      >
+                                        {getFileIcon(msg.file_type || msg.type)}
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium truncate">
+                                            {msg.file_name || msg.message?.replace("File: ", "") || "Fayl"}
+                                          </p>
+                                          {msg.file_size && (
+                                            <p className="text-xs opacity-70">
+                                              {formatFileSize(Number(msg.file_size))}
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-sm break-words whitespace-pre-wrap overflow-wrap-anywhere max-w-full">
+                                        {msg.message || ""}
+                                      </p>
+                                    )}
+                                    {msg.is_updated && (
+                                      <p className="text-xs opacity-70 mt-1">tahrirlangan</p>
+                                    )}
+                                  </div>
+
+                                  {/* Vaqt va status */}
+                                  <div className={`flex items-center gap-1 mt-1 ${selectedChat?.type === "channel"
                                     ? msg.isOwn ? "justify-end" : "justify-start"
                                     : msg.isOwn ? "justify-end" : "justify-start"
-                                  }`}>
-                                  <p className="text-xs text-gray-400">
-                                    {formatMessageTime(msg.timestamp)}
-                                  </p>
-                                  {/* Status faqat o'z xabarlarimiz uchun va guruh/kanal emas */}
-                                  {msg.isOwn && selectedChat?.type !== "group" && selectedChat?.type !== "channel" && (
-                                    <MessageStatus status={getMessageStatus(msg)} isOwn={msg.isOwn} />
-                                  )}
+                                    }`}>
+                                    <p className="text-xs text-gray-400">
+                                      {formatMessageTime(msg.timestamp)}
+                                    </p>
+                                    {/* Status faqat o'z xabarlarimiz uchun va guruh/kanal emas */}
+                                    {msg.isOwn && selectedChat?.type !== "group" && selectedChat?.type !== "channel" && (
+                                      <MessageStatus status={getMessageStatus(msg)} isOwn={msg.isOwn} />
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ))
                   )}

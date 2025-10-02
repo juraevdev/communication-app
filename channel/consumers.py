@@ -375,7 +375,7 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             'id': message.id,
             'content': message.content,
             'user': {
-                'id': message.user.id,  
+                'id': str(message.user.id),  # ✅ String formatga o'tkazish
                 'fullname': message.user.fullname,
                 'email': message.user.email
             },
@@ -383,9 +383,9 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             'message_type': message.message_type,
             'is_updated': message.is_updated,
             'is_read': message.is_read,
-            'is_own': message.user.id == self.user.id
-            }
-
+            'is_own': str(message.user.id) == str(self.user.id)  # ✅ String solishtirish
+        }
+    
         if message.file:
             result['file'] = {
                 'name': message.file.original_filename,
