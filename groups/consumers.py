@@ -53,7 +53,7 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
         try:
             text_data_json = json.loads(text_data)
             message_type = text_data_json.get('type', 'chat_message')
-    
+
             if message_type == 'chat_message':
                 await self.handle_chat_message(text_data_json)
             elif message_type == 'typing':
@@ -69,7 +69,11 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
             elif message_type == 'get_unread_count': 
                 await self.send_unread_count()
             elif message_type == 'mark_all_as_read':
-                await self.handle_mark_all_as_read()    
+                await self.handle_mark_all_as_read()
+            elif message_type == 'edit_message':
+                await self.handle_edit_message(text_data_json)
+            elif message_type == 'delete_message':
+                await self.handle_delete_message(text_data_json)
             
         except json.JSONDecodeError:
             await self.send(text_data=json.dumps({
@@ -506,7 +510,8 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                 {
                     'type': 'message_updated',
                     'message_id': message_id,
-                    'new_content': new_content
+                    'new_content': new_content,
+                    'sender_id': self.user.id  # ✅ Qo'shildi
                 }
             )
         else:
@@ -528,7 +533,8 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                 self.group_room_name,
                 {
                     'type': 'message_deleted',
-                    'message_id': message_id
+                    'message_id': message_id,
+                    'sender_id': self.user.id  # ✅ Qo'shildi
                 }
             )
         else:
@@ -540,13 +546,15 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'type': 'message_updated',
             'message_id': event['message_id'],
-            'new_content': event['new_content']
+            'new_content': event['new_content'],
+            'sender_id': event['sender_id']  # ✅ Qo'shildi
         }))
 
     async def message_deleted(self, event):
         await self.send(text_data=json.dumps({
             'type': 'message_deleted',
-            'message_id': event['message_id']
+            'message_id': event['message_id'],
+            'sender_id': event['sender_id']  # ✅ Qo'shildi
         }))
 
     @database_sync_to_async

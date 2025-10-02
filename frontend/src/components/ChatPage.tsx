@@ -786,124 +786,125 @@ export default function ChatPage() {
   };
 
   // Edit message handler
-  const handleEditMessage = async (messageId: string, newContent: string) => {
-    if (!selectedChat || !isConnected) return;
+  // handleEditMessage funksiyasini yangilang
+const handleEditMessage = async (messageId: string, newContent: string) => {
+  if (!selectedChat || !isConnected) return;
 
-    try {
-      if (selectedChat.type === "group") {
-        if (groupWsRef.current?.readyState === WebSocket.OPEN) {
-          groupWsRef.current.send(JSON.stringify({
-            type: "edit_message",
-            message_id: messageId,
-            new_content: newContent
-          }));
-        }
-      } else if (selectedChat.type === "channel") {
-        if (channelWsRef.current?.readyState === WebSocket.OPEN) {
-          channelWsRef.current.send(JSON.stringify({
-            action: "edit_message",
-            message_id: messageId,
-            new_content: newContent
-          }));
-        }
-      } else {
-        const roomId = selectedChat.room_id || selectedChat.id?.toString();
-        if (roomId && chatWsRef.current?.readyState === WebSocket.OPEN) {
-          chatWsRef.current.send(JSON.stringify({
-            action: "edit_message",
-            message_id: messageId,
-            new_content: newContent
-          }));
-        }
+  try {
+    if (selectedChat.type === "group") {
+      if (groupWsRef.current?.readyState === WebSocket.OPEN) {
+        groupWsRef.current.send(JSON.stringify({
+          type: "edit_message",
+          message_id: messageId,
+          new_content: newContent
+        }));
       }
-    } catch (error) {
-      console.error("Failed to edit message:", error);
-      alert("Xabarni tahrirlash muvaffaqiyatsiz. Iltimos, qayta urinib ko'ring.");
-    }
-  };
-
-  // Delete message handler
-  const handleDeleteMessage = async (messageId: string, msg: any) => {
-    if (!selectedChat || !isConnected) return;
-
-    const isFile = isFileMessage(msg);
-    console.log("[UI] Deleting message:", { messageId, isFile, msg });
-
-    try {
-      if (selectedChat.type === "group") {
-        // Optimistic update - darhol UI dan o'chirish
-        setMessages(prev => {
-          const roomKey = `group_${selectedChat.id}`;
-          const updatedMessages = (prev[roomKey] || []).filter(m => m.id !== messageId);
-          return {
-            ...prev,
-            [roomKey]: updatedMessages,
-          };
-        });
-
-        if (groupWsRef.current?.readyState === WebSocket.OPEN) {
-          groupWsRef.current.send(JSON.stringify({
-            action: isFile ? "delete_file" : "delete_message",
-            [isFile ? "file_id" : "message_id"]: messageId
-          }));
-        }
-      } else if (selectedChat.type === "channel") {
-        // Optimistic update - darhol UI dan o'chirish
-        setMessages(prev => {
-          const roomKey = `channel_${selectedChat.id}`;
-          const updatedMessages = (prev[roomKey] || []).filter(m => m.id !== messageId);
-          return {
-            ...prev,
-            [roomKey]: updatedMessages,
-          };
-        });
-
-        if (channelWsRef.current?.readyState === WebSocket.OPEN) {
-          channelWsRef.current.send(JSON.stringify({
-            action: isFile ? "delete_file" : "delete_message",
-            [isFile ? "file_id" : "message_id"]: messageId
-          }));
-        }
-      } else {
-        const roomId = selectedChat.room_id || selectedChat.id?.toString();
-
-        // Optimistic update - darhol UI dan o'chirish
-        if (roomId) {
-          setMessages(prev => {
-            const updatedMessages = (prev[roomId] || []).filter(m => m.id !== messageId);
-            return {
-              ...prev,
-              [roomId]: updatedMessages,
-            };
-          });
-        }
-
-        if (roomId && chatWsRef.current?.readyState === WebSocket.OPEN) {
-          chatWsRef.current.send(JSON.stringify({
-            action: isFile ? "delete_file" : "delete_message",
-            [isFile ? "file_id" : "message_id"]: messageId
-          }));
-        }
+    } else if (selectedChat.type === "channel") {
+      if (channelWsRef.current?.readyState === WebSocket.OPEN) {
+        channelWsRef.current.send(JSON.stringify({
+          action: "edit_message",
+          message_id: messageId,
+          new_content: newContent
+        }));
       }
-    } catch (error) {
-      console.error("Failed to delete message:", error);
-      alert("Xabarni o'chirish muvaffaqiyatsiz. Iltimos, qayta urinib ko'ring.");
-
-      // Agar xatolik bo'lsa, UI ni qayta yuklash
-      if (selectedChat.type === "group") {
-        const groupId = selectedChat.id.toString();
-        connectToGroup(groupId);
-      } else if (selectedChat.type === "channel") {
-        const channelId = selectedChat.id.toString();
-        connectToChannel(channelId);
-      } else {
-        const roomId = selectedChat.room_id || selectedChat.id?.toString();
-        if (roomId) {
-          connectToChatRoom(roomId);
-        }
+    } else {
+      const roomId = selectedChat.room_id || selectedChat.id?.toString();
+      if (roomId && chatWsRef.current?.readyState === WebSocket.OPEN) {
+        chatWsRef.current.send(JSON.stringify({
+          action: "edit_message",
+          message_id: messageId,
+          new_content: newContent
+        }));
       }
     }
-  };
+  } catch (error) {
+    console.error("Failed to edit message:", error);
+    alert("Xabarni tahrirlash muvaffaqiyatsiz. Iltimos, qayta urinib ko'ring.");
+  }
+};
+
+// handleDeleteMessage funksiyasini yangilang
+const handleDeleteMessage = async (messageId: string, msg: any) => {
+  if (!selectedChat || !isConnected) return;
+
+  const isFile = isFileMessage(msg);
+  console.log("[UI] Deleting message:", { messageId, isFile, msg });
+
+  try {
+    if (selectedChat.type === "group") {
+      // Optimistic update - darhol UI dan o'chirish
+      setMessages(prev => {
+        const roomKey = `group_${selectedChat.id}`;
+        const updatedMessages = (prev[roomKey] || []).filter(m => m.id !== messageId);
+        return {
+          ...prev,
+          [roomKey]: updatedMessages,
+        };
+      });
+
+      if (groupWsRef.current?.readyState === WebSocket.OPEN) {
+        groupWsRef.current.send(JSON.stringify({
+          type: isFile ? "delete_file" : "delete_message",
+          message_id: messageId
+        }));
+      }
+    } else if (selectedChat.type === "channel") {
+      // Optimistic update - darhol UI dan o'chirish
+      setMessages(prev => {
+        const roomKey = `channel_${selectedChat.id}`;
+        const updatedMessages = (prev[roomKey] || []).filter(m => m.id !== messageId);
+        return {
+          ...prev,
+          [roomKey]: updatedMessages,
+        };
+      });
+
+      if (channelWsRef.current?.readyState === WebSocket.OPEN) {
+        channelWsRef.current.send(JSON.stringify({
+          action: isFile ? "delete_file" : "delete_message",
+          message_id: messageId
+        }));
+      }
+    } else {
+      const roomId = selectedChat.room_id || selectedChat.id?.toString();
+
+      // Optimistic update - darhol UI dan o'chirish
+      if (roomId) {
+        setMessages(prev => {
+          const updatedMessages = (prev[roomId] || []).filter(m => m.id !== messageId);
+          return {
+            ...prev,
+            [roomId]: updatedMessages,
+          };
+        });
+      }
+
+      if (roomId && chatWsRef.current?.readyState === WebSocket.OPEN) {
+        chatWsRef.current.send(JSON.stringify({
+          action: isFile ? "delete_file" : "delete_message",
+          message_id: messageId
+        }));
+      }
+    }
+  } catch (error) {
+    console.error("Failed to delete message:", error);
+    alert("Xabarni o'chirish muvaffaqiyatsiz. Iltimos, qayta urinib ko'ring.");
+
+    // Agar xatolik bo'lsa, UI ni qayta yuklash
+    if (selectedChat.type === "group") {
+      const groupId = selectedChat.id.toString();
+      connectToGroup(groupId);
+    } else if (selectedChat.type === "channel") {
+      const channelId = selectedChat.id.toString();
+      connectToChannel(channelId);
+    } else {
+      const roomId = selectedChat.room_id || selectedChat.id?.toString();
+      if (roomId) {
+        connectToChatRoom(roomId);
+      }
+    }
+  }
+};
 
   // Date header formatter
   const formatDateHeader = (dateString: string) => {

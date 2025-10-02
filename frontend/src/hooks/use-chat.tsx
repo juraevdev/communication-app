@@ -749,13 +749,11 @@ export function useChat() {
               break;
 
             case "message_deleted":
-              console.log("[Chat] Channel message deleted:", data);
+              console.log("[Chat] Group message deleted:", data);
               setMessages(prev => {
                 const roomKey = `group_${groupId}`;
                 const updatedMessages = (prev[roomKey] || []).filter(msg => {
-                  const isTargetMessage = msg.id === data.message_id?.toString() ||
-                    msg.id === data.file_id?.toString();
-                  return !isTargetMessage;
+                  return msg.id !== data.message_id.toString();
                 });
 
                 return {
