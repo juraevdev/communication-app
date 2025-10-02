@@ -54,6 +54,7 @@ class GroupMessage(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_read = models.BooleanField(default=False)  
+    is_updated = models.BooleanField(default=False)  
     read_by = models.ManyToManyField(CustomUser, related_name='read_group_messages', blank=True)
 
     def __str__(self):
