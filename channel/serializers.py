@@ -51,9 +51,43 @@ class ChannelUpdateSerializer(serializers.ModelSerializer):
         
     
 class ChannelMessageSerializer(serializers.ModelSerializer):
+    is_own = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
+    can_delete = serializers.SerializerMethodField()
+    user_info = serializers.SerializerMethodField()
+    
     class Meta:
         model = ChannelMessage
-        fields = '__all__'
+        fields = [
+            'id', 'content', 'user', 'user_info', 'channel', 'file',
+            'message_type', 'created_at', 'updated_at', 'is_updated',
+            'is_read', 'read_by', 'is_own', 'can_edit', 'can_delete'
+        ]
+    
+    def get_is_own(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.user.id == request.user.id
+        return False
+    
+    def get_can_edit(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.user.id == request.user.id or obj.channel.owner.id == request.user.id
+        return False
+    
+    def get_can_delete(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.user.id == request.user.id or obj.channel.owner.id == request.user.id
+        return False
+    
+    def get_user_info(self, obj):
+        return {
+            'id': obj.user.id,
+            'fullname': obj.user.fullname,
+            'email': obj.user.email
+        }
         
         
         
