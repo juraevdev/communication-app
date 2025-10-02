@@ -4,9 +4,38 @@ from channel.models import Channel, ChannelMessage
 
 
 class ChannelSerializer(serializers.ModelSerializer):
+    owner_name = serializers.CharField(source='owner.fullname', read_only=True)
+    member_count = serializers.SerializerMethodField()
+    is_subscribed = serializers.SerializerMethodField()
+    last_message = serializers.SerializerMethodField()  # ✅ Yangi field
+    
     class Meta:
         model = Channel
-        fields = '__all__'
+        fields = [
+            'id', 'name', 'description', 'username', 
+            'owner', 'owner_name', 'member_count', 
+            'is_subscribed', 'created_at', 'updated_at',
+            'last_message'  # ✅ Qo'shish
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def get_member_count(self, obj):
+        return obj.members.count()
+    
+    def get_is_subscribed(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.members.filter(id=request.user.id).exists() or obj.owner_id == request.user.id
+        return False
+    
+    # ✅ Oxirgi xabarni olish
+    def get_last_message(self, obj):
+        last_msg = ChannelMessage.objects.filter(channel=obj).order_by('-created_at').first()
+        if last_msg:
+            if last_msg.message_type == 'file':
+                return f"📎 {last_msg.file.original_filename if last_msg.file else 'Fayl'}"
+            return last_msg.content or ""
+        return ""
         
 
 class ChannelCreateSerializer(serializers.ModelSerializer):

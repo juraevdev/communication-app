@@ -88,8 +88,10 @@ class ChannelConsumer(AsyncWebsocketConsumer):
         message = await self.save_message(content)
 
         if message:
+            await self.update_channel_timestamp()
+        
             message_data = await self.serialize_message(message)
-            
+        
             await self.channel_layer.group_send(
                 self.channel_room_name,
                 {
@@ -460,3 +462,16 @@ class ChannelConsumer(AsyncWebsocketConsumer):
         ).exclude(
             read_by=self.user   
         ).count()
+        
+        
+    @database_sync_to_async
+    def update_channel_timestamp(self):
+        from channel.models import Channel
+        from django.utils import timezone
+    
+        try:
+            channel = Channel.objects.get(id=self.channel_id)
+            channel.updated_at = timezone.now()
+            channel.save(update_fields=['updated_at'])
+        except Channel.DoesNotExist:
+            pass

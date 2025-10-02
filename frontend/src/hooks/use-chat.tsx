@@ -182,11 +182,11 @@ export function useChat() {
         memberCount: 0,
         isAdmin: group.created_by === currentUser?.id,
       }))
-      
-      formattedGroups.sort((a, b) => 
+
+      formattedGroups.sort((a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       )
-      
+
       setGroups(formattedGroups)
 
       formattedGroups.forEach(group => {
@@ -1096,6 +1096,8 @@ export function useChat() {
         console.log(`[Chat] Channel background listener connected to channel ${channelId}`)
       }
 
+      // use-chat.txt - initializeChannelBackgroundListener funksiyasida
+
       channelWs.onmessage = (event) => {
         const data = JSON.parse(event.data)
 
@@ -1104,12 +1106,29 @@ export function useChat() {
             case "chat_message":
             case "file_uploaded":
               if (data.message?.user?.id !== currentUser?.id?.toString()) {
-                setChannels(prev => prev.map(channel => {
-                  if (channel.id.toString() === channelId) {
-                    return { ...channel, unread: (channel.unread || 0) + 1 };
-                  }
-                  return channel;
-                }));
+                setChannels(prev => {
+                  const updatedChannels = prev.map(channel => {
+                    if (channel.id.toString() === channelId) {
+                      return {
+                        ...channel,
+                        unread: (channel.unread || 0) + 1,
+                        // ✅ Timestamp va last_message yangilash
+                        timestamp: data.message?.created_at || new Date().toISOString(),
+                        last_message: data.message?.content || channel.last_message
+                      };
+                    }
+                    return channel;
+                  });
+
+                  // ✅ So'nggi xabar bo'yicha tartiblash
+                  updatedChannels.sort((a, b) => {
+                    const dateA = new Date(a.timestamp).getTime();
+                    const dateB = new Date(b.timestamp).getTime();
+                    return dateB - dateA;
+                  });
+
+                  return updatedChannels;
+                });
               }
               break;
 
@@ -1237,6 +1256,8 @@ export function useChat() {
             });
             break;
 
+          // use-chat.txt - connectToChannel funksiyasida "chat_message" case'da qo'shing
+
           case "chat_message":
             const newMessage: Message = {
               id: data.message?.id?.toString() || `temp-${Date.now()}`,
@@ -1256,14 +1277,29 @@ export function useChat() {
 
             addMessage(`channel_${channelId}`, newMessage)
 
-            if (data.unread_count !== undefined) {
-              setChannels(prev => prev.map(channel => {
+            // ✅ Kanalni ro'yxatda yuqoriga ko'tarish
+            setChannels(prev => {
+              const updatedChannels = prev.map(channel => {
                 if (channel.id.toString() === channelId) {
-                  return { ...channel, unread: data.unread_count };
+                  return {
+                    ...channel,
+                    timestamp: data.message.created_at,
+                    last_message: data.message.content || "",
+                    unread: data.unread_count !== undefined ? data.unread_count : channel.unread
+                  }
                 }
-                return channel;
-              }));
-            }
+                return channel
+              })
+
+              // So'nggi xabar bo'yicha tartiblash
+              updatedChannels.sort((a, b) => {
+                const dateA = new Date(a.timestamp).getTime()
+                const dateB = new Date(b.timestamp).getTime()
+                return dateB - dateA
+              })
+
+              return updatedChannels
+            })
             break;
 
           case "file_uploaded":
@@ -1388,20 +1424,17 @@ export function useChat() {
     }
   }, [currentUser])
 
+  // use-chat.txt - loadChannels funksiyasining oxirida
+
   const loadChannels = useCallback(async () => {
     try {
       const channelsData = await apiClient.getChannels()
       const currentUserData = await apiClient.getMe()
 
-      console.log("[DEBUG] Channels from API:", channelsData)
-      console.log("[DEBUG] Current user ID:", currentUserData?.id)
-
       const formattedChannels: Chat[] = channelsData.map((channel: any) => {
         const isOwner = channel.owner === currentUserData?.id
         const isMember = Array.isArray(channel.members) && channel.members.includes(currentUserData?.id)
         const isSubscribed = isOwner || isMember
-
-        console.log(`[DEBUG] Channel "${channel.name}": owner=${channel.owner}, isOwner=${isOwner}, isMember=${isMember}, isSubscribed=${isSubscribed}`)
 
         return {
           id: channel.id,
@@ -1424,8 +1457,12 @@ export function useChat() {
         }
       })
 
-      console.log("[DEBUG] Formatted channels count:", formattedChannels.length)
-      console.log("[DEBUG] Formatted channels:", formattedChannels)
+      // ✅ So'nggi faollik bo'yicha tartiblash
+      formattedChannels.sort((a, b) => {
+        const dateA = new Date(a.timestamp).getTime()
+        const dateB = new Date(b.timestamp).getTime()
+        return dateB - dateA // Yangi xabarlar yuqorida
+      })
 
       setChannels(formattedChannels)
 
