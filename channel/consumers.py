@@ -373,7 +373,7 @@ class ChannelConsumer(AsyncWebsocketConsumer):
     def serialize_message(self, message):
         from channel.models import Channel
     
-        print(f"[DEBUG] Serializing message: user_id={message.user.id}, current_user_id={self.user.id}")
+        print(f"[DEBUG] Serializing message: message_user_id={message.user.id}, current_user_id={self.user.id}, channel_id={self.channel_id}")
     
         is_channel_owner = False
         can_edit = False
@@ -386,7 +386,10 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             can_edit = is_channel_owner
             can_delete = is_channel_owner
         
+            print(f"[DEBUG] Channel check: channel_owner_id={channel.owner_id}, current_user_id={self.user.id}, is_channel_owner={is_channel_owner}")
+        
         except Channel.DoesNotExist:
+            print(f"[DEBUG] Channel {self.channel_id} not found")
             pass
     
         is_own_message = message.user.id == self.user.id
@@ -395,7 +398,7 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             'id': message.id,
             'content': message.content,
             'user': {
-                'id': str(message.user.id),  # ✅ Frontend bilan moslashtirish uchun string ga o'tkazamiz
+                'id': str(message.user.id),
                 'fullname': message.user.fullname,
                 'email': message.user.email
             },
@@ -417,7 +420,7 @@ class ChannelConsumer(AsyncWebsocketConsumer):
                 'type': message.message_type
             }
 
-        print(f"[DEBUG] Serialized result: is_own={is_own_message}, is_channel_owner={is_channel_owner}, can_edit={can_edit}, can_delete={can_delete}")
+        print(f"[DEBUG] Final result: is_own={is_own_message}, is_channel_owner={is_channel_owner}, can_edit={can_edit}, can_delete={can_delete}")
         return result
 
     @database_sync_to_async
@@ -429,24 +432,27 @@ class ChannelConsumer(AsyncWebsocketConsumer):
         ).prefetch_related('read_by').select_related('user', 'file').order_by('created_at')
 
         result = []
+    
+        try:
+            channel = Channel.objects.get(id=self.channel_id)
+            is_current_user_channel_owner = channel.owner_id == self.user.id
+            print(f"[DEBUG] Current user is channel owner: {is_current_user_channel_owner}")
+        except Channel.DoesNotExist:
+            is_current_user_channel_owner = False
+            print(f"[DEBUG] Channel {self.channel_id} not found")
+
         for msg in messages:
             is_read_by_user = self.user in msg.read_by.all() or msg.user == self.user
         
-            try:
-                channel = Channel.objects.get(id=self.channel_id)
-                is_channel_owner = channel.owner_id == self.user.id
-                can_edit = is_channel_owner
-                can_delete = is_channel_owner
-            except Channel.DoesNotExist:
-                is_channel_owner = False
-                can_edit = False
-                can_delete = False
+            is_channel_owner = is_current_user_channel_owner
+            can_edit = is_current_user_channel_owner
+            can_delete = is_current_user_channel_owner
 
             message_data = {
                 'id': msg.id,
                 'content': msg.content,
                 'user': {
-                    'id': str(msg.user.id),  # ✅ String ga o'tkazish
+                    'id': str(msg.user.id),
                     'fullname': msg.user.fullname,
                     'email': msg.user.email
                 },
@@ -468,7 +474,7 @@ class ChannelConsumer(AsyncWebsocketConsumer):
                     'type': msg.message_type
                 }
 
-            print(f"[DEBUG] Channel message {msg.id}: is_own={message_data['is_own']}, is_channel_owner={is_channel_owner}")
+            print(f"[DEBUG] Message {msg.id}: is_own={message_data['is_own']}, is_channel_owner={is_channel_owner}")
             result.append(message_data)
 
         return result

@@ -330,14 +330,14 @@ export default function ChatPage() {
   }, [selectedChat, messages, markAsRead])
 
   const getIsOwnMessage = (msg: any): boolean => {
-    // Agar kanal bo'lsa, kanal egasi bo'yicha aniqlash
+    // ✅ TO'G'RI: Agar kanal bo'lsa, faqat kanal egasi o'ng tomonda bo'ladi
     if (selectedChat?.type === "channel") {
       const isChannelOwner = msg.is_channel_owner || false;
-      console.log("[DEBUG] Channel message - is_channel_owner:", isChannelOwner);
-      return isChannelOwner;
+      console.log("[DEBUG] Channel message - is_channel_owner:", isChannelOwner, "msg.is_own:", msg.is_own);
+      return isChannelOwner; // ✅ Faqat kanal egasi o'ng tomonda
     }
 
-    // Qolgan hollarda odatiy tekshirish
+    // Qolgan hollarda (shaxsiy chat, guruh) odatiy tekshirish
     if (msg.is_own !== undefined) {
       console.log("[DEBUG] Using is_own from backend:", msg.is_own);
       return msg.is_own;
