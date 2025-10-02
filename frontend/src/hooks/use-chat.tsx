@@ -1203,6 +1203,7 @@ export function useChat() {
         console.log("[Chat] Channel message received:", data)
 
         switch (data.type) {
+          // use-chat.txt ichida - connectToChannel funksiyasida
           case "message_history":
             if (data.messages && Array.isArray(data.messages)) {
               const formattedMessages: Message[] = data.messages.map((msg: any) => ({
@@ -1216,6 +1217,7 @@ export function useChat() {
                 },
                 message: msg.content || "",
                 timestamp: msg.created_at,
+                // ✅ TO'G'RILASH: currentUser.id bilan msg.user.id ni solishtirish
                 isOwn: msg.user.id === currentUser?.id?.toString(),
                 is_read: msg.is_read,
                 is_updated: msg.is_updated,
