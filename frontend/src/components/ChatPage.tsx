@@ -496,42 +496,58 @@ export default function ChatPage() {
     setLoadingMessages(false)
   }
 
-  // Start chat from contacts
   const handleStartChatFromContacts = async (contactUserId: number) => {
-    try {
-      setLoadingMessages(true);
+  try {
+    setLoadingMessages(true);
 
-      const userData = await apiClient.getUserProfile(contactUserId);
+    const userData = await apiClient.getUserProfile(contactUserId);
+    const contacts = await apiClient.getContacts();
+    
+    console.log("[StartChat] All contacts:", contacts);
+    
+    // Kontaktlardan alias ni topish - contact_user ID bo'yicha
+    const contact = contacts.find((c: any) => 
+      c.contact_user === contactUserId // contact_user ID raqam
+    );
+    
+    console.log("[StartChat] Found contact:", contact);
+    const alias = contact?.alias;
+    console.log("[StartChat] Alias:", alias);
 
-      const response = await apiClient.startChat(contactUserId);
-      if (response.room_id) {
-        const newChat = {
-          id: contactUserId,
-          sender_id: contactUserId,
-          sender: userData.fullname || userData.username || "Foydalanuvchi",
-          name: userData.fullname || userData.username || "Foydalanuvchi",
-          email: userData.email || "",
-          avatar: userData.avatar || "",
-          type: "private",
-          unread: 0,
-          last_message: "",
-          timestamp: new Date().toISOString(),
-          room_id: response.room_id.toString()
-        };
+    const response = await apiClient.startChat(contactUserId);
+    if (response.room_id) {
+      const newChat = {
+        id: contactUserId,
+        sender_id: contactUserId,
+        sender: userData.fullname || userData.username || "Foydalanuvchi",
+        name: alias || userData.fullname || userData.username || "Foydalanuvchi",
+        email: userData.email || "",
+        avatar: userData.avatar || "",
+        type: "private",
+        unread: 0,
+        last_message: "",
+        timestamp: new Date().toISOString(),
+        room_id: response.room_id.toString(),
+        alias: alias,
+        isContact: !!alias
+      };
 
-        setSelectedChat(newChat);
-        connectToChatRoom(response.room_id.toString());
-      }
-
-      setShowContacts(false);
-      setLoadingMessages(false);
-    } catch (error) {
-      console.error("Failed to start chat from contacts:", error);
-      setLoadingMessages(false);
+      console.log("[StartChat] New chat created:", newChat);
+      
+      setSelectedChat(newChat);
+      connectToChatRoom(response.room_id.toString());
     }
-  };
+
+    setShowContacts(false);
+    setLoadingMessages(false);
+  } catch (error) {
+    console.error("Failed to start chat from contacts:", error);
+    setLoadingMessages(false);
+  }
+};
 
   // Search user select handler
+  // Search user select handler ni yangilang
   const handleSearchUserSelect = async (user: any) => {
     try {
       setLoadingMessages(true);
@@ -540,13 +556,15 @@ export default function ChatPage() {
         id: user.id,
         sender_id: user.id,
         sender: user.username || user.email,
-        name: user.username || user.email,
+        name: user.alias || user.username || user.email, // ✅ Alias birinchi
         email: user.email,
         avatar: user.avatar,
         type: "private",
         unread: 0,
         last_message: "",
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        alias: user.alias, // ✅ Alias ni saqlash
+        isContact: !!user.alias // ✅ Kontakt ekanligini belgilash
       }
 
       const response = await apiClient.startChat(user.id);
@@ -915,18 +933,73 @@ export default function ChatPage() {
     return msg.is_read ? "read" : "sent"
   }
 
-  // Chat name getter
   const getChatName = (chat: any): string => {
     if (!chat) return "Noma'lum Chat"
+
+    // Agar private chat bo'lsa va alias mavjud bo'lsa
+    if (chat.type === "private") {
+      return chat.alias || chat.name || chat.sender || "Noma'lum Foydalanuvchi"
+    }
+
     return chat.name || chat.sender || "Noma'lum Foydalanuvchi"
   }
 
-  // Sender name getter
+  // ChatPage komponentiga useEffect qo'shing
+  // ChatPage komponentiga useEffect qo'shing
+  useEffect(() => {
+    // Chatlar o'zgarganda alias larni yangilash
+    if (chats.length > 0) {
+      const refreshChatAliases = async () => {
+        try {
+          const contacts = await apiClient.getContacts();
+          const contactsMap = new Map();
+
+          console.log("[ChatPage] Contacts for aliases:", contacts);
+
+          contacts.forEach((contact: any) => {
+            console.log(`[ChatPage] Contact:`, contact);
+            if (contact.contact_user) { // contact_user ID raqam
+              contactsMap.set(contact.contact_user, contact.alias);
+            }
+          });
+
+          console.log("[ChatPage] Contacts map:", contactsMap);
+
+          setChats(prevChats =>
+            prevChats.map(chat => {
+              const alias = contactsMap.get(chat.sender_id);
+              console.log(`[ChatPage] Chat ${chat.id} (sender ${chat.sender_id}): alias = ${alias}`);
+
+              if (alias) {
+                const updatedChat = {
+                  ...chat,
+                  name: alias,
+                  alias: alias,
+                  isContact: true
+                };
+                console.log(`[ChatPage] Updated chat:`, updatedChat);
+                return updatedChat;
+              }
+              console.log(`[ChatPage] No alias for chat:`, chat);
+              return chat;
+            })
+          );
+        } catch (error) {
+          console.error("Failed to refresh chat aliases:", error);
+        }
+      };
+
+      refreshChatAliases();
+    }
+  }, [chats.length]);
+
+  // Sender name getter funksiyasini yangilang
   const getSenderName = (sender: any): string => {
     if (!sender) return "Noma'lum"
     if (typeof sender === "string") return sender
     if (typeof sender === "object") {
-      return sender.fullname || sender.full_name || sender.email || "Noma'lum Foydalanuvchi"
+      // Agar kontakt bo'lsa alias, bo'lmasa fullname
+      return sender.alias || sender.fullname || sender.full_name || sender.email || "Noma'lum Foydalanuvchi"
     }
     return "Noma'lum"
   }
@@ -1463,7 +1536,12 @@ export default function ChatPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <h3 className="font-medium text-white truncate">
-                          {isSearchResult ? (item.username || item.email) : getChatName(item)}
+                          {isSearchResult ? (
+                            // Kanal qidiruvi natijalari uchun
+                            activeTab === "channels" && item.type === "channel"
+                              ? `${item.name}`
+                              : item.username || item.email
+                          ) : getChatName(item)}
                         </h3>
                         {!isSearchResult && (
                           <span className="text-xs text-gray-400">
@@ -1473,10 +1551,14 @@ export default function ChatPage() {
                       </div>
                       <div className="flex items-center justify-between">
                         <p className="text-sm text-gray-400 truncate">
-                          {isSearchResult ?
-                            (item.email || "Foydalanuvchi") :
-                            (item.message_type === "file" ? "📎 Fayl" : (item.last_message || ""))
-                          }
+                          {isSearchResult ? (
+                            // Kanal qidiruvi natijalari uchun tavsif
+                            activeTab === "channels" && item.type === "channel"
+                              ? item.username || "Kanal tavsifi yo'q"
+                              : (item.email || "Foydalanuvchi")
+                          ) : (
+                            item.message_type === "file" ? "📎 Fayl" : (item.last_message || "")
+                          )}
                         </p>
                         {!isSearchResult && item.unread > 0 && (
                           <Badge variant="default" className="h-5 min-w-5 text-white px-1.5">
@@ -1513,11 +1595,6 @@ export default function ChatPage() {
                     <h2 className="font-semibold text-white">
                       {getChatName(selectedChat)}
                     </h2>
-                    <p className="text-sm text-gray-400">
-                      {selectedChat.type === "private" && (selectedChat.isOnline ? "Onlayn" : "Offlayn")}
-                      {selectedChat.type === "group" && `${selectedChat.memberCount || 0} a'zo`}
-                      {selectedChat.type === "channel" && `${selectedChat.subscriberCount || 0} obunachi`}
-                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

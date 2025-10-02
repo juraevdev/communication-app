@@ -196,3 +196,21 @@ class UpdateGroupMemberRoleApiView(generics.GenericAPIView):
                 {'message': 'Member not found'}, 
                 status=status.HTTP_404_NOT_FOUND
             )
+            
+            
+class LeaveGroup(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, group_id):
+        try:
+            group = Group.objects.get(id=group_id)
+        except Group.DoesNotExist:
+            return Response({"detail": "Group not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.user in group.members.all():
+            group.members.remove(request.user)
+            return Response({"detail": "Successfully left the group."}, status=status.HTTP_200_OK)
+
+        return Response({"detail": "You are not a member of this group."}, status=status.HTTP_400_BAD_REQUEST)
+    
+    

@@ -8,6 +8,8 @@ export default function RegisterPage() {
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
+    phone_number: "",
+    username: "",
     password: "",
     confirmPassword: "",
     role: "",
@@ -30,6 +32,8 @@ export default function RegisterPage() {
       await registerUser({
         fullname: formData.fullName,
         email: formData.email,
+        phone_number: formData.phone_number,
+        username: formData.username,
         password: formData.password,
         confirm_password: formData.confirmPassword,
       });
@@ -68,6 +72,28 @@ export default function RegisterPage() {
           </div>
 
           <div>
+            <Label className="block text-white text-sm font-medium">Phone Number</Label>
+            <Input
+              type="phone"
+              placeholder="Enter your phone number"
+              value={formData.phone_number}
+              onChange={(e) => handleInputChange("phone_number", e.target.value)}
+              className="w-full border rounded px-3 py-2 mt-1 text-white"
+              required
+            />
+          </div>
+          <div>
+            <Label className="block text-white text-sm font-medium">Username</Label>
+            <Input
+              type="username"
+              placeholder="Enter your username"
+              value={formData.username}
+              onChange={(e) => handleInputChange("username", e.target.value)}
+              className="w-full border rounded px-3 py-2 mt-1 text-white"
+              required
+            />
+          </div>
+          <div>
             <Label className="block text-white text-sm font-medium">Email Address</Label>
             <Input
               type="email"
@@ -86,7 +112,7 @@ export default function RegisterPage() {
               placeholder="Create a password"
               value={formData.password}
               onChange={(e) => handleInputChange("password", e.target.value)}
-              className="w-full border rounded px-3 py-2 mt-1 text-white"
+              className="w-full border rounded px-3 py-2 mt-1 text-white" 
               required
             />
           </div>

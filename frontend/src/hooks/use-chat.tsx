@@ -280,6 +280,64 @@ export function useChat() {
     }
   }, [])
 
+  const loadChatsWithAliases = async () => {
+    try {
+      // Kontaktlarni olish
+      const contacts = await apiClient.getContacts();
+      const contactsMap = new Map();
+
+      console.log("[DEBUG] Contacts from API:", contacts);
+
+      // Kontaktlarni map ga joylash - contact_user ID sifatida
+      contacts.forEach((contact: any) => {
+        console.log(`[DEBUG] Processing contact:`, contact);
+        if (contact.contact_user) { // contact_user ID raqam
+          contactsMap.set(contact.contact_user, {
+            alias: contact.alias,
+            isContact: true
+          });
+        }
+      });
+
+      console.log("[DEBUG] Contacts map:", contactsMap);
+
+      // Chatlarni yangilash
+      setChats(prevChats =>
+        prevChats.map(chat => {
+          console.log(`[DEBUG] Checking chat:`, {
+            chatId: chat.id,
+            senderId: chat.sender_id,
+            chatName: chat.name
+          });
+
+          const contactInfo = contactsMap.get(chat.sender_id);
+          console.log(`[DEBUG] Contact info for sender ${chat.sender_id}:`, contactInfo);
+
+          if (contactInfo) {
+            const updatedChat = {
+              ...chat,
+              name: contactInfo.alias || chat.name,
+              alias: contactInfo.alias,
+              isContact: true
+            };
+            console.log(`[DEBUG] Updated chat:`, updatedChat);
+            return updatedChat;
+          }
+
+          const unchangedChat = {
+            ...chat,
+            alias: null,
+            isContact: false
+          };
+          console.log(`[DEBUG] Unchanged chat:`, unchangedChat);
+          return unchangedChat;
+        })
+      );
+    } catch (error) {
+      console.error("[Chat] Failed to load contacts for chats:", error);
+    }
+  };
+
   const initializeNotificationsWebSocket = useCallback(() => {
     try {
       const notificationsWs = new WebSocket(apiClient.getNotificationsWebSocketUrl())
@@ -312,8 +370,17 @@ export function useChat() {
                 message_type: conv.message_type || "text",
                 room_id: conv.id?.toString(),
                 type: "private",
+                alias: null, // Hozircha null
+                isContact: false // Hozircha false
               }))
+
+              console.log("[DEBUG] Formatted chats before aliases:", formattedChats);
               setChats(formattedChats)
+
+              // Chatlar yuklangandan so'ng alias larni yuklash
+              setTimeout(() => {
+                loadChatsWithAliases();
+              }, 100);
             }
             break
 

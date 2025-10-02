@@ -21,6 +21,8 @@ export const loginUser = (data: LoginData) =>
 interface RegisterData {
   fullname: string;
   email: string;
+  phone_number: string;
+  username: string;
   password: string;
   confirm_password: string;
 }

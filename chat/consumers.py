@@ -991,25 +991,36 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         try:
             from django.db.models import Q, Max
             from chat.models import Room, Message, FileUpload
-            
+            from accounts.models import Contact  # Kontakt modelini import qiling
+        
             user = self.user
-            
+        
             user_rooms = Room.objects.filter(
                 Q(user1=user) | Q(user2=user)
             ).select_related('user1', 'user2')
-            
+        
             conversations = []
-            
+        
             for room in user_rooms:
                 other_user = room.user2 if room.user1 == user else room.user1
-                
+            
+                try:
+                    contact = Contact.objects.filter(
+                        user=user, 
+                        contact_user=other_user
+                    ).first()
+                    alias = contact.alias if contact else None
+                except Exception as e:
+                    logger.error(f"Error getting contact alias: {e}")
+                    alias = None
+            
                 latest_text_message = Message.objects.filter(room=room).order_by('-timestamp').first()
                 latest_file_upload = FileUpload.objects.filter(room=room).order_by('-uploaded_at').first()
-                
+            
                 latest_timestamp = None
                 last_message = "No messages yet"
                 message_type = "text"
-                
+            
                 if latest_text_message and latest_file_upload:
                     if latest_text_message.timestamp > latest_file_upload.uploaded_at:
                         latest_timestamp = latest_text_message.timestamp
@@ -1018,8 +1029,8 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
                     else:
                         latest_timestamp = latest_file_upload.uploaded_at
                         file_name = (latest_file_upload.original_filename 
-                                   if hasattr(latest_file_upload, 'original_filename') and latest_file_upload.original_filename
-                                   else latest_file_upload.file.name.split('/')[-1])
+                                if hasattr(latest_file_upload, 'original_filename') and latest_file_upload.original_filename
+                                else latest_file_upload.file.name.split('/')[-1])
                         last_message = file_name
                         message_type = "file"
                 elif latest_text_message:
@@ -1029,42 +1040,44 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
                 elif latest_file_upload:
                     latest_timestamp = latest_file_upload.uploaded_at
                     file_name = (latest_file_upload.original_filename 
-                               if hasattr(latest_file_upload, 'original_filename') and latest_file_upload.original_filename
-                               else latest_file_upload.file.name.split('/')[-1])
+                            if hasattr(latest_file_upload, 'original_filename') and latest_file_upload.original_filename
+                            else latest_file_upload.file.name.split('/')[-1])
                     last_message = file_name
                     message_type = "file"
-                
+            
                 if not latest_timestamp:
                     continue
-                
+            
                 unread_messages = Message.objects.filter(
                     room=room,
                     recipient=user,
                     is_read=False
                 ).count()
-                
+            
                 unread_files = FileUpload.objects.filter(
                     room=room,
                     recipient=user,
                     is_read=False
                 ).count()
-                
+            
                 total_unread = unread_messages + unread_files
-                
+            
                 conversations.append({
                     'id': room.id,
-                    'sender': other_user.fullname,
+                    'sender': alias or other_user.fullname,  # ✅ Avval alias, keyin fullname
                     'sender_id': other_user.id,
                     'last_message': last_message,
                     'message_type': message_type,
                     'timestamp': latest_timestamp.isoformat(),
-                    'unread': total_unread
+                    'unread': total_unread,
+                    'alias': alias,  # ✅ Alias ni alohida saqlash
+                    'is_contact': bool(alias)  # ✅ Kontakt ekanligini belgilash
                 })
-            
+        
             conversations.sort(key=lambda x: x['timestamp'], reverse=True)
-            
+        
             return conversations[:]
-            
+        
         except Exception as e:
             logger.error(f"Error getting recent conversations: {e}")
             return []
