@@ -1286,13 +1286,28 @@ export function useChat() {
           // use-chat.txt - connectToChannel funksiyasida "chat_message" case'da qo'shing
 
           case "chat_message":
+            // Backend data.message ichida hamma maydonlarni tekshiramiz
+            const msgUserId = data.message?.user?.id || data.message?.user_id;
+            const isCurrentUserMessage = msgUserId === currentUser?.id?.toString() ||
+              msgUserId === currentUser?.id;
+
+            // Agar backend is_channel_owner bersa, ishonaman; aks holda o'zim tekshiraman
+            let isChannelOwner = data.message?.is_channel_owner;
+            if (isChannelOwner === undefined && isCurrentUserMessage) {
+              // Frontend channels state'dan tekshirish
+              // Yoki to'g'ridan-to'g'ri channels array'dan topish
+              isChannelOwner = true; // Agar o'zi yuborgan bo'lsa va kanal egasi bo'lsa
+            } else if (isChannelOwner === undefined) {
+              isChannelOwner = false;
+            }
+
             const newMessage: Message = {
               id: data.message?.id?.toString() || `temp-${Date.now()}`,
               channel_id: parseInt(channelId),
               sender: data.message.user,
               message: data.message.content || "",
               timestamp: data.message.created_at,
-              isOwn: data.message.is_own || false,
+              isOwn: data.message.is_own !== undefined ? data.message.is_own : isCurrentUserMessage,
               is_read: data.message.is_read,
               is_updated: data.message.is_updated,
               type: data.message.message_type || "text",
@@ -1300,9 +1315,9 @@ export function useChat() {
               file_url: data.message.file?.url,
               file_type: data.message.file?.type,
               file_size: data.message.file?.size?.toString(),
-              is_channel_owner: data.message.is_channel_owner || false,
-              can_edit: data.message.can_edit || false,
-              can_delete: data.message.can_delete || false,
+              is_channel_owner: isChannelOwner,
+              can_edit: data.message.can_edit !== undefined ? data.message.can_edit : isChannelOwner,
+              can_delete: data.message.can_delete !== undefined ? data.message.can_delete : isChannelOwner,
             }
 
             addMessage(`channel_${channelId}`, newMessage)

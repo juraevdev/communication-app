@@ -334,7 +334,6 @@ export default function ChatPage() {
       return msg.is_channel_owner || msg.can_edit || false;
     }
 
-    // Shaxsiy chat va guruhlar uchun
     if (msg.is_own !== undefined) {
       return msg.is_own;
     }

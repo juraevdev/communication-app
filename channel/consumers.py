@@ -57,10 +57,10 @@ class ChannelConsumer(AsyncWebsocketConsumer):
                 await self.handle_mark_as_read(data)
             elif action == 'get_unread_count':
                 await self.send_unread_count()
-            elif action == 'message_deleted':
-                await self.handle_delete_message()
-            elif action == 'message_updated':
-                await self.handle_edit_message()
+            elif action == 'delete_message':  
+                await self.handle_delete_message(data)  
+            elif action == 'edit_message':    
+                await self.handle_edit_message(data)    
             else:
                 await self.send(text_data=json.dumps({
                     'error': 'Invalid action'
