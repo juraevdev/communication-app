@@ -329,27 +329,29 @@ export default function ChatPage() {
     }
   }, [selectedChat, messages, markAsRead])
 
-  // ChatPage komponentiga qo'shing
-  const getIsOwnMessage = (msg: any): boolean => {
-    // Agar isOwn mavjud bo'lsa, undan foydalaning
-    if (msg.isOwn !== undefined) {
-      return msg.isOwn;
-    }
+const getIsOwnMessage = (msg: any): boolean => {
+  if (msg.is_own !== undefined) {
+    console.log("[DEBUG] Using is_own from backend:", msg.is_own);
+    return msg.is_own;
+  }
+  
+  if (msg.isOwn !== undefined) {
+    console.log("[DEBUG] Using isOwn from frontend:", msg.isOwn);
+    return msg.isOwn;
+  }
+  
+  const senderId = msg.sender?.id?.toString();
+  const currentUserId = currentUser?.id?.toString();
+  
+  console.log("[DEBUG] Manual ID comparison:", {
+    senderId,
+    currentUserId,
+    equal: senderId === currentUserId
+  });
+  
+  return senderId === currentUserId;
+};
 
-    // Agar isOwn bo'lmasa, sender ID va currentUser ID ni solishtiring
-    const senderId = msg.sender?.id?.toString();
-    const currentUserId = currentUser?.id?.toString();
-
-    console.log("[DEBUG] Comparing IDs:", {
-      senderId,
-      currentUserId,
-      equal: senderId === currentUserId
-    });
-
-    return senderId === currentUserId;
-  };
-
-  // Send message handler
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault()
     if (!message.trim() || !selectedChat || !isConnected) return

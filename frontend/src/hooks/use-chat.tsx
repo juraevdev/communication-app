@@ -1203,30 +1203,32 @@ export function useChat() {
         console.log("[Chat] Channel message received:", data)
 
         switch (data.type) {
-          // use-chat.txt ichida - connectToChannel funksiyasida
           case "message_history":
             if (data.messages && Array.isArray(data.messages)) {
-              const formattedMessages: Message[] = data.messages.map((msg: any) => ({
-                id: msg.id.toString(),
-                channel_id: parseInt(channelId),
-                sender: {
-                  id: msg.user.id,
-                  email: "",
-                  fullname: msg.user.fullname || "Unknown",
-                  full_name: msg.user.fullname || "Unknown",
-                },
-                message: msg.content || "",
-                timestamp: msg.created_at,
-                // ✅ TO'G'RILASH: currentUser.id bilan msg.user.id ni solishtirish
-                isOwn: msg.user.id === currentUser?.id?.toString(),
-                is_read: msg.is_read,
-                is_updated: msg.is_updated,
-                type: msg.message_type || "text",
-                file_name: msg.file?.name,
-                file_url: msg.file?.url,
-                file_type: msg.file?.type,
-                file_size: msg.file?.size?.toString(),
-              }))
+              const formattedMessages: Message[] = data.messages.map((msg: any) => {
+                console.log("[DEBUG] Raw message from backend:", msg);  
+
+                return {
+                  id: msg.id.toString(),
+                  channel_id: parseInt(channelId),
+                  sender: {
+                    id: msg.user.id,  
+                    email: "",
+                    fullname: msg.user.fullname || "Unknown",
+                    full_name: msg.user.fullname || "Unknown",
+                  },
+                  message: msg.content || "",
+                  timestamp: msg.created_at,
+                  isOwn: msg.user.id === currentUser?.id?.toString(),   
+                  is_read: msg.is_read,
+                  is_updated: msg.is_updated,
+                  type: msg.message_type || "text",
+                  file_name: msg.file?.name,
+                  file_url: msg.file?.url,
+                  file_type: msg.file?.type,
+                  file_size: msg.file?.size?.toString(),
+                }
+              })
 
               setMessages(prev => ({
                 ...prev,

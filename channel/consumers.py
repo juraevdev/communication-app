@@ -371,11 +371,13 @@ class ChannelConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def serialize_message(self, message):
+        print(f"[DEBUG] Serializing message: user_id={message.user.id}, current_user_id={self.user.id}")  # ✅ Debug
+    
         result = {
             'id': message.id,
             'content': message.content,
             'user': {
-                'id': str(message.user.id),  # ✅ String formatga o'tkazish
+                'id': message.user.id,  # ❌ Bu integer bo'lishi mumkin
                 'fullname': message.user.fullname,
                 'email': message.user.email
             },
@@ -383,7 +385,7 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             'message_type': message.message_type,
             'is_updated': message.is_updated,
             'is_read': message.is_read,
-            'is_own': str(message.user.id) == str(self.user.id)  # ✅ String solishtirish
+            'is_own': message.user.id == self.user.id,  # ❌ Bu boolean, lekin frontendda ishlatilmayapti
         }
     
         if message.file:
@@ -394,6 +396,7 @@ class ChannelConsumer(AsyncWebsocketConsumer):
                 'type': message.message_type
             }
 
+        print(f"[DEBUG] Serialized result: {result}")  # ✅ Debug
         return result
 
     @database_sync_to_async
