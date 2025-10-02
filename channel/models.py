@@ -17,7 +17,7 @@ class Channel(models.Model):
     
     class Meta:
         db_table = 'channels'
-        ordering = ['-created_at']
+        ordering = ['-created_at'] 
 
 
 class ChannelMessage(models.Model):
