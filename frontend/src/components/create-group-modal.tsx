@@ -256,12 +256,12 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup, onGroupCreate
       <DialogContent className="max-w-md bg-gray-300">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">
-            {step === 1 ? "New group" : "A'zolarni tanlash"}
+            {step === 1 ? "New group" : "Choose members to add"}
           </DialogTitle>
           <DialogDescription>
             {step === 1
-              ? "Guruh nomi va tavsifini kiriting"
-              : "Guruhga qo'shmoqchi bo'lgan a'zolarni tanlang"}
+              ? ""
+              : ""}
           </DialogDescription>
         </DialogHeader>
 

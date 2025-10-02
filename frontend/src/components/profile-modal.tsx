@@ -68,6 +68,7 @@ export function ProfileModal({ isOpen, onClose, user, isOwnProfile = false }: Pr
             </div>
             <div className="w-full space-y-2">
               <h3 className="text-xl font-semibold">{user.name || ""}</h3>
+              {/* Haqiqiy username ko'rsatish */}
               <p className="text-muted-foreground">@{user.username || "user"}</p>
             </div>
           </div>
@@ -80,14 +81,30 @@ export function ProfileModal({ isOpen, onClose, user, isOwnProfile = false }: Pr
 
             <TabsContent value="info" className="space-y-4">
               <div className="space-y-3">
+                {/* Haqiqiy email ko'rsatish */}
                 <div>
                   <Label className="text-sm font-medium">Email</Label>
                   <p className="text-sm text-muted-foreground">{user.email || "No email"}</p>
                 </div>
+                {/* Haqiqiy username ko'rsatish */}
                 <div>
                   <Label className="text-sm font-medium">Username</Label>
                   <p className="text-sm text-muted-foreground">@{user.username || "user"}</p>
                 </div>
+                {/* Bio ma'lumotini ko'rsatish */}
+                {user.bio && (
+                  <div>
+                    <Label className="text-sm font-medium">Bio</Label>
+                    <p className="text-sm text-muted-foreground">{user.bio}</p>
+                  </div>
+                )}
+                {/* Telefon raqamini ko'rsatish */}
+                {user.phone_number && (
+                  <div>
+                    <Label className="text-sm font-medium">Phone</Label>
+                    <p className="text-sm text-muted-foreground">{user.phone_number}</p>
+                  </div>
+                )}
               </div>
             </TabsContent>
 

@@ -493,16 +493,35 @@ export default function ChatPage() {
     } else if (selectedChat?.type === "channel") {
       setShowChannelInfo(true)
     } else if (selectedChat?.type === "private") {
-      setShowUserProfile(true)
+      // Foydalanuvchi profili ma'lumotlarini tekshirish va yangilash
+      if (!selectedChat.email || !selectedChat.username) {
+        try {
+          // ✅ TO'G'RI: Foydalanuvchi ID sini olish
+          const userId = selectedChat.sender_id || selectedChat.id;
+          console.log("Loading profile for user ID:", userId);
+
+          const userData = await apiClient.getUserProfile(userId);
+          console.log("User data for profile modal:", userData);
+
+          const updatedChat = {
+            ...selectedChat,
+            username: userData.username || selectedChat.username,
+            email: userData.email || selectedChat.email,
+            name: userData.fullname || selectedChat.name,
+            phone_number: userData.phone_number || selectedChat.phone_number
+          };
+          setSelectedChat(updatedChat);
+        } catch (error) {
+          console.error("Failed to load user profile:", error);
+        }
+      }
+      setShowUserProfile(true);
     }
   }
 
   // Chat select handler
   const handleChatSelect = async (chat: any) => {
     console.log("Selected chat:", chat);
-    console.log("Chat isSubscribed:", chat.isSubscribed);
-    console.log("Chat isOwner:", chat.isOwner);
-
     setSelectedChat(chat)
     setLoadingMessages(true)
     setReplyingTo(null)
@@ -522,19 +541,40 @@ export default function ChatPage() {
         connectToChannel(channelId)
       }
     } else {
+      // PRIVATE CHAT - Foydalanuvchi ma'lumotlarini to'ldirish
       const roomId = chat.room_id || chat.id?.toString()
-      if (roomId) {
-        connectToChatRoom(roomId)
-      } else if (chat.sender_id) {
-        try {
-          const response = await apiClient.startChat(chat.sender_id)
-          if (response.room_id) {
-            const updatedChat = { ...chat, room_id: response.room_id.toString() }
-            setSelectedChat(updatedChat)
-            connectToChatRoom(response.room_id.toString())
-          }
-        } catch (error) {
-          console.error("Failed to start chat:", error)
+
+      try {
+        // ✅ TO'G'RI: Foydalanuvchi ID sini olish - sender_id dan
+        const userId = chat.sender_id || chat.id;
+        console.log("Loading user profile for ID:", userId);
+
+        // Serverdan to'liq foydalanuvchi ma'lumotlarini olish
+        const userData = await apiClient.getUserProfile(userId);
+        console.log("User profile data from server:", userData);
+
+        // SelectedChat ni yangilash
+        const updatedChat = {
+          ...chat,
+          username: userData.username || "user",
+          email: userData.email || "",
+          name: userData.fullname || chat.name || chat.sender,
+          bio: userData.bio || "",
+          phone_number: userData.phone_number || "",
+          avatar: userData.avatar || chat.avatar,
+          room_id: roomId
+        };
+
+        console.log("Updated chat with user data:", updatedChat);
+        setSelectedChat(updatedChat);
+
+        if (roomId) {
+          connectToChatRoom(roomId)
+        }
+      } catch (error) {
+        console.error("Failed to load user details:", error);
+        if (roomId) {
+          connectToChatRoom(roomId)
         }
       }
     }
@@ -949,13 +989,13 @@ export default function ChatPage() {
     const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
     if (messageDate.getTime() === today.getTime()) {
-      return "Bugun";
+      return "Today";
     } else if (messageDate.getTime() === yesterday.getTime()) {
-      return "Kecha";
+      return "Yesterday";
     } else if (now.getTime() - date.getTime() < 7 * 24 * 60 * 60 * 1000) {
-      return date.toLocaleDateString("uz-UZ", { weekday: "long" });
+      return date.toLocaleDateString("en-En", { weekday: "long" });
     } else {
-      return date.toLocaleDateString("uz-UZ", {
+      return date.toLocaleDateString("en-En", {
         day: "numeric",
         month: "long",
         year: "numeric",
@@ -1378,7 +1418,6 @@ export default function ChatPage() {
     lastSeen: selectedChat.lastSeen || new Date().toISOString()
   } : safeCurrentUser
 
-  // Check if current user can send messages to channel
   const canSendMessage = () => {
     if (!selectedChat) return false
 
@@ -1389,7 +1428,6 @@ export default function ChatPage() {
     return true
   }
 
-  // Check if user should see join/leave buttons
   const shouldShowChannelActions = () => {
     if (!selectedChat || selectedChat.type !== "channel") return false
 
@@ -1400,7 +1438,6 @@ export default function ChatPage() {
     return true
   }
 
-  // Debug effect
   useEffect(() => {
     console.log("[UI Debug] Messages updated:", messages)
     console.log("[UI Debug] Selected chat:", selectedChat)
@@ -1409,7 +1446,6 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-screen bg-gray-950">
-      {/* Sidebar */}
       <div className="w-80 border-r border-gray-500 bg-card flex flex-col">
         <div className="p-4 border-b border-gray-500">
           <div className="flex items-center justify-between mb-4 text-white">
@@ -1422,27 +1458,27 @@ export default function ChatPage() {
               <DropdownMenuContent align="start" className="w-48 bg-gray-900">
                 <DropdownMenuItem className="text-white cursor-pointer" onClick={() => setShowOwnProfile(true)}>
                   <User className="mr-2 h-4 w-4 text-white" />
-                  Profil
+                  Profile
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-white cursor-pointer" onClick={() => setShowContacts(true)}>
                   <UserPlus className="mr-2 h-4 w-4 text-white" />
-                  Kontaktlar
+                  Contacts
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-white cursor-pointer" onClick={() => setShowCreateGroup(true)}>
                   <Users className="mr-2 h-4 w-4 text-white" />
-                  Yangi guruh
+                  New Group
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-white cursor-pointer" onClick={() => setShowCreateChannel(true)}>
                   <Hash className="mr-2 h-4 w-4 text-white" />
-                  Yangi kanal
+                  New Channel
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-white cursor-pointer" onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" />
-                  Chiqish
+                  Leave
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1456,7 +1492,7 @@ export default function ChatPage() {
             <Input
               id="chat-search-users-input"
               name="chat-search-users"
-              placeholder="Foydalanuvchilarni qidirish..."
+              placeholder="Search..."
               value={searchQuery}
               autoComplete="new-password"
               data-form-type="search"
@@ -1503,7 +1539,7 @@ export default function ChatPage() {
               onClick={() => setActiveTab("private")}
             >
               <MessageSquare className="mr-1 h-3 w-3" />
-              Shaxsiy
+              Private
             </Button>
 
             <Button
@@ -1516,7 +1552,7 @@ export default function ChatPage() {
               onClick={() => setActiveTab("groups")}
             >
               <Users className="mr-1 h-3 w-3" />
-              Guruhlar
+              Groups
             </Button>
 
             <Button
@@ -1529,7 +1565,7 @@ export default function ChatPage() {
               onClick={() => setActiveTab("channels")}
             >
               <Hash className="mr-1 h-3 w-3" />
-              Kanallar
+              Channels
             </Button>
           </div>
         </div>
@@ -1700,15 +1736,14 @@ export default function ChatPage() {
             <ScrollArea className="flex-1 p-4 bg-gray-950">
               {loadingMessages ? (
                 <div className="flex justify-center items-center h-32">
-                  <div className="text-gray-400">Xabarlar yuklanmoqda...</div>
+                  <div className="text-gray-400">Loading...</div>
                 </div>
               ) : (
                 <div className="space-y-6">
                   {currentMessages.length === 0 ? (
                     <div className="text-center py-8">
                       <MessageSquare className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                      <p className="text-gray-400">Hali xabarlar yo'q</p>
-                      <p className="text-xs text-gray-500 mt-1">Birinchi xabarni yuboring!</p>
+                      <p className="text-gray-400">No messages yet</p>
                     </div>
                   ) : (
                     Object.entries(groupMessagesByDate(currentMessages)).map(([dateKey, dateMessages]) => (
@@ -1724,8 +1759,10 @@ export default function ChatPage() {
 
                         {dateMessages.map((msg) => {
                           const isRightAligned = getIsOwnMessage(msg);
-                          const canEdit = msg.can_edit || false;
-                          const canDelete = msg.can_delete || false;
+
+                          // ✅ TO'G'RI: canEdit va canDelete ni aniqlash
+                          const canEdit = msg.can_edit !== undefined ? msg.can_edit : isRightAligned;
+                          const canDelete = msg.can_delete !== undefined ? msg.can_delete : isRightAligned;
 
                           return (
                             <div key={msg.id} className={`group flex gap-3 mb-4 ${isRightAligned ? "flex-row-reverse" : "flex-row"}`}>
@@ -1748,7 +1785,7 @@ export default function ChatPage() {
                                 )}
 
                                 <div className="relative">
-                                  {/* Tahrirlash va o'chirish tugmalari - faqat o'ng tomondagi xabarlar uchun */}
+                                  {/* ✅ Tahrirlash va o'chirish tugmalari - faqat o'z xabarlarimiz uchun */}
                                   {isRightAligned && (canEdit || canDelete) && (
                                     <div className="absolute -left-8 top-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col gap-1">
                                       {/* Tahrirlash tugmasi - faqat text xabarlar uchun */}
@@ -1819,9 +1856,13 @@ export default function ChatPage() {
 
                                   {/* Vaqt va status */}
                                   <div className={`flex items-center gap-1 mt-1 ${isRightAligned ? "justify-end" : "justify-start"}`}>
-                                    <p className="text-xs text-gray-400">
+                                    <span className="text-xs text-gray-400">
                                       {formatMessageTime(msg.timestamp)}
-                                    </p>
+                                    </span>
+                                    {/* Xabar statusini ko'rsatish */}
+                                    {isRightAligned && (
+                                      <MessageStatus status={getMessageStatus(msg)} isOwn={false} />
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -1973,7 +2014,7 @@ export default function ChatPage() {
                   </Button>
                   <div className="flex-1 relative">
                     <Input
-                      placeholder={replyingTo ? `${getSenderName(replyingTo.sender)} ga javob...` : "Xabar yozing..."}
+                      placeholder={replyingTo ? `${getSenderName(replyingTo.sender)} ga javob...` : "Message..."}
                       value={message}
                       onChange={handleMessageChange}
                       className="pr-10 bg-gray-800 border-gray-600 text-white"
@@ -1990,7 +2031,7 @@ export default function ChatPage() {
               ) : (
                 // Disabled state for non-subscribed channels (shouldn't normally show)
                 <div className="flex justify-center">
-                  <p className="text-gray-400 text-sm">Siz bu kanalga xabar yubora olmaysiz</p>
+                  <p className="text-gray-400 text-sm">You can't send message!</p>
                 </div>
               )}
             </div>
@@ -1999,8 +2040,7 @@ export default function ChatPage() {
           <div className="flex-1 flex items-center justify-center bg-gray-950">
             <div className="text-center">
               <MessageSquare className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-white mb-2">Chat tanlang</h3>
-              <p className="text-gray-400">Xabar almashish uchun suhbatni tanlang</p>
+              <h3 className="text-lg font-semibold text-white mb-2">Choose chat</h3>
             </div>
           </div>
         )}
@@ -2071,7 +2111,7 @@ export default function ChatPage() {
           group={{
             id: selectedChat.id || 0,
             name: getChatName(selectedChat),
-            description: selectedChat.description || "Guruh tavsifi yo'q",
+            description: selectedChat.description || "No description",
             avatar: selectedChat.avatar || "",
             memberCount: selectedChat.memberCount || 0,
           }}
@@ -2086,7 +2126,7 @@ export default function ChatPage() {
           channel={{
             id: selectedChat.id || 0,
             name: getChatName(selectedChat),
-            description: selectedChat.description || "Kanal tavsifi yo'q",
+            description: selectedChat.description || "No description",
             username: selectedChat.username || selectedChat.name?.toLowerCase().replace(/\s+/g, '_') || "kanal",
             avatar: selectedChat.avatar || "",
             subscriberCount: selectedChat.subscriberCount || 0,
