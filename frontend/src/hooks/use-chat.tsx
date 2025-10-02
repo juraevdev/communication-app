@@ -807,13 +807,27 @@ export function useChat() {
               break;
 
             case "unread_count":
-              // Har bir foydalanuvchi o'zining unread count'ini oladi
               setGroups(prev => prev.map(group => {
                 if (group.id.toString() === groupId) {
                   return { ...group, unread: data.count };
                 }
                 return group;
               }));
+              break;
+
+            case "file_deleted":
+              console.log("[Chat] Group file deleted:", data);
+              setMessages(prev => {
+                const roomKey = `group_${groupId}`;
+                const updatedMessages = (prev[roomKey] || []).filter(msg => {
+                  return msg.id !== data.file_id.toString();
+                });
+
+                return {
+                  ...prev,
+                  [roomKey]: updatedMessages,
+                };
+              });
               break;
           }
         }

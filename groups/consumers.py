@@ -74,7 +74,9 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                 await self.handle_edit_message(text_data_json)
             elif message_type == 'delete_message':
                 await self.handle_delete_message(text_data_json)
-            
+            elif message_type == 'delete_file':     
+                await self.handle_delete_file(text_data_json)
+        
         except json.JSONDecodeError:
             await self.send(text_data=json.dumps({
                 'error': 'Invalid JSON format'
@@ -335,6 +337,56 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
             'uploaded_at': event['timestamp'],
             'message_type': 'file'
         }))
+        
+        
+    async def handle_delete_file(self, data):
+        file_id = data.get('file_id')
+        if not file_id:
+            await self.send(text_data=json.dumps({
+                'error': 'file_id is required'
+            }))
+            return
+
+        success = await self.delete_file_message(file_id)
+        if success:
+            await self.channel_layer.group_send(
+                self.group_room_name,
+                {
+                    'type': 'file_deleted',
+                    'file_id': file_id,
+                    'sender_id': self.user.id
+                }
+            )
+        else:
+            await self.send(text_data=json.dumps({
+                'error': 'You cannot delete this file or file not found'
+            }))
+
+    async def file_deleted(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'file_deleted',
+            'file_id': event['file_id'],
+            'sender_id': event['sender_id']
+        }))
+
+    @database_sync_to_async
+    def delete_file_message(self, file_id):
+        try:
+            message = GroupMessage.objects.get(
+                id=file_id,
+                group_id=self.group_id,
+                sender=self.user,
+                message_type='file'
+            )
+        
+            if message.file:
+                message.file.delete()   
+                message.file = None
+        
+            message.delete()
+            return True
+        except GroupMessage.DoesNotExist:
+            return False
 
 
     @database_sync_to_async

@@ -787,124 +787,133 @@ export default function ChatPage() {
 
   // Edit message handler
   // handleEditMessage funksiyasini yangilang
-const handleEditMessage = async (messageId: string, newContent: string) => {
-  if (!selectedChat || !isConnected) return;
+  const handleEditMessage = async (messageId: string, newContent: string) => {
+    if (!selectedChat || !isConnected) return;
 
-  try {
-    if (selectedChat.type === "group") {
-      if (groupWsRef.current?.readyState === WebSocket.OPEN) {
-        groupWsRef.current.send(JSON.stringify({
-          type: "edit_message",
-          message_id: messageId,
-          new_content: newContent
-        }));
+    try {
+      if (selectedChat.type === "group") {
+        if (groupWsRef.current?.readyState === WebSocket.OPEN) {
+          groupWsRef.current.send(JSON.stringify({
+            type: "edit_message",
+            message_id: messageId,
+            new_content: newContent
+          }));
+        }
+      } else if (selectedChat.type === "channel") {
+        if (channelWsRef.current?.readyState === WebSocket.OPEN) {
+          channelWsRef.current.send(JSON.stringify({
+            action: "edit_message",
+            message_id: messageId,
+            new_content: newContent
+          }));
+        }
+      } else {
+        const roomId = selectedChat.room_id || selectedChat.id?.toString();
+        if (roomId && chatWsRef.current?.readyState === WebSocket.OPEN) {
+          chatWsRef.current.send(JSON.stringify({
+            action: "edit_message",
+            message_id: messageId,
+            new_content: newContent
+          }));
+        }
       }
-    } else if (selectedChat.type === "channel") {
-      if (channelWsRef.current?.readyState === WebSocket.OPEN) {
-        channelWsRef.current.send(JSON.stringify({
-          action: "edit_message",
-          message_id: messageId,
-          new_content: newContent
-        }));
-      }
-    } else {
-      const roomId = selectedChat.room_id || selectedChat.id?.toString();
-      if (roomId && chatWsRef.current?.readyState === WebSocket.OPEN) {
-        chatWsRef.current.send(JSON.stringify({
-          action: "edit_message",
-          message_id: messageId,
-          new_content: newContent
-        }));
-      }
+    } catch (error) {
+      console.error("Failed to edit message:", error);
+      alert("Xabarni tahrirlash muvaffaqiyatsiz. Iltimos, qayta urinib ko'ring.");
     }
-  } catch (error) {
-    console.error("Failed to edit message:", error);
-    alert("Xabarni tahrirlash muvaffaqiyatsiz. Iltimos, qayta urinib ko'ring.");
-  }
-};
+  };
 
-// handleDeleteMessage funksiyasini yangilang
-const handleDeleteMessage = async (messageId: string, msg: any) => {
-  if (!selectedChat || !isConnected) return;
+  // handleDeleteMessage funksiyasini to'liq yangilang
+  const handleDeleteMessage = async (messageId: string, msg: any) => {
+    if (!selectedChat || !isConnected) return;
 
-  const isFile = isFileMessage(msg);
-  console.log("[UI] Deleting message:", { messageId, isFile, msg });
+    const isFile = isFileMessage(msg);
+    console.log("[UI] Deleting message:", { messageId, isFile, msg });
 
-  try {
-    if (selectedChat.type === "group") {
-      // Optimistic update - darhol UI dan o'chirish
-      setMessages(prev => {
-        const roomKey = `group_${selectedChat.id}`;
-        const updatedMessages = (prev[roomKey] || []).filter(m => m.id !== messageId);
-        return {
-          ...prev,
-          [roomKey]: updatedMessages,
-        };
-      });
-
-      if (groupWsRef.current?.readyState === WebSocket.OPEN) {
-        groupWsRef.current.send(JSON.stringify({
-          type: isFile ? "delete_file" : "delete_message",
-          message_id: messageId
-        }));
-      }
-    } else if (selectedChat.type === "channel") {
-      // Optimistic update - darhol UI dan o'chirish
-      setMessages(prev => {
-        const roomKey = `channel_${selectedChat.id}`;
-        const updatedMessages = (prev[roomKey] || []).filter(m => m.id !== messageId);
-        return {
-          ...prev,
-          [roomKey]: updatedMessages,
-        };
-      });
-
-      if (channelWsRef.current?.readyState === WebSocket.OPEN) {
-        channelWsRef.current.send(JSON.stringify({
-          action: isFile ? "delete_file" : "delete_message",
-          message_id: messageId
-        }));
-      }
-    } else {
-      const roomId = selectedChat.room_id || selectedChat.id?.toString();
-
-      // Optimistic update - darhol UI dan o'chirish
-      if (roomId) {
+    try {
+      if (selectedChat.type === "group") {
+        // Optimistic update - darhol UI dan o'chirish
         setMessages(prev => {
-          const updatedMessages = (prev[roomId] || []).filter(m => m.id !== messageId);
+          const roomKey = `group_${selectedChat.id}`;
+          const updatedMessages = (prev[roomKey] || []).filter(m => m.id !== messageId);
           return {
             ...prev,
-            [roomId]: updatedMessages,
+            [roomKey]: updatedMessages,
           };
         });
-      }
 
-      if (roomId && chatWsRef.current?.readyState === WebSocket.OPEN) {
-        chatWsRef.current.send(JSON.stringify({
-          action: isFile ? "delete_file" : "delete_message",
-          message_id: messageId
-        }));
+        if (groupWsRef.current?.readyState === WebSocket.OPEN) {
+          if (isFile) {
+            // Fayl uchun alohida delete_file turi
+            groupWsRef.current.send(JSON.stringify({
+              type: "delete_file",
+              file_id: messageId
+            }));
+          } else {
+            // Oddiy xabar uchun delete_message
+            groupWsRef.current.send(JSON.stringify({
+              type: "delete_message",
+              message_id: messageId
+            }));
+          }
+        }
+      } else if (selectedChat.type === "channel") {
+        // Optimistic update - darhol UI dan o'chirish
+        setMessages(prev => {
+          const roomKey = `channel_${selectedChat.id}`;
+          const updatedMessages = (prev[roomKey] || []).filter(m => m.id !== messageId);
+          return {
+            ...prev,
+            [roomKey]: updatedMessages,
+          };
+        });
+
+        if (channelWsRef.current?.readyState === WebSocket.OPEN) {
+          channelWsRef.current.send(JSON.stringify({
+            action: isFile ? "delete_file" : "delete_message",
+            message_id: messageId
+          }));
+        }
+      } else {
+        const roomId = selectedChat.room_id || selectedChat.id?.toString();
+
+        // Optimistic update - darhol UI dan o'chirish
+        if (roomId) {
+          setMessages(prev => {
+            const updatedMessages = (prev[roomId] || []).filter(m => m.id !== messageId);
+            return {
+              ...prev,
+              [roomId]: updatedMessages,
+            };
+          });
+        }
+
+        if (roomId && chatWsRef.current?.readyState === WebSocket.OPEN) {
+          chatWsRef.current.send(JSON.stringify({
+            action: isFile ? "delete_file" : "delete_message",
+            message_id: messageId
+          }));
+        }
+      }
+    } catch (error) {
+      console.error("Failed to delete message:", error);
+      alert("Xabarni o'chirish muvaffaqiyatsiz. Iltimos, qayta urinib ko'ring.");
+
+      // Agar xatolik bo'lsa, UI ni qayta yuklash
+      if (selectedChat.type === "group") {
+        const groupId = selectedChat.id.toString();
+        connectToGroup(groupId);
+      } else if (selectedChat.type === "channel") {
+        const channelId = selectedChat.id.toString();
+        connectToChannel(channelId);
+      } else {
+        const roomId = selectedChat.room_id || selectedChat.id?.toString();
+        if (roomId) {
+          connectToChatRoom(roomId);
+        }
       }
     }
-  } catch (error) {
-    console.error("Failed to delete message:", error);
-    alert("Xabarni o'chirish muvaffaqiyatsiz. Iltimos, qayta urinib ko'ring.");
-
-    // Agar xatolik bo'lsa, UI ni qayta yuklash
-    if (selectedChat.type === "group") {
-      const groupId = selectedChat.id.toString();
-      connectToGroup(groupId);
-    } else if (selectedChat.type === "channel") {
-      const channelId = selectedChat.id.toString();
-      connectToChannel(channelId);
-    } else {
-      const roomId = selectedChat.room_id || selectedChat.id?.toString();
-      if (roomId) {
-        connectToChatRoom(roomId);
-      }
-    }
-  }
-};
+  };
 
   // Date header formatter
   const formatDateHeader = (dateString: string) => {
@@ -931,17 +940,20 @@ const handleDeleteMessage = async (messageId: string, msg: any) => {
   };
 
   const isFileMessage = (msg: any): boolean => {
-    if (!msg) return false;
+  if (!msg) return false;
 
-    if (msg.message_type === "file") return true;
-    if (msg.type === "file") return true;
-    if (msg.file_url || msg.file_name) return true;
-    if (msg.file_name && msg.file_url) return true;
-    if (msg.message?.startsWith("File: ")) return true;
-    if (msg.file_size) return true;
+  if (msg.message_type === "file") return true;
+  if (msg.type === "file") return true;
+  if (msg.file_url || msg.file_name) return true;
+  if (msg.file_name && msg.file_url) return true;
+  if (msg.message?.startsWith("File: ")) return true;
+  if (msg.file_size) return true;
+  
+  if (msg.group_id && msg.file) return true;
+  if (msg.channel_id && msg.file) return true;
 
-    return false;
-  };
+  return false;
+};
 
   // Message status getter
   const getMessageStatus = (msg: any): "sending" | "sent" | "delivered" | "read" | "read_file" => {
