@@ -59,6 +59,8 @@ class ChannelConsumer(AsyncWebsocketConsumer):
                 await self.send_unread_count()
             elif action == 'delete_message':  
                 await self.handle_delete_message(data)  
+            elif action == 'delete_file':  
+                await self.handle_delete_message(data)  
             elif action == 'edit_message':    
                 await self.handle_edit_message(data)    
             else:
