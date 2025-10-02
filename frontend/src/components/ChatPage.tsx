@@ -330,6 +330,14 @@ export default function ChatPage() {
   }, [selectedChat, messages, markAsRead])
 
   const getIsOwnMessage = (msg: any): boolean => {
+    // Agar kanal bo'lsa, kanal egasi bo'yicha aniqlash
+    if (selectedChat?.type === "channel") {
+      const isChannelOwner = msg.is_channel_owner || false;
+      console.log("[DEBUG] Channel message - is_channel_owner:", isChannelOwner);
+      return isChannelOwner;
+    }
+
+    // Qolgan hollarda odatiy tekshirish
     if (msg.is_own !== undefined) {
       console.log("[DEBUG] Using is_own from backend:", msg.is_own);
       return msg.is_own;
@@ -1727,66 +1735,44 @@ export default function ChatPage() {
                           const canEdit = msg.can_edit || false;
                           const canDelete = msg.can_delete || false;
 
-                          console.log(`[RENDER] Message ${msg.id}: isOwn = ${isOwn}, isChannelOwner = ${isChannelOwner}`);
+                          console.log(`[RENDER] Message ${msg.id}: isOwn = ${isOwn}, isChannelOwner = ${isChannelOwner}, canEdit = ${canEdit}, canDelete = ${canDelete}`);
+
+                          // Kanalda: egasi o'ngda, a'zolar chapda
+                          // Boshqa chatlarda: o'z xabarlarim o'ngda, boshqalari chapda
+                          const isRightAligned = selectedChat?.type === "channel" ? isChannelOwner : isOwn;
 
                           return (
                             <div
                               key={msg.id || Math.random()}
-                              className={`group flex gap-3 mb-4 ${
-                                // ✅ Kanal uchun: egasi o'ngda, a'zolar chapda
-                                selectedChat?.type === "channel"
-                                  ? isChannelOwner ? "flex-row-reverse" : "flex-row"
-                                  : isOwn ? "flex-row-reverse" : "flex-row"
+                              className={`group flex gap-3 mb-4 ${isRightAligned ? "flex-row-reverse" : "flex-row"
                                 }`}
-                              style={{ cursor: !isOwn && !msg.is_read ? 'pointer' : 'default' }}
                             >
-                              {/* Avatar - faqat a'zolar uchun (kanalda egasi uchun avatar ko'rsatilmaydi) */}
-                              {!isChannelOwner && selectedChat?.type === "channel" && (
+                              {/* Avatar - faqat chap tomondagi xabarlar uchun */}
+                              {!isRightAligned && (
                                 <Avatar className="h-8 w-8 flex-shrink-0">
-                                  <AvatarImage src="/diverse-group.png" />
+                                  <AvatarImage src={
+                                    selectedChat?.type === "channel" ? "/channel-avatar.png" : "/diverse-group.png"
+                                  } />
                                   <AvatarFallback className="bg-gray-600 text-white">
                                     {getAvatarLetter(getSenderName(msg.sender))}
                                   </AvatarFallback>
                                 </Avatar>
                               )}
 
-                              {/* Shaxsiy chatlar va guruhlar uchun avatar */}
-                              {!isOwn && selectedChat?.type !== "channel" && (
-                                <Avatar className="h-8 w-8 flex-shrink-0">
-                                  <AvatarImage src="/diverse-group.png" />
-                                  <AvatarFallback className="bg-gray-600 text-white">
-                                    {getAvatarLetter(getSenderName(msg.sender))}
-                                  </AvatarFallback>
-                                </Avatar>
-                              )}
-
-                              <div className={`max-w-xs lg:max-w-md ${selectedChat?.type === "channel"
-                                  ? isChannelOwner ? "text-right" : "text-left"
-                                  : isOwn ? "text-right" : "text-left"
+                              <div className={`max-w-xs lg:max-w-md ${isRightAligned ? "text-right" : "text-left"
                                 }`}>
 
-                                {/* Sender nomi - faqat a'zolar uchun */}
-                                {!isChannelOwner && selectedChat?.type === "channel" && (
-                                  <p className="text-sm font-medium text-white mb-1">
-                                    {getSenderName(msg.sender)}
-                                  </p>
-                                )}
-
-                                {/* Shaxsiy chatlar va guruhlar uchun sender nomi */}
-                                {!isOwn && selectedChat?.type !== "channel" && (
+                                {/* Sender nomi - faqat chap tomondagi xabarlar uchun */}
+                                {!isRightAligned && selectedChat?.type === "channel" && (
                                   <p className="text-sm font-medium text-white mb-1">
                                     {getSenderName(msg.sender)}
                                   </p>
                                 )}
 
                                 <div className="relative">
-                                  {/* Tahrirlash va o'chirish tugmalari - faqat kanal egasi uchun */}
-                                  {(isChannelOwner || (msg.isOwn && selectedChat?.type !== "channel")) && (
-                                    <div className={`absolute ${
-                                      // ✅ Kanalda: egasi o'ng tomonda, shuning uchun tugmalar chap tomonda
-                                      selectedChat?.type === "channel"
-                                        ? isChannelOwner ? "-left-8" : "-right-8"
-                                        : isOwn ? "-left-8" : "-right-8"
+                                  {/* Tahrirlash va o'chirish tugmalari - faqat o'ng tomondagi xabarlar uchun */}
+                                  {isRightAligned && (canEdit || canDelete) && (
+                                    <div className={`absolute ${isRightAligned ? "-left-8" : "-right-8"
                                       } top-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col gap-1`}>
 
                                       {/* Tahrirlash tugmasi - faqat text xabarlar uchun */}
@@ -1829,30 +1815,12 @@ export default function ChatPage() {
 
                                   {/* Xabar kontenti */}
                                   <div
-                                    className={`rounded-lg px-3 py-2 ${selectedChat?.type === "channel"
-                                        ? isChannelOwner
-                                          ? "bg-blue-600 text-white"
-                                          : "bg-gray-700 text-white"
-                                        : isOwn
-                                          ? "bg-blue-600 text-white"
-                                          : "bg-gray-700 text-white"
+                                    className={`rounded-lg px-3 py-2 ${isRightAligned ? "bg-blue-600 text-white" : "bg-gray-700 text-white"
                                       }`}
                                   >
-                                    {/* Reply preview */}
-                                    {msg.reply_to && (
-                                      <div className="mb-2 p-2 bg-blue-800 bg-opacity-20 rounded border-l-2 border-blue-400">
-                                        <p className="text-xs opacity-70 mb-1">
-                                          {msg.reply_to.sender || "Noma'lum"} ga javob
-                                        </p>
-                                        <p className="text-sm opacity-90 truncate">
-                                          {msg.reply_to.content || msg.reply_to.message || "Xabar"}
-                                        </p>
-                                      </div>
-                                    )}
-
                                     {isFileMessage(msg) ? (
                                       <div
-                                        className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:opacity-80 ${isChannelOwner ? "bg-blue-700" : "bg-gray-600"
+                                        className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:opacity-80 ${isRightAligned ? "bg-blue-700" : "bg-gray-600"
                                           }`}
                                         onClick={() => handleDownload(msg.file_url || "", msg.file_name || msg.message?.replace("File: ", "") || "file")}
                                       >
@@ -1879,15 +1847,13 @@ export default function ChatPage() {
                                   </div>
 
                                   {/* Vaqt va status */}
-                                  <div className={`flex items-center gap-1 mt-1 ${selectedChat?.type === "channel"
-                                      ? isChannelOwner ? "justify-end" : "justify-start"
-                                      : isOwn ? "justify-end" : "justify-start"
+                                  <div className={`flex items-center gap-1 mt-1 ${isRightAligned ? "justify-end" : "justify-start"
                                     }`}>
                                     <p className="text-xs text-gray-400">
                                       {formatMessageTime(msg.timestamp)}
                                     </p>
-                                    {/* Status faqat o'z xabarlarimiz uchun va guruh/kanal emas */}
-                                    {isOwn && selectedChat?.type !== "group" && selectedChat?.type !== "channel" && (
+                                    {/* Status faqat shaxsiy chatlar uchun */}
+                                    {isOwn && selectedChat?.type === "private" && (
                                       <MessageStatus status={getMessageStatus(msg)} isOwn={isOwn} />
                                     )}
                                   </div>

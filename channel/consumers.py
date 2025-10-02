@@ -371,21 +371,31 @@ class ChannelConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def serialize_message(self, message):
+        from channel.models import Channel
+    
         print(f"[DEBUG] Serializing message: user_id={message.user.id}, current_user_id={self.user.id}")
     
         is_channel_owner = False
+        can_edit = False
+        can_delete = False
+    
         try:
-            from channel.models import Channel
             channel = Channel.objects.get(id=self.channel_id)
             is_channel_owner = channel.owner_id == self.user.id
+        
+            can_edit = is_channel_owner
+            can_delete = is_channel_owner
+        
         except Channel.DoesNotExist:
             pass
+    
+        is_own_message = message.user.id == self.user.id
     
         result = {
             'id': message.id,
             'content': message.content,
             'user': {
-                'id': message.user.id,
+                'id': str(message.user.id),  # ✅ Frontend bilan moslashtirish uchun string ga o'tkazamiz
                 'fullname': message.user.fullname,
                 'email': message.user.email
             },
@@ -393,10 +403,10 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             'message_type': message.message_type,
             'is_updated': message.is_updated,
             'is_read': message.is_read,
-            'is_own': message.user.id == self.user.id,
-            'is_channel_owner': is_channel_owner,  # ✅ Yangi field
-            'can_edit': is_channel_owner,  # ✅ Faqat egasi tahrirlay oladi
-            'can_delete': is_channel_owner,  # ✅ Faqat egasi o'chira oladi
+            'is_own': is_own_message,  # ✅ Xabar joriy foydalanuvchiga tegishliligi
+            'is_channel_owner': is_channel_owner,  # ✅ Joriy foydalanuvchi kanal egasimi
+            'can_edit': can_edit,  # ✅ Tahrirlash huquqi
+            'can_delete': can_delete,  # ✅ O'chirish huquqi
         }
     
         if message.file:
@@ -407,12 +417,12 @@ class ChannelConsumer(AsyncWebsocketConsumer):
                 'type': message.message_type
             }
 
-        print(f"[DEBUG] Serialized result: {result}")
+        print(f"[DEBUG] Serialized result: is_own={is_own_message}, is_channel_owner={is_channel_owner}, can_edit={can_edit}, can_delete={can_delete}")
         return result
 
     @database_sync_to_async
     def get_channel_messages(self):
-        from channel.models import ChannelMessage
+        from channel.models import ChannelMessage, Channel
     
         messages = ChannelMessage.objects.filter(
             channel_id=self.channel_id
@@ -422,18 +432,32 @@ class ChannelConsumer(AsyncWebsocketConsumer):
         for msg in messages:
             is_read_by_user = self.user in msg.read_by.all() or msg.user == self.user
         
+            try:
+                channel = Channel.objects.get(id=self.channel_id)
+                is_channel_owner = channel.owner_id == self.user.id
+                can_edit = is_channel_owner
+                can_delete = is_channel_owner
+            except Channel.DoesNotExist:
+                is_channel_owner = False
+                can_edit = False
+                can_delete = False
+
             message_data = {
                 'id': msg.id,
                 'content': msg.content,
                 'user': {
-                    'id': msg.user.id,
+                    'id': str(msg.user.id),  # ✅ String ga o'tkazish
                     'fullname': msg.user.fullname,
                     'email': msg.user.email
                 },
                 'created_at': msg.created_at.isoformat(),
                 'message_type': msg.message_type,
                 'is_updated': msg.is_updated,
-                'is_read': is_read_by_user,  # Har bir foydalanuvchi uchun alohida
+                'is_read': is_read_by_user,
+                'is_own': msg.user.id == self.user.id,  # ✅ Xabar egasi
+                'is_channel_owner': is_channel_owner,  # ✅ Kanal egasi
+                'can_edit': can_edit,  # ✅ Tahrirlash huquqi
+                'can_delete': can_delete,  # ✅ O'chirish huquqi
             }
 
             if msg.file:
@@ -444,6 +468,7 @@ class ChannelConsumer(AsyncWebsocketConsumer):
                     'type': msg.message_type
                 }
 
+            print(f"[DEBUG] Channel message {msg.id}: is_own={message_data['is_own']}, is_channel_owner={is_channel_owner}")
             result.append(message_data)
 
         return result

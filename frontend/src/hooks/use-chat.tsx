@@ -1295,7 +1295,7 @@ export function useChat() {
               sender: data.message.user,
               message: data.message.content || "",
               timestamp: data.message.created_at,
-              isOwn: data.message.user.id === currentUser?.id?.toString(),
+              isOwn: data.message.is_own || (data.message.user.id === currentUser?.id?.toString()),
               is_read: data.message.is_read,
               is_updated: data.message.is_updated,
               type: data.message.message_type || "text",
@@ -1310,7 +1310,7 @@ export function useChat() {
 
             addMessage(`channel_${channelId}`, newMessage)
 
-            // Kanalni ro'yxatda yuqoriga ko'tarish
+            // ✅ Kanalni ro'yxatda yuqoriga ko'tarish
             setChannels(prev => {
               const updatedChannels = prev.map(channel => {
                 if (channel.id.toString() === channelId) {
@@ -1324,6 +1324,7 @@ export function useChat() {
                 return channel
               })
 
+              // So'nggi xabar bo'yicha tartiblash
               updatedChannels.sort((a, b) => {
                 const dateA = new Date(a.timestamp).getTime()
                 const dateB = new Date(b.timestamp).getTime()
