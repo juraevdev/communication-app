@@ -1283,20 +1283,15 @@ export function useChat() {
             });
             break;
 
-          // use-chat.txt - connectToChannel funksiyasida "chat_message" case'da qo'shing
 
           case "chat_message":
-            // Backend data.message ichida hamma maydonlarni tekshiramiz
             const msgUserId = data.message?.user?.id || data.message?.user_id;
             const isCurrentUserMessage = msgUserId === currentUser?.id?.toString() ||
               msgUserId === currentUser?.id;
 
-            // Agar backend is_channel_owner bersa, ishonaman; aks holda o'zim tekshiraman
             let isChannelOwner = data.message?.is_channel_owner;
             if (isChannelOwner === undefined && isCurrentUserMessage) {
-              // Frontend channels state'dan tekshirish
-              // Yoki to'g'ridan-to'g'ri channels array'dan topish
-              isChannelOwner = true; // Agar o'zi yuborgan bo'lsa va kanal egasi bo'lsa
+              isChannelOwner = true;
             } else if (isChannelOwner === undefined) {
               isChannelOwner = false;
             }
@@ -1344,6 +1339,20 @@ export function useChat() {
             }
 
             addMessage(`channel_${channelId}`, fileMessage)
+            break;
+
+          case "file_deleted":
+            setMessages(prev => {
+              const roomKey = `channel_${channelId}`;
+              const updatedMessages = (prev[roomKey] || []).filter(
+                msg => msg.id !== data.file_id.toString()
+              );
+
+              return {
+                ...prev,
+                [roomKey]: updatedMessages,
+              };
+            });
             break;
 
           case "unread_count":

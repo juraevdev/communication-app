@@ -57,12 +57,12 @@ class ChannelConsumer(AsyncWebsocketConsumer):
                 await self.handle_mark_as_read(data)
             elif action == 'get_unread_count':
                 await self.send_unread_count()
-            elif action == 'delete_message':  
-                await self.handle_delete_message(data)  
-            elif action == 'delete_file':  
-                await self.handle_delete_file(data)  
-            elif action == 'edit_message':    
-                await self.handle_edit_message(data)    
+            elif action == 'delete_message':  # ✅ Xabarlarni o'chirish
+                await self.handle_delete_message(data)
+            elif action == 'edit_message':    # ✅ Xabarlarni tahrirlash
+                await self.handle_edit_message(data)
+            elif action == 'delete_file':     # ✅ Fayllarni o'chirish uchun yangi action
+                await self.handle_delete_file(data)
             else:
                 await self.send(text_data=json.dumps({
                     'error': 'Invalid action'
@@ -253,26 +253,31 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             }))
             return
 
+        is_owner = await self.check_channel_owner()
+        if not is_owner:
+            await self.send(text_data=json.dumps({
+                'error': 'Only channel owner can delete files'
+            }))
+            return
+
         success = await self.delete_file_message(file_id)
         if success:
             await self.channel_layer.group_send(
-                self.group_room_name,
-                {
+                self.channel_room_name,
+                {   
                     'type': 'file_deleted',
-                    'file_id': file_id,
-                    'sender_id': self.user.id
+                    'file_id': file_id
                 }
             )
         else:
             await self.send(text_data=json.dumps({
-                'error': 'You cannot delete this file or file not found'
+                'error': 'Failed to delete file'
             }))
             
     async def file_deleted(self, event):
         await self.send(text_data=json.dumps({
             'type': 'file_deleted',
-            'file_id': event['file_id'],
-            'sender_id': event['sender_id']
+            'file_id': event['file_id']
         }))
 
     async def message_updated(self, event):
@@ -310,21 +315,29 @@ class ChannelConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def delete_file_message(self, file_id):
         from channel.models import ChannelMessage
+        from chat.models import FileUpload
+    
         try:
             message = ChannelMessage.objects.get(
                 id=file_id,
-                group_id=self.group_id,
-                sender=self.user,
-                message_type='file'
+                channel_id=self.channel_id,
+                user=self.user,
+                message_type='file'  # Faqat fayl xabarlarini o'chirish
             )
         
             if message.file:
-                message.file.delete()   
-                message.file = None
+                file_upload = message.file
+                file_upload.file.delete()  # Faylni fayl tizimidan o'chiradi
+                file_upload.delete()       # FileUpload obyektini o'chiradi
         
             message.delete()
             return True
+        
         except ChannelMessage.DoesNotExist:
+            logger.error(f"File message {file_id} not found in channel {self.channel_id}")
+            return False
+        except Exception as e:
+            logger.error(f"Error deleting file message: {e}")
             return False
 
     @database_sync_to_async

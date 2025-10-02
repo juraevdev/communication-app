@@ -887,15 +887,21 @@ export default function ChatPage() {
         });
 
         if (channelWsRef.current?.readyState === WebSocket.OPEN) {
-          channelWsRef.current.send(JSON.stringify({
-            action: isFile ? "delete_file" : "delete_message",
-            message_id: messageId
-          }));
+          if (isFile) {
+            channelWsRef.current.send(JSON.stringify({
+              action: "delete_file",
+              file_id: messageId
+            }));
+          } else {
+            channelWsRef.current.send(JSON.stringify({
+              action: "delete_message",
+              message_id: messageId
+            }));
+          }
         }
       } else {
         const roomId = selectedChat.room_id || selectedChat.id?.toString();
 
-        // Optimistic update - darhol UI dan o'chirish
         if (roomId) {
           setMessages(prev => {
             const updatedMessages = (prev[roomId] || []).filter(m => m.id !== messageId);
