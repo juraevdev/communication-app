@@ -7,7 +7,7 @@ class ChannelSerializer(serializers.ModelSerializer):
     owner_name = serializers.CharField(source='owner.fullname', read_only=True)
     member_count = serializers.SerializerMethodField()
     is_subscribed = serializers.SerializerMethodField()
-    last_message = serializers.SerializerMethodField()  # ✅ Yangi field
+    last_message = serializers.SerializerMethodField() 
     
     class Meta:
         model = Channel
@@ -15,7 +15,7 @@ class ChannelSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'username', 
             'owner', 'owner_name', 'member_count', 
             'is_subscribed', 'created_at', 'updated_at',
-            'last_message'  # ✅ Qo'shish
+            'last_message'  
         ]
         read_only_fields = ['created_at', 'updated_at']
     

@@ -329,28 +329,28 @@ export default function ChatPage() {
     }
   }, [selectedChat, messages, markAsRead])
 
-const getIsOwnMessage = (msg: any): boolean => {
-  if (msg.is_own !== undefined) {
-    console.log("[DEBUG] Using is_own from backend:", msg.is_own);
-    return msg.is_own;
-  }
-  
-  if (msg.isOwn !== undefined) {
-    console.log("[DEBUG] Using isOwn from frontend:", msg.isOwn);
-    return msg.isOwn;
-  }
-  
-  const senderId = msg.sender?.id?.toString();
-  const currentUserId = currentUser?.id?.toString();
-  
-  console.log("[DEBUG] Manual ID comparison:", {
-    senderId,
-    currentUserId,
-    equal: senderId === currentUserId
-  });
-  
-  return senderId === currentUserId;
-};
+  const getIsOwnMessage = (msg: any): boolean => {
+    if (msg.is_own !== undefined) {
+      console.log("[DEBUG] Using is_own from backend:", msg.is_own);
+      return msg.is_own;
+    }
+
+    if (msg.isOwn !== undefined) {
+      console.log("[DEBUG] Using isOwn from frontend:", msg.isOwn);
+      return msg.isOwn;
+    }
+
+    const senderId = msg.sender?.id?.toString();
+    const currentUserId = currentUser?.id?.toString();
+
+    console.log("[DEBUG] Manual ID comparison:", {
+      senderId,
+      currentUserId,
+      equal: senderId === currentUserId
+    });
+
+    return senderId === currentUserId;
+  };
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault()
@@ -1723,20 +1723,25 @@ const getIsOwnMessage = (msg: any): boolean => {
                         {/* Messages for this date */}
                         {dateMessages.map((msg) => {
                           const isOwn = getIsOwnMessage(msg);
-                          console.log(`[RENDER] Message ${msg.id}: isOwn = ${isOwn}`);
+                          const isChannelOwner = msg.is_channel_owner || false;
+                          const canEdit = msg.can_edit || false;
+                          const canDelete = msg.can_delete || false;
+
+                          console.log(`[RENDER] Message ${msg.id}: isOwn = ${isOwn}, isChannelOwner = ${isChannelOwner}`);
+
                           return (
                             <div
                               key={msg.id || Math.random()}
                               className={`group flex gap-3 mb-4 ${
                                 // ✅ Kanal uchun: egasi o'ngda, a'zolar chapda
                                 selectedChat?.type === "channel"
-                                  ? msg.isOwn ? "flex-row-reverse" : "flex-row"
-                                  : msg.isOwn ? "flex-row-reverse" : "flex-row"
+                                  ? isChannelOwner ? "flex-row-reverse" : "flex-row"
+                                  : isOwn ? "flex-row-reverse" : "flex-row"
                                 }`}
-                              style={{ cursor: !msg.isOwn && !msg.is_read ? 'pointer' : 'default' }}
+                              style={{ cursor: !isOwn && !msg.is_read ? 'pointer' : 'default' }}
                             >
                               {/* Avatar - faqat a'zolar uchun (kanalda egasi uchun avatar ko'rsatilmaydi) */}
-                              {!msg.isOwn && selectedChat?.type === "channel" && (
+                              {!isChannelOwner && selectedChat?.type === "channel" && (
                                 <Avatar className="h-8 w-8 flex-shrink-0">
                                   <AvatarImage src="/diverse-group.png" />
                                   <AvatarFallback className="bg-gray-600 text-white">
@@ -1745,8 +1750,8 @@ const getIsOwnMessage = (msg: any): boolean => {
                                 </Avatar>
                               )}
 
-                              {/* Shaxsiy chatlar uchun avatar */}
-                              {!msg.isOwn && selectedChat?.type !== "channel" && (
+                              {/* Shaxsiy chatlar va guruhlar uchun avatar */}
+                              {!isOwn && selectedChat?.type !== "channel" && (
                                 <Avatar className="h-8 w-8 flex-shrink-0">
                                   <AvatarImage src="/diverse-group.png" />
                                   <AvatarFallback className="bg-gray-600 text-white">
@@ -1756,51 +1761,36 @@ const getIsOwnMessage = (msg: any): boolean => {
                               )}
 
                               <div className={`max-w-xs lg:max-w-md ${selectedChat?.type === "channel"
-                                ? msg.isOwn ? "text-right" : "text-left"
-                                : msg.isOwn ? "text-right" : "text-left"
+                                  ? isChannelOwner ? "text-right" : "text-left"
+                                  : isOwn ? "text-right" : "text-left"
                                 }`}>
 
                                 {/* Sender nomi - faqat a'zolar uchun */}
-                                {!msg.isOwn && selectedChat?.type === "channel" && (
+                                {!isChannelOwner && selectedChat?.type === "channel" && (
                                   <p className="text-sm font-medium text-white mb-1">
                                     {getSenderName(msg.sender)}
                                   </p>
                                 )}
 
-                                {/* Shaxsiy chatlar uchun sender nomi */}
-                                {!msg.isOwn && selectedChat?.type !== "channel" && (
+                                {/* Shaxsiy chatlar va guruhlar uchun sender nomi */}
+                                {!isOwn && selectedChat?.type !== "channel" && (
                                   <p className="text-sm font-medium text-white mb-1">
                                     {getSenderName(msg.sender)}
                                   </p>
                                 )}
 
                                 <div className="relative">
-                                  {/* Reply button - faqat a'zolar xabarlari uchun */}
-                                  {!msg.isOwn && selectedChat?.type !== "channel" && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="absolute -left-8 top-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-gray-400 hover:text-white hover:bg-gray-700 p-1 h-6 w-6"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleReply(msg);
-                                      }}
-                                    >
-                                      <Reply className="h-3 w-3" />
-                                    </Button>
-                                  )}
-
-                                  {/* Tahrirlash va o'chirish tugmalari - faqat o'z xabarlarimiz uchun */}
-                                  {msg.isOwn && (
+                                  {/* Tahrirlash va o'chirish tugmalari - faqat kanal egasi uchun */}
+                                  {(isChannelOwner || (msg.isOwn && selectedChat?.type !== "channel")) && (
                                     <div className={`absolute ${
                                       // ✅ Kanalda: egasi o'ng tomonda, shuning uchun tugmalar chap tomonda
                                       selectedChat?.type === "channel"
-                                        ? msg.isOwn ? "-left-8" : "-right-8"
-                                        : msg.isOwn ? "-left-8" : "-right-8"
+                                        ? isChannelOwner ? "-left-8" : "-right-8"
+                                        : isOwn ? "-left-8" : "-right-8"
                                       } top-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col gap-1`}>
 
                                       {/* Tahrirlash tugmasi - faqat text xabarlar uchun */}
-                                      {msg.type !== "file" && (
+                                      {msg.type !== "file" && canEdit && (
                                         <Button
                                           variant="ghost"
                                           size="sm"
@@ -1819,31 +1809,33 @@ const getIsOwnMessage = (msg: any): boolean => {
                                       )}
 
                                       {/* O'chirish tugmasi */}
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 w-6 p-0 text-gray-400 hover:text-red-400 hover:bg-gray-700"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (confirm("Bu xabarni o'chirishni istaysizmi?")) {
-                                            handleDeleteMessage(msg.id, msg);
-                                          }
-                                        }}
-                                      >
-                                        <Trash2 className="h-3 w-3" />
-                                      </Button>
+                                      {canDelete && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 w-6 p-0 text-gray-400 hover:text-red-400 hover:bg-gray-700"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (confirm("Bu xabarni o'chirishni istaysizmi?")) {
+                                              handleDeleteMessage(msg.id, msg);
+                                            }
+                                          }}
+                                        >
+                                          <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                      )}
                                     </div>
                                   )}
 
                                   {/* Xabar kontenti */}
                                   <div
                                     className={`rounded-lg px-3 py-2 ${selectedChat?.type === "channel"
-                                      ? msg.isOwn
-                                        ? "bg-blue-600 text-white"
-                                        : "bg-gray-700 text-white"
-                                      : msg.isOwn
-                                        ? "bg-blue-600 text-white"
-                                        : "bg-gray-700 text-white"
+                                        ? isChannelOwner
+                                          ? "bg-blue-600 text-white"
+                                          : "bg-gray-700 text-white"
+                                        : isOwn
+                                          ? "bg-blue-600 text-white"
+                                          : "bg-gray-700 text-white"
                                       }`}
                                   >
                                     {/* Reply preview */}
@@ -1860,7 +1852,7 @@ const getIsOwnMessage = (msg: any): boolean => {
 
                                     {isFileMessage(msg) ? (
                                       <div
-                                        className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:opacity-80 ${msg.isOwn ? "bg-blue-700" : "bg-gray-600"
+                                        className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:opacity-80 ${isChannelOwner ? "bg-blue-700" : "bg-gray-600"
                                           }`}
                                         onClick={() => handleDownload(msg.file_url || "", msg.file_name || msg.message?.replace("File: ", "") || "file")}
                                       >
@@ -1888,15 +1880,15 @@ const getIsOwnMessage = (msg: any): boolean => {
 
                                   {/* Vaqt va status */}
                                   <div className={`flex items-center gap-1 mt-1 ${selectedChat?.type === "channel"
-                                    ? msg.isOwn ? "justify-end" : "justify-start"
-                                    : msg.isOwn ? "justify-end" : "justify-start"
+                                      ? isChannelOwner ? "justify-end" : "justify-start"
+                                      : isOwn ? "justify-end" : "justify-start"
                                     }`}>
                                     <p className="text-xs text-gray-400">
                                       {formatMessageTime(msg.timestamp)}
                                     </p>
                                     {/* Status faqat o'z xabarlarimiz uchun va guruh/kanal emas */}
-                                    {msg.isOwn && selectedChat?.type !== "group" && selectedChat?.type !== "channel" && (
-                                      <MessageStatus status={getMessageStatus(msg)} isOwn={msg.isOwn} />
+                                    {isOwn && selectedChat?.type !== "group" && selectedChat?.type !== "channel" && (
+                                      <MessageStatus status={getMessageStatus(msg)} isOwn={isOwn} />
                                     )}
                                   </div>
                                 </div>

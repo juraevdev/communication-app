@@ -369,54 +369,46 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             logger.error(f"Error saving channel file: {e}")
             return None
 
-    async def serialize_message(self, message):
-        from channel.models import Channel
-        from channel.serializers import ChannelMessageSerializer
+    @database_sync_to_async
+    def serialize_message(self, message):
+        print(f"[DEBUG] Serializing message: user_id={message.user.id}, current_user_id={self.user.id}")
     
+        is_channel_owner = False
         try:
-            channel = await database_sync_to_async(Channel.objects.get)(id=self.channel_id)
-        
-            class MockRequest:
-                def __init__(self, user):
-                    self.user = user
-        
-            mock_request = MockRequest(self.user)
-        
-            serializer = ChannelMessageSerializer(
-                message, 
-                context={'request': mock_request}
-            )
-        
-            result = serializer.data
-        
-            if message.file:
-                result['file'] = {
-                    'name': message.file.original_filename,
-                    'url': message.file.file_url,
-                    'size': message.file.file.size if message.file.file else 0,
-                    'type': message.message_type
-                }
-        
-            return result
-        
-        except Exception as e:
-            logger.error(f"Error serializing message: {e}")
-            return {
-                'id': message.id,
-                'content': message.content,
-                'user': {
-                    'id': message.user.id,
-                    'fullname': message.user.fullname,
-                    'email': message.user.email
-                },
-                'created_at': message.created_at.isoformat(),
-                'message_type': message.message_type,
-                'is_updated': message.is_updated,
-                'is_read': message.is_read,
-                'is_own': message.user.id == self.user.id,
-                'can_edit': message.user.id == self.user.id or message.channel.owner.id == self.user.id,
-                'can_delete': message.user.id == self.user.id or message.channel.owner.id == self.user.id,
+            from channel.models import Channel
+            channel = Channel.objects.get(id=self.channel_id)
+            is_channel_owner = channel.owner_id == self.user.id
+        except Channel.DoesNotExist:
+            pass
+    
+        result = {
+            'id': message.id,
+            'content': message.content,
+            'user': {
+                'id': message.user.id,
+                'fullname': message.user.fullname,
+                'email': message.user.email
+            },
+            'created_at': message.created_at.isoformat(),
+            'message_type': message.message_type,
+            'is_updated': message.is_updated,
+            'is_read': message.is_read,
+            'is_own': message.user.id == self.user.id,
+            'is_channel_owner': is_channel_owner,  # ✅ Yangi field
+            'can_edit': is_channel_owner,  # ✅ Faqat egasi tahrirlay oladi
+            'can_delete': is_channel_owner,  # ✅ Faqat egasi o'chira oladi
+        }
+    
+        if message.file:
+            result['file'] = {
+                'name': message.file.original_filename,
+                'url': message.file.file_url,
+                'size': message.file.file.size if message.file.file else 0,
+                'type': message.message_type
             }
+
+        print(f"[DEBUG] Serialized result: {result}")
+        return result
 
     @database_sync_to_async
     def get_channel_messages(self):
