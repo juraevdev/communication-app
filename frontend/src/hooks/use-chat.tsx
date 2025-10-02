@@ -172,7 +172,7 @@ export function useChat() {
         sender: group.name,
         sender_id: group.created_by,
         last_message: "",
-        timestamp: group.updated_at,
+        timestamp: group.last_message_time || group.updated_at,
         unread: 0,
         avatar: "/group-avatar.png",
         message_type: "text",
@@ -182,6 +182,11 @@ export function useChat() {
         memberCount: 0,
         isAdmin: group.created_by === currentUser?.id,
       }))
+      
+      formattedGroups.sort((a, b) => 
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      )
+      
       setGroups(formattedGroups)
 
       formattedGroups.forEach(group => {

@@ -52,6 +52,7 @@ class GroupMessage(models.Model):
     message_type = models.CharField(max_length=10, default='text', null=True)
     reply_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='replies')
     created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
     is_read = models.BooleanField(default=False)  
     read_by = models.ManyToManyField(CustomUser, related_name='read_group_messages', blank=True)
 

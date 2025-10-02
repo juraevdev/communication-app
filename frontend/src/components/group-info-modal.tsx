@@ -40,7 +40,7 @@ interface GroupInfoModalProps {
     avatar: string
     memberCount: number
   }
-  onGroupUpdate?: () => void  
+  onGroupUpdate?: () => void
 }
 
 interface GroupMember {
@@ -151,11 +151,11 @@ export function GroupInfoModal({ isOpen, onClose, group, onGroupUpdate }: GroupI
     try {
       await apiClient.updateGroup(group.id, editData)
       setIsEditing(false)
-      
+
       if (onGroupUpdate) {
         onGroupUpdate()
       }
-      
+
     } catch (error) {
       console.error("Failed to update group:", error)
     }
@@ -196,6 +196,11 @@ export function GroupInfoModal({ isOpen, onClose, group, onGroupUpdate }: GroupI
   const handleLeaveGroup = async () => {
     try {
       await apiClient.leaveGroup(group.id)
+
+      if (onGroupUpdate) {
+        onGroupUpdate()
+      }
+
       onClose()
     } catch (error) {
       console.error("Failed to leave group:", error)

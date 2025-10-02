@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react"
 
+// ChannelInfoModalProps interfeysini yangilang
 interface ChannelInfoModalProps {
   isOpen: boolean
   onClose: () => void
@@ -30,7 +31,7 @@ interface ChannelInfoModalProps {
     isSubscribed: boolean
     isMuted: boolean
   }
-  onChannelUpdate?: () => void  
+  onChannelUpdate?: (channelId?: number, isSubscribed?: boolean) => void  // ✅ Yangilangan
 }
 
 interface User {
@@ -92,51 +93,66 @@ export function ChannelInfoModal({ isOpen, onClose, channel, onChannelUpdate }: 
     }
   }
   
-  const handleSubscribe = async () => {
-    if (!currentUser) {
-      console.error("No user logged in");
-      alert("Iltimos, avval tizimga kiring");
-      return;
-    }
+  // channel-info-modal.txt faylida quyidagi funksiyalarni yangilang
 
-    try {
-      if (isSubscribed) {
-        await apiClient.unfollowChannel(channel.id, currentUser.id);
-        console.log("Unsubscribed from", channel.id);
-      } else {
-        await apiClient.followChannel(channel.id, currentUser.id);
-        console.log("Subscribed to", channel.id);
-      }
-      
-      setIsSubscribed(!isSubscribed);
-    } catch (error) {
-      console.error("Subscription error:", error);
-      alert("Amalni bajarishda xatolik yuz berdi");
-    }
+// channel-info-modal.txt faylida quyidagi funksiyalarni yangilang
+
+const handleSubscribe = async () => {
+  if (!currentUser) {
+    console.error("No user logged in");
+    alert("Iltimos, avval tizimga kiring");
+    return;
   }
 
-  const handleLeaveChannel = async () => {
-    if (!currentUser) {
-      console.error("No user logged in");
-      return;
-    }
-
-    try {
-      await apiClient.unfollowChannel(channel.id, currentUser.id);
-      console.log("Left channel:", channel.id);
-      onClose();
-    } catch (error) {
-      console.error("Error leaving channel:", error);
-    }
-  }
-
-  const handleSubscribeButtonClick = () => {
+  try {
     if (isSubscribed) {
-      handleLeaveChannel();
+      await apiClient.unfollowChannel(channel.id, currentUser.id);
+      console.log("Unsubscribed from", channel.id);
     } else {
-      handleSubscribe();
+      await apiClient.followChannel(channel.id, currentUser.id);
+      console.log("Subscribed to", channel.id);
     }
+    
+    setIsSubscribed(!isSubscribed);
+    
+    // ✅ Kanal yangilanishini chaqirish
+    if (onChannelUpdate) {
+      onChannelUpdate(channel.id, !isSubscribed); // ID va yangi holatni o'tkazish
+    }
+  } catch (error) {
+    console.error("Subscription error:", error);
+    alert("Amalni bajarishda xatolik yuz berdi");
   }
+}
+
+const handleLeaveChannel = async () => {
+  if (!currentUser) {
+    console.error("No user logged in");
+    return;
+  }
+
+  try {
+    await apiClient.unfollowChannel(channel.id, currentUser.id);
+    console.log("Left channel:", channel.id);
+    
+    // ✅ Kanal yangilanishini chaqirish
+    if (onChannelUpdate) {
+      onChannelUpdate(channel.id, false); // Chiqib ketganligi haqida ma'lumot
+    }
+    
+    onClose();
+  } catch (error) {
+    console.error("Error leaving channel:", error);
+  }
+}
+
+const handleSubscribeButtonClick = () => {
+  if (isSubscribed) {
+    handleLeaveChannel();
+  } else {
+    handleSubscribe();
+  }
+}
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>

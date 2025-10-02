@@ -37,8 +37,23 @@ class ChannelListApiView(generics.GenericAPIView):
                 Q(members=request.user) | Q(owner=request.user)
             ).distinct()
             
-            serializer = self.get_serializer(user_channels, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            channels_data = []
+            for channel in user_channels:
+                last_message = ChannelMessage.objects.filter(
+                    channel=channel
+                ).order_by('-created_at').first()
+                
+                serializer = self.get_serializer(channel)
+                channel_data = serializer.data
+                
+                if last_message:
+                    channel_data['last_message_time'] = last_message.created_at.isoformat()
+                else:
+                    channel_data['last_message_time'] = channel.created_at.isoformat()
+                    
+                channels_data.append(channel_data)
+            
+            return Response(channels_data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'message': 'Error retrieving channels', 'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     

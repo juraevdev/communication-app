@@ -204,12 +204,40 @@ export default function ChatPage() {
     }
   };
 
-  const refreshGroupsList = () => {
-    setRefreshGroupsTrigger(prev => prev + 1)
+  const refreshGroupsList = (leftGroupId?: number) => {
+    if (leftGroupId) {
+      setGroups(prev => prev.filter(group => group.id !== leftGroupId))
+
+      if (selectedChat?.id === leftGroupId && selectedChat?.type === "group") {
+        setSelectedChat(null)
+      }
+    } else {
+      // Umumiy yangilash
+      setRefreshGroupsTrigger(prev => prev + 1)
+    }
   }
 
-  const refreshChannelsList = () => {
-    setRefreshChannelsTrigger(prev => prev + 1)
+  const refreshChannelsList = (channelId?: number, isSubscribed?: boolean) => {
+    if (channelId !== undefined) {
+      // Optimistic update - darhol UI ni yangilash
+      setChannels(prev =>
+        prev.map(channel =>
+          channel.id === channelId
+            ? { ...channel, isSubscribed: isSubscribed !== undefined ? isSubscribed : channel.isSubscribed }
+            : channel
+        )
+      );
+
+      // Agar tanlangan kanal bo'lsa, uni yangilash
+      if (selectedChat?.id === channelId && selectedChat?.type === "channel") {
+        setSelectedChat((prev: { isSubscribed: any }) =>
+          prev ? { ...prev, isSubscribed: isSubscribed !== undefined ? isSubscribed : prev.isSubscribed } : prev
+        );
+      }
+    }
+
+    // Backenddan yangi ma'lumotlarni olish
+    setRefreshChannelsTrigger(prev => prev + 1);
   }
 
   useEffect(() => {
@@ -497,54 +525,54 @@ export default function ChatPage() {
   }
 
   const handleStartChatFromContacts = async (contactUserId: number) => {
-  try {
-    setLoadingMessages(true);
+    try {
+      setLoadingMessages(true);
 
-    const userData = await apiClient.getUserProfile(contactUserId);
-    const contacts = await apiClient.getContacts();
-    
-    console.log("[StartChat] All contacts:", contacts);
-    
-    // Kontaktlardan alias ni topish - contact_user ID bo'yicha
-    const contact = contacts.find((c: any) => 
-      c.contact_user === contactUserId // contact_user ID raqam
-    );
-    
-    console.log("[StartChat] Found contact:", contact);
-    const alias = contact?.alias;
-    console.log("[StartChat] Alias:", alias);
+      const userData = await apiClient.getUserProfile(contactUserId);
+      const contacts = await apiClient.getContacts();
 
-    const response = await apiClient.startChat(contactUserId);
-    if (response.room_id) {
-      const newChat = {
-        id: contactUserId,
-        sender_id: contactUserId,
-        sender: userData.fullname || userData.username || "Foydalanuvchi",
-        name: alias || userData.fullname || userData.username || "Foydalanuvchi",
-        email: userData.email || "",
-        avatar: userData.avatar || "",
-        type: "private",
-        unread: 0,
-        last_message: "",
-        timestamp: new Date().toISOString(),
-        room_id: response.room_id.toString(),
-        alias: alias,
-        isContact: !!alias
-      };
+      console.log("[StartChat] All contacts:", contacts);
 
-      console.log("[StartChat] New chat created:", newChat);
-      
-      setSelectedChat(newChat);
-      connectToChatRoom(response.room_id.toString());
+      // Kontaktlardan alias ni topish - contact_user ID bo'yicha
+      const contact = contacts.find((c: any) =>
+        c.contact_user === contactUserId // contact_user ID raqam
+      );
+
+      console.log("[StartChat] Found contact:", contact);
+      const alias = contact?.alias;
+      console.log("[StartChat] Alias:", alias);
+
+      const response = await apiClient.startChat(contactUserId);
+      if (response.room_id) {
+        const newChat = {
+          id: contactUserId,
+          sender_id: contactUserId,
+          sender: userData.fullname || userData.username || "Foydalanuvchi",
+          name: alias || userData.fullname || userData.username || "Foydalanuvchi",
+          email: userData.email || "",
+          avatar: userData.avatar || "",
+          type: "private",
+          unread: 0,
+          last_message: "",
+          timestamp: new Date().toISOString(),
+          room_id: response.room_id.toString(),
+          alias: alias,
+          isContact: !!alias
+        };
+
+        console.log("[StartChat] New chat created:", newChat);
+
+        setSelectedChat(newChat);
+        connectToChatRoom(response.room_id.toString());
+      }
+
+      setShowContacts(false);
+      setLoadingMessages(false);
+    } catch (error) {
+      console.error("Failed to start chat from contacts:", error);
+      setLoadingMessages(false);
     }
-
-    setShowContacts(false);
-    setLoadingMessages(false);
-  } catch (error) {
-    console.error("Failed to start chat from contacts:", error);
-    setLoadingMessages(false);
-  }
-};
+  };
 
   // Search user select handler
   // Search user select handler ni yangilang
@@ -2084,7 +2112,7 @@ export default function ChatPage() {
             isSubscribed: selectedChat.isSubscribed || false,
             isMuted: selectedChat.isMuted || false,
           }}
-          onChannelUpdate={refreshChannelsList}
+          onChannelUpdate={refreshChannelsList} // ✅ Yangilangan funksiya
         />
       )}
 

@@ -56,8 +56,23 @@ class GroupListApiView(generics.GenericAPIView):
     def get(self, request):
         user_groups = Group.objects.filter(members__user=request.user)
         
-        serializer = self.get_serializer(user_groups, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        groups_data = []
+        for group in user_groups:
+            last_message = GroupMessage.objects.filter(
+                group=group
+            ).order_by('-created_at').first()
+            
+            serializer = self.get_serializer(group)
+            group_data = serializer.data
+            
+            if last_message:
+                group_data['last_message_time'] = last_message.created_at.isoformat()
+            else:
+                group_data['last_message_time'] = group.created_at.isoformat()
+                
+            groups_data.append(group_data)
+        
+        return Response(groups_data, status=status.HTTP_200_OK)
     
     
 
