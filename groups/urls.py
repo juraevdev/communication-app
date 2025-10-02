@@ -21,5 +21,5 @@ urlpatterns = [
     path('group-messages/<int:group_id>/', GroupMessageListApiView.as_view()),
     path('member/<int:id>/', GroupMemberDetailApiView.as_view()),
     path('update-member-role/<int:group_id>/<int:user_id>/', UpdateGroupMemberRoleApiView.as_view()),
-    path('<int:group_id>/leave', LeaveGroup.as_view()),
+    path('<int:group_id>/leave/', LeaveGroup.as_view()),
 ] 

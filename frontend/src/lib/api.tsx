@@ -375,7 +375,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async leaveGroup(groupId: number): Promise<any> {
-    const response = await fetch(`${BASE_URL}/group/${groupId}/leave/`, {
+    const response = await fetch(`${BASE_URL}/api/v1/group/${groupId}/leave/`, {
       method: 'POST',
       headers: this.getHeaders(),
     })
