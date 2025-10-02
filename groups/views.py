@@ -213,4 +213,3 @@ class LeaveGroup(generics.GenericAPIView):
 
         return Response({"detail": "You are not a member of this group."}, status=status.HTTP_400_BAD_REQUEST)
     
-    
