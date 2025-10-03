@@ -487,6 +487,38 @@ export default function ChatPage() {
     }
   }, [selectedChat, messages, markGroupMessageAsRead, setGroups]);
 
+
+  // Kanal xabarlarini o'qilgan deb belgilash
+  useEffect(() => {
+    if (selectedChat && selectedChat.type === "channel") {
+      const channelId = selectedChat.id.toString();
+      const currentMessages = messages[`channel_${channelId}`] || [];
+
+      const unreadMessages = currentMessages.filter(msg =>
+        !msg.is_read &&
+        !msg.isOwn && // O'z xabarlarimiz emas
+        msg.user?.id !== currentUser?.id // Boshqa foydalanuvchi xabarlari
+      );
+
+      if (unreadMessages.length > 0 && channelWsRef.current?.readyState === WebSocket.OPEN) {
+        console.log(`[Channel] Marking ${unreadMessages.length} messages as read`);
+
+        // Har bir xabarni alohida belgilash
+        unreadMessages.forEach(msg => {
+          channelWsRef.current?.send(JSON.stringify({
+            action: "mark_as_read",
+            message_id: msg.id
+          }));
+        });
+
+        // UI ni yangilash
+        setChannels(prev => prev.map(channel =>
+          channel.id.toString() === channelId ? { ...channel, unread: 0 } : channel
+        ));
+      }
+    }
+  }, [selectedChat, messages, channelWsRef, currentUser, setChannels]);
+
   // Chat header click handler
   const handleChatHeaderClick = async () => {
     if (selectedChat?.type === "group") {

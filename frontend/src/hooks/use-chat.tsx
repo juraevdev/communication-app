@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { apiClient } from "@/lib/api"
 
 export interface Message {
+  [x: string]: any
   id: string
   room_id?: number
   group_id?: number
@@ -1216,37 +1217,33 @@ export function useChat() {
 
         switch (data.type) {
           case "message_history":
-            if (data.messages && Array.isArray(data.messages)) {
-              const formattedMessages: Message[] = data.messages.map((msg: any) => ({
-                id: msg.id.toString(),
-                channel_id: parseInt(channelId),
-                sender: {
-                  id: msg.user.id || msg.user_info?.id,
-                  email: "",
-                  fullname: msg.user_info?.fullname || msg.user?.fullname || "Unknown",
-                  full_name: msg.user_info?.fullname || msg.user?.fullname || "Unknown",
-                },
+            if (data.messages) {
+              const roomKey = `channel_${channelId}`
+              const formattedMessages = data.messages.map((msg: any) => ({
+                id: msg.id,
                 message: msg.content || "",
+                sender: msg.user?.fullname || msg.user?.email || "User",
                 timestamp: msg.created_at,
-                isOwn: msg.is_own || false,
+                isOwn: msg.is_own || msg.user?.id === currentUser?.id,
+                is_own: msg.is_own || msg.user?.id === currentUser?.id,
                 is_read: msg.is_read,
+                is_channel_owner: msg.is_channel_owner,
+                can_edit: msg.can_edit,
+                can_delete: msg.can_delete,
                 is_updated: msg.is_updated,
-                type: msg.message_type || "text",
+                message_type: msg.message_type || 'text',
                 file_name: msg.file?.name,
                 file_url: msg.file?.url,
                 file_type: msg.file?.type,
-                file_size: msg.file?.size?.toString(),
-                can_edit: msg.can_edit || false,
-                can_delete: msg.can_delete || false,
-                is_channel_owner: msg.is_channel_owner || false,
+                file_size: msg.file?.size,
+                user: msg.user
               }))
-
               setMessages(prev => ({
                 ...prev,
-                [`channel_${channelId}`]: formattedMessages,
+                [roomKey]: formattedMessages
               }))
             }
-            break;
+            break
 
           case "message_updated":
             setMessages(prev => {
@@ -1387,6 +1384,21 @@ export function useChat() {
               return channel;
             }));
             break;
+
+          case "message_read_update":
+            // ✅ Xabar o'qilgan deb yangilash
+            if (data.message_id) {
+              const roomKey = `channel_${channelId}`
+              setMessages(prev => ({
+                ...prev,
+                [roomKey]: (prev[roomKey] || []).map(msg =>
+                  msg.id === data.message_id
+                    ? { ...msg, is_read: true }
+                    : msg
+                )
+              }))
+            }
+            break
         }
       }
 

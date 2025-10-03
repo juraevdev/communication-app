@@ -148,14 +148,30 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             return
 
         success = await self.mark_message_as_read(message_id)
-        
+    
         if success:
+            await self.channel_layer.group_send(
+                self.channel_room_name,
+                {
+                    'type': 'message_read_update',
+                    'message_id': message_id,
+                    'user_id': self.user.id
+                }
+            )
+        
             unread_count = await self.get_unread_count()
             await self.send(text_data=json.dumps({
                 'type': 'message_read',
                 'message_id': message_id,
                 'unread_count': unread_count
             }))
+            
+    async def message_read_update(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'message_read_update',
+            'message_id': event['message_id'],
+            'user_id': event['user_id']
+        }))
 
     async def send_unread_count(self):
         unread_count = await self.get_unread_count()
@@ -495,23 +511,25 @@ class ChannelConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def get_channel_messages(self):
         from channel.models import ChannelMessage, Channel
-    
+
         messages = ChannelMessage.objects.filter(
             channel_id=self.channel_id
         ).prefetch_related('read_by').select_related('user', 'file').order_by('created_at')
 
         result = []
-    
+
         try:
             channel = Channel.objects.get(id=self.channel_id)
             is_current_user_channel_owner = channel.owner_id == self.user.id
-            print(f"[DEBUG] Current user is channel owner: {is_current_user_channel_owner}")
         except Channel.DoesNotExist:
             is_current_user_channel_owner = False
-            print(f"[DEBUG] Channel {self.channel_id} not found")
 
         for msg in messages:
-            is_read_by_user = self.user in msg.read_by.all() or msg.user == self.user
+            is_read_by_current_user = (
+                self.user in msg.read_by.all() or 
+                msg.user == self.user or  # O'z xabarimiz
+                is_current_user_channel_owner  # Kanal egasi
+            )
         
             is_channel_owner = is_current_user_channel_owner
             can_edit = is_current_user_channel_owner
@@ -528,11 +546,11 @@ class ChannelConsumer(AsyncWebsocketConsumer):
                 'created_at': msg.created_at.isoformat(),
                 'message_type': msg.message_type,
                 'is_updated': msg.is_updated,
-                'is_read': is_read_by_user,
-                'is_own': msg.user.id == self.user.id,      
-                'is_channel_owner': is_channel_owner,   
-                'can_edit': can_edit,   
-                'can_delete': can_delete,   
+                'is_read': is_read_by_current_user,  # ✅ To'g'ri qiymat
+                'is_own': msg.user.id == self.user.id,
+                'is_channel_owner': is_channel_owner,
+                'can_edit': can_edit,
+                'can_delete': can_delete,
             }
 
             if msg.file:
@@ -543,7 +561,6 @@ class ChannelConsumer(AsyncWebsocketConsumer):
                     'type': msg.message_type
                 }
 
-            print(f"[DEBUG] Message {msg.id}: is_own={message_data['is_own']}, is_channel_owner={is_channel_owner}")
             result.append(message_data)
 
         return result
@@ -551,19 +568,32 @@ class ChannelConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def mark_message_as_read(self, message_id):
         from channel.models import ChannelMessage
-        
+    
         try:
             message = ChannelMessage.objects.get(
                 id=message_id,
                 channel_id=self.channel_id
             )
-            
+        
             if message.user != self.user:
-                message.is_read = True
-                message.save()
+                if self.user not in message.read_by.all():
+                    message.read_by.add(self.user)
             
+                from channel.models import Channel
+                channel = Channel.objects.get(id=self.channel_id)
+                total_members = channel.members.count()
+                read_count = message.read_by.count()
+            
+                if read_count >= total_members:
+                    message.is_read = True
+                    message.save(update_fields=['is_read'])
+        
             return True
         except ChannelMessage.DoesNotExist:
+            logger.error(f"Message {message_id} not found in channel {self.channel_id}")
+            return False
+        except Exception as e:
+            logger.error(f"Error marking message as read: {e}")
             return False
 
     @database_sync_to_async
