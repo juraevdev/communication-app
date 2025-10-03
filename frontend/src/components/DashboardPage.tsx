@@ -56,7 +56,7 @@ export default function DashboardPage() {
         return null;
       }
 
-      const response = await fetch("https://planshet2.stat.uz/api/api/token/refresh/", {
+      const response = await fetch("https://planshet2.stat.uz/api/token/refresh/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh }),

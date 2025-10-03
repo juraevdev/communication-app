@@ -50,7 +50,7 @@ export default function ProfilePage() {
   const fetchUserData = async () => {
     try {
       const token = localStorage.getItem("access_token")
-      const response = await axios.get("https://planshet2.stat.uz/api/api/v1/accounts/user", {
+      const response = await axios.get("https://planshet2.stat.uz/api/v1/accounts/user", {
         headers: { Authorization: `Bearer ${token}` },
       })
 
