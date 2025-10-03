@@ -1384,7 +1384,7 @@ export default function ChatPage() {
 
       let downloadUrl = fileUrl;
       if (!fileUrl.startsWith('http')) {
-        downloadUrl = `http://172.16.8.92:8000${fileUrl}`;
+        downloadUrl = `https://hisobot2.stat.uz${fileUrl}`;
       }
 
       console.log('Downloading file from:', downloadUrl);

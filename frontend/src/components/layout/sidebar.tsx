@@ -35,7 +35,7 @@ export function Sidebar() {
 
   const fetchUserData = async () => {
     try {
-      const response = await fetchWithAuth("http://172.16.8.92:8000/api/v1/accounts/user");
+      const response = await fetchWithAuth("https://hisobot2.stat.uz/api/v1/accounts/user");
       setUser(response.data);
       setProfileData({
         fullname: response.data.fullname,
@@ -62,7 +62,7 @@ export function Sidebar() {
       const token = localStorage.getItem("access_token");
 
       const userResponse = await axios.get(
-        `http://172.16.8.92:8000/api/v1/accounts/filter/?search=${newUsername}`,
+        `https://hisobot2.stat.uz/api/v1/accounts/filter/?search=${newUsername}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -74,7 +74,7 @@ export function Sidebar() {
       const userId = userResponse.data[0].id;
 
       await axios.post(
-        "http://172.16.8.92:8000/api/v1/accounts/contact/",
+        "https://hisobot2.stat.uz/api/v1/accounts/contact/",
         { contact_user: userId, alias: newAlias },
         { headers: { Authorization: `Bearer ${token}` } }
       );
