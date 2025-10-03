@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-const BASE_URL = 'https://planshet2.stat.uz';
-const WS_BASE_URL = 'ws://planshet2.stat.uz';
+const BASE_URL = 'https://planshet2.stat.uz/api';
+const WS_BASE_URL = 'ws://planshet2.stat.uz/ws';
 
 const api = axios.create({
   baseURL: `${BASE_URL}/api/v1`,
@@ -161,7 +161,7 @@ export const apiClient = {
   // api.js fayliga qo'shiladi
 async getVideoCallWebSocketUrl(roomId: any) {
   const token = localStorage.getItem('access_token');
-  return `ws://planshet2.stat.uz/ws/videocall/${roomId}/?token=${token}`;
+  return `ws://planshet2.stat.uz/ws/ws/videocall/${roomId}/?token=${token}`;
 },
 
   async removeContact(contactId: number) {

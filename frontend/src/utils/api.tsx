@@ -33,7 +33,7 @@ export const registerUser = (data: RegisterData) =>
 
 
 export const getCurrentUserInfo = async (token: string) => {
-  return axios.get("https://planshet2.stat.uz/api/v1/accounts/me/", {
+  return axios.get("https://planshet2.stat.uz/api/api/v1/accounts/me/", {
     headers: {
       Authorization: `Bearer ${token}`,
     },
