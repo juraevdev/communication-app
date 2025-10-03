@@ -101,7 +101,7 @@ export default function DashboardPage() {
         filesSocket.close();
       }
 
-      const newFilesSocket = new WebSocket(`ws://planshet2.stat.uz/ws/ws/files/?token=${token}`)
+      const newFilesSocket = new WebSocket(`ws://planshet2.stat.uz/ws/files/?token=${token}`)
 
       newFilesSocket.onopen = () => {
         console.log("✅ Files WebSocket connected")
@@ -170,7 +170,7 @@ export default function DashboardPage() {
         notificationSocket.close();
       }
 
-      const newNotificationSocket = new WebSocket(`ws://planshet2.stat.uz/ws/ws/notifications/?token=${token}`)
+      const newNotificationSocket = new WebSocket(`ws://planshet2.stat.uz/ws/notifications/?token=${token}`)
 
       newNotificationSocket.onopen = () => {
         console.log("✅ Notification WebSocket connected")

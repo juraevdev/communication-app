@@ -50,7 +50,7 @@ export const useVideoCall = ({
     try {
       currentRoomId.current = roomId;
       const token = localStorage.getItem('access_token')
-      const wsUrl = `ws://172.16.8.92:8000/ws/videocall/${roomId}/?token=${token}`;
+      const wsUrl = `ws://planshet2.stat.uz/ws/videocall/${roomId}/?token=${token}`;
       
       console.log('[VideoCall] Connecting to WebSocket:', wsUrl);
       

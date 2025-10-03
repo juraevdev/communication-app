@@ -23,7 +23,7 @@ onFileList: (files: FileItem[]) => void, onFileUploaded: (file: FileItem) => voi
     useEffect(() => {
         if (!roomId) return;
         const token = localStorage.getItem("access_token");
-        const socket = new WebSocket(`ws://172.16.8.92:8000/ws/chat/room/${roomId}/?token=${token}`);
+        const socket = new WebSocket(`ws://planshet2.stat.uz/ws/chat/room/${roomId}/?token=${token}`);
 
         socket.onopen = () => {
             console.log("✅ Connected to room:", roomId);
