@@ -1383,7 +1383,7 @@ export default function ChatPage() {
       const token = localStorage.getItem('access_token');
 
       let downloadUrl = fileUrl;
-      if (!fileUrl.startsWith('http')) {
+      if (!fileUrl.startsWith('https')) {
         downloadUrl = `https://planshet2.stat.uz${fileUrl}`;
       }
 

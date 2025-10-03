@@ -215,7 +215,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
 
   // Alternative method using the existing API structure
   async downloadFile(fileUrl: string, _isGroupFile: boolean = false): Promise<Blob> {
-    const fullUrl = fileUrl.startsWith('http')
+    const fullUrl = fileUrl.startsWith('https')
       ? fileUrl
       : `${BASE_URL}${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
 
