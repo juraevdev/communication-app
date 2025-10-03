@@ -677,7 +677,6 @@ export function useChat() {
                   message: msg.content || "",
                   timestamp: msg.created_at,
                   isOwn: msg.sender_id === currentUser?.id,
-                  // Backend har bir foydalanuvchi uchun alohida is_read yuboradi
                   is_read: Boolean(msg.is_read),
                   is_updated: msg.is_updated || false,
                   type: msg.message_type || "text",
@@ -685,7 +684,16 @@ export function useChat() {
                   file_url: msg.file_url,
                   file_type: msg.file_type,
                   file_size: msg.file_size?.toString(),
-                  reply_to: msg.reply_to,
+                  reply_to: msg.reply_to ? {
+                    id: msg.reply_to.id,
+                    content: msg.reply_to.content,
+                    sender_id: msg.reply_to.sender_id,
+                    sender_fullname: msg.reply_to.sender_fullname,
+                    sender: msg.reply_to.sender_fullname,
+                    message: msg.reply_to.content,
+                    message_type: msg.reply_to.message_type,
+                    file_name: msg.reply_to.file_name
+                  } : undefined,
                 }))
 
                 formattedMessages.sort((a, b) =>
@@ -786,10 +794,19 @@ export function useChat() {
                 message: data.message?.content || data.message || "",
                 timestamp: data.timestamp || new Date().toISOString(),
                 isOwn: data.sender_id === currentUser?.id,
-                is_read: data.sender_id === currentUser?.id, // O'z xabari avtomatik o'qilgan
+                is_read: data.sender_id === currentUser?.id,
                 is_updated: false,
                 type: data.message_type || "text",
-                reply_to: data.reply_to,
+                reply_to: data.reply_to ? {
+                  id: data.reply_to.id,
+                  content: data.reply_to.content,
+                  sender_id: data.reply_to.sender_id,
+                  sender_fullname: data.reply_to.sender_fullname,
+                  sender: data.reply_to.sender_fullname,
+                  message: data.reply_to.content,
+                  message_type: data.reply_to.message_type,
+                  file_name: data.reply_to.file_name
+                } : undefined,
                 file_name: data.file_name,
                 file_url: data.file_url,
                 file_type: data.file_type,

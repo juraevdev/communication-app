@@ -507,7 +507,7 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
         messages = GroupMessage.objects.filter(
             group_id=self.group_id
         ).prefetch_related('read_by').select_related(
-            'sender', 'reply_to', 'file'
+            'sender', 'reply_to', 'reply_to__sender', 'file'
         ).order_by('created_at')
 
         result = []
@@ -521,8 +521,8 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                 'sender_fullname': msg.sender.fullname,
                 'created_at': msg.created_at.isoformat(),
                 'message_type': msg.message_type,
-                'is_updated': False,
-                'is_read': is_read_by_user, 
+                'is_updated': msg.is_updated,
+                'is_read': is_read_by_user,
             }
     
             if msg.file:
@@ -534,12 +534,20 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                 })
         
             if msg.reply_to:
-                message_data['reply_to'] = {
+                reply_data = {
                     'id': msg.reply_to.id,
                     'content': msg.reply_to.content,
-                    'sender': msg.reply_to.sender.fullname,
+                    'sender_id': msg.reply_to.sender.id,
+                    'sender_fullname': msg.reply_to.sender.fullname,
                     'message': msg.reply_to.content
                 }
+                
+                # Agar reply qilingan xabar fayl bo'lsa
+                if msg.reply_to.message_type == 'file' and msg.reply_to.file:
+                    reply_data['file_name'] = msg.reply_to.file.original_filename
+                    reply_data['message_type'] = 'file'
+                
+                message_data['reply_to'] = reply_data
     
             result.append(message_data)
 

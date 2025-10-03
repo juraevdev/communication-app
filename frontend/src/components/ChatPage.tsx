@@ -355,17 +355,19 @@ export default function ChatPage() {
     if (selectedChat.type === "group") {
       const groupId = selectedChat.id.toString()
       sendGroupMessage(groupId, message, replyingTo?.id)
+      setMessage("")
+      setReplyingTo(null)
     } else if (selectedChat.type === "channel") {
       const channelId = selectedChat.id.toString()
       sendChannelMessage(channelId, message)
+      setMessage("")
     } else {
       const roomId = selectedChat.room_id || selectedChat.id?.toString()
       if (roomId) {
         sendMessage(roomId, message)
+        setMessage("")
       }
     }
-    setMessage("")
-    setReplyingTo(null)
   }
 
   // Channel action handler
@@ -1828,6 +1830,7 @@ export default function ChatPage() {
 
                                 <div className="relative">
                                   {/* ✅ Tahrirlash va o'chirish tugmalari - faqat o'z xabarlarimiz uchun */}
+                                  {/* âœ… Tahrirlash va o'chirish tugmalari - faqat o'z xabarlarimiz uchun */}
                                   {isRightAligned && (canEdit || canDelete) && (
                                     <div className="absolute -left-8 top-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col gap-1">
                                       {/* Tahrirlash tugmasi - faqat text xabarlar uchun */}
@@ -1868,8 +1871,40 @@ export default function ChatPage() {
                                     </div>
                                   )}
 
+                                  {/* âœ… Reply tugmasi - guruhlarda faqat */}
+                                  {selectedChat?.type === "group" && !isRightAligned && (
+                                    <div className="absolute -right-8 top-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 p-0 text-gray-400 hover:text-blue-400 hover:bg-gray-700"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleReply(msg);
+                                        }}
+                                      >
+                                        <Reply className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  )}
+
+                                  {/* Xabar kontenti */}
                                   {/* Xabar kontenti */}
                                   <div className={`rounded-lg px-3 py-2 ${isRightAligned ? "bg-blue-600 text-white" : "bg-gray-700 text-white"}`}>
+                                    {/* Reply preview */}
+                                    {msg.reply_to && (
+                                      <div className={`mb-2 pb-2 border-l-2 pl-2 ${isRightAligned ? "border-blue-300" : "border-gray-500"} opacity-80`}>
+                                        <p className="text-xs font-semibold">
+                                          {msg.reply_to.sender_fullname || msg.reply_to.sender || "User"}
+                                        </p>
+                                        <p className="text-xs truncate">
+                                          {msg.reply_to.message_type === "file" 
+                                            ? `📎 ${msg.reply_to.file_name || "Fayl"}` 
+                                            : msg.reply_to.content || msg.reply_to.message || ""}
+                                        </p>
+                                      </div>
+                                    )}
+                                    
                                     {isFileMessage(msg) ? (
                                       <div className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:opacity-80 ${isRightAligned ? "bg-blue-700" : "bg-gray-600"}`}
                                         onClick={() => handleDownload(msg.file_url || "", msg.file_name || msg.message?.replace("File: ", "") || "file")}
