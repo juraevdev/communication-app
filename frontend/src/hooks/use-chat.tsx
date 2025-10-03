@@ -1472,21 +1472,22 @@ export function useChat() {
         return {
           id: channel.id,
           name: channel.name,
-          sender: channel.owner_name || "Unknown",
+          sender: channel.owner_name || "Noma'lum",
           sender_id: channel.owner,
           last_message: channel.last_message || "",
-          timestamp: channel.updated_at || channel.created_at,
-          unread: channel.unread_count || 0,
+          timestamp: channel.timestamp || channel.updated_at,
+          unread: 0,
           avatar: "/channel-avatar.png",
           message_type: "text",
           room_id: `channel_${channel.id}`,
           type: "channel",
-          description: channel.description || "",
-          memberCount: Array.isArray(channel.members) ? channel.members.length : 0,
-          isAdmin: isOwner,
-          isOwner: isOwner,
-          isSubscribed: isSubscribed,
-          username: channel.username || channel.name.toLowerCase().replace(/\s+/g, '_')
+          description: channel.description,
+          memberCount: channel.member_count || 0,
+          isAdmin: channel.isOwner || channel.owner === currentUser?.id,
+          isOwner: channel.isOwner || channel.owner === currentUser?.id,
+          // ✅ is_subscribed ni to'g'ri o'rnatish
+          isSubscribed: channel.is_subscribed === true,
+          username: channel.username
         }
       })
 

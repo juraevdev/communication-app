@@ -7,7 +7,8 @@ class ChannelSerializer(serializers.ModelSerializer):
     owner_name = serializers.CharField(source='owner.fullname', read_only=True)
     member_count = serializers.SerializerMethodField()
     is_subscribed = serializers.SerializerMethodField()
-    last_message = serializers.SerializerMethodField() 
+    last_message = serializers.SerializerMethodField()
+    isOwner = serializers.SerializerMethodField()   
     
     class Meta:
         model = Channel
@@ -15,7 +16,7 @@ class ChannelSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'username', 
             'owner', 'owner_name', 'member_count', 
             'is_subscribed', 'created_at', 'updated_at',
-            'last_message'  
+            'last_message', 'isOwner'   
         ]
         read_only_fields = ['created_at', 'updated_at']
     
@@ -25,11 +26,19 @@ class ChannelSerializer(serializers.ModelSerializer):
     def get_is_subscribed(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return obj.members.filter(id=request.user.id).exists() or obj.owner_id == request.user.id
+            is_owner = obj.owner_id == request.user.id
+            is_member = obj.members.filter(id=request.user.id).exists()
+            return is_owner or is_member
         return False
     
-    # ✅ Oxirgi xabarni olish
+    def get_isOwner(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.owner_id == request.user.id
+        return False
+    
     def get_last_message(self, obj):
+        from channel.models import ChannelMessage
         last_msg = ChannelMessage.objects.filter(channel=obj).order_by('-created_at').first()
         if last_msg:
             if last_msg.message_type == 'file':

@@ -380,17 +380,22 @@ export default function ChatPage() {
 
       const newSubscriptionStatus = response.is_subscribed;
 
+      console.log("[ChannelAction] New subscription status:", newSubscriptionStatus)
+
+      // ✅ SelectedChat ni yangilash
       setSelectedChat((prev: any) => ({
         ...prev,
         isSubscribed: newSubscriptionStatus
       }))
 
+      // ✅ Channels ro'yxatini yangilash
       setChannels(prev => prev.map(channel =>
         channel.id === selectedChat.id
           ? { ...channel, isSubscribed: newSubscriptionStatus }
           : channel
       ))
 
+      // ✅ WebSocket ulanishni boshqarish
       if (newSubscriptionStatus) {
         const channelId = selectedChat.id.toString()
         connectToChannel(channelId)
@@ -399,6 +404,9 @@ export default function ChatPage() {
           channelWsRef.current.close()
         }
       }
+
+      // ✅ Kanallar ro'yxatini qayta yuklash
+      await loadChannels()
 
     } catch (error) {
       console.error("Failed to perform channel action:", error)
@@ -670,6 +678,7 @@ export default function ChatPage() {
   };
 
   // Channel select handler
+  // Channel select handler
   const handleChannelSelect = async (channel: any) => {
     console.log("Selected channel from search:", channel)
 
@@ -678,8 +687,8 @@ export default function ChatPage() {
       name: channel.name,
       sender: channel.owner_name || "Noma'lum",
       sender_id: channel.owner,
-      last_message: channel.description || "",
-      timestamp: channel.updated_at,
+      last_message: channel.last_message || channel.description || "",
+      timestamp: channel.timestamp || channel.updated_at,
       unread: channel.unread_count || 0,
       avatar: "/channel-avatar.png",
       message_type: "text",
@@ -687,9 +696,10 @@ export default function ChatPage() {
       type: "channel",
       description: channel.description,
       memberCount: channel.member_count || 0,
-      isAdmin: channel.owner === currentUser?.id,
-      isOwner: channel.owner === currentUser?.id,
-      isSubscribed: channel.is_subscribed || false,
+      isAdmin: channel.isOwner || channel.owner === currentUser?.id,
+      isOwner: channel.isOwner || channel.owner === currentUser?.id,
+      // ✅ Backend dan kelgan is_subscribed ni to'g'ri o'rnatish
+      isSubscribed: channel.is_subscribed !== undefined ? channel.is_subscribed : false,
       username: channel.username
     }
 
@@ -1575,7 +1585,7 @@ export default function ChatPage() {
             {isSearching ? (
               <div className="text-center py-8">
                 <Search className="h-8 w-8 text-gray-400 mx-auto mb-2 animate-pulse" />
-                <p className="text-gray-400">Qidirilmoqda...</p>
+                <p className="text-gray-400">Searching...</p>
               </div>
             ) : displayChats.length === 0 ? (
               <div className="text-center py-8">
@@ -1850,7 +1860,7 @@ export default function ChatPage() {
                                       </p>
                                     )}
                                     {msg.is_updated && (
-                                      <p className="text-xs opacity-70 mt-1">tahrirlangan</p>
+                                      <p className="text-xs opacity-70 mt-1">Edited</p>
                                     )}
                                   </div>
 
@@ -1886,7 +1896,7 @@ export default function ChatPage() {
                     <Reply className="h-4 w-4 text-blue-400 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-blue-400 mb-1">
-                        {getSenderName(replyingTo.sender)} ga javob
+                        {getSenderName(replyingTo.sender)} replied to
                       </p>
                       <p className="text-sm text-white truncate">
                         {isFileMessage(replyingTo)

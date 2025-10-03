@@ -35,21 +35,23 @@ class ChannelListApiView(generics.GenericAPIView):
         try:
             user_channels = Channel.objects.filter(
                 Q(members=request.user) | Q(owner=request.user)
-            ).distinct()
+            ).distinct().order_by('-updated_at')    
             
             channels_data = []
             for channel in user_channels:
+                serializer = self.get_serializer(channel, context={'request': request})
+                channel_data = serializer.data
+                
+                channel_data['type'] = 'channel'
+                
                 last_message = ChannelMessage.objects.filter(
                     channel=channel
                 ).order_by('-created_at').first()
                 
-                serializer = self.get_serializer(channel)
-                channel_data = serializer.data
-                
                 if last_message:
-                    channel_data['last_message_time'] = last_message.created_at.isoformat()
+                    channel_data['timestamp'] = last_message.created_at.isoformat()
                 else:
-                    channel_data['last_message_time'] = channel.created_at.isoformat()
+                    channel_data['timestamp'] = channel.created_at.isoformat()
                     
                 channels_data.append(channel_data)
             
