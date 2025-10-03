@@ -1491,12 +1491,8 @@ export function useChat() {
   const loadChannels = useCallback(async () => {
     try {
       const channelsData = await apiClient.getChannels()
-      const currentUserData = await apiClient.getMe()
 
       const formattedChannels: Chat[] = channelsData.map((channel: any) => {
-        const isOwner = channel.owner === currentUserData?.id
-        const isMember = Array.isArray(channel.members) && channel.members.includes(currentUserData?.id)
-        const isSubscribed = isOwner || isMember
 
         return {
           id: channel.id,
