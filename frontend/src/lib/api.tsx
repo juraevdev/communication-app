@@ -60,7 +60,7 @@ export const apiClient = {
   baseUrl: `${BASE_URL}/api/v1`,
 
   async login(email: string, password: string) {
-    const response = await api.post('/accounts/login', { email, password });
+    const response = await api.post('/accounts/login/', { email, password });
     const { access, refresh } = response.data;
 
     localStorage.setItem('access_token', access);
