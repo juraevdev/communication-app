@@ -34,7 +34,7 @@ api.interceptors.response.use(
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
         try {
-          const response = await axios.post(`${BASE_URL}/api/token/refresh/`, {
+          const response = await axios.post(`${BASE_URL}/token/refresh/`, {
             refresh: refreshToken,
           });
 
@@ -106,18 +106,18 @@ export const apiClient = {
   // },
 
   async getUserProfile(contactUserId: any) {
-    const response = await api.get(`accounts/user/${contactUserId}`)
+    const response = await api.get(`/accounts/user/${contactUserId}`)
     return response.data
   },
 
   async getProfile() {
-    const response = await api.get('accounts/me/');
+    const response = await api.get('/accounts/me/');
     return response.data;
   },
 
   async changePassword(passwordData: any) {
     try {
-      const response = await api.post('accounts/change-password/', passwordData);
+      const response = await api.post('/accounts/change-password/', passwordData);
       return response.data;
     } catch (error) {
       console.error("Parolni o'zgartirishda xatolik:", error)
@@ -161,7 +161,7 @@ export const apiClient = {
   // api.js fayliga qo'shiladi
 async getVideoCallWebSocketUrl(roomId: any) {
   const token = localStorage.getItem('access_token');
-  return `ws://planshet2.stat.uz/ws/ws/videocall/${roomId}/?token=${token}`;
+  return `ws://planshet2.stat.uz/ws/videocall/${roomId}/?token=${token}`;
 },
 
   async removeContact(contactId: number) {
@@ -170,7 +170,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async updateContact(contactId: number, alias: string) {
-    const response = await api.put(`accounts/contact/edit/${contactId}/`, {
+    const response = await api.put(`/accounts/contact/edit/${contactId}/`, {
       alias: alias
     });
     return response.data;
@@ -240,22 +240,22 @@ async getVideoCallWebSocketUrl(roomId: any) {
 
   getStatusWebSocketUrl(): string {
     const token = localStorage.getItem('access_token');
-    return `${WS_BASE_URL}/ws/status/?token=${token}`;
+    return `${WS_BASE_URL}/status/?token=${token}`;
   },
 
   getChatWebSocketUrl(roomId: string): string {
     const token = localStorage.getItem('access_token');
-    return `${WS_BASE_URL}/ws/chat/room/${roomId}/?token=${token}`;
+    return `${WS_BASE_URL}/chat/room/${roomId}/?token=${token}`;
   },
 
   getNotificationsWebSocketUrl(): string {
     const token = localStorage.getItem('access_token');
-    return `${WS_BASE_URL}/ws/notifications/?token=${token}`;
+    return `${WS_BASE_URL}/notifications/?token=${token}`;
   },
 
   getFilesWebSocketUrl(): string {
     const token = localStorage.getItem('access_token');
-    return `${WS_BASE_URL}/ws/files/?token=${token}`;
+    return `${WS_BASE_URL}/files/?token=${token}`;
   },
 
   getHeaders(): HeadersInit {
@@ -268,7 +268,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
 
 
   async createGroup(data: { name: string; description?: string; created_by: string }) {
-    const response = await fetch(`${BASE_URL}/api/v1/group/create/`, {
+    const response = await fetch(`${BASE_URL}/v1/group/create/`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(data),
@@ -277,7 +277,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async getGroups() {
-    const response = await fetch(`${BASE_URL}/api/v1/group/all/`, {
+    const response = await fetch(`${BASE_URL}/v1/group/all/`, {
       method: 'GET',
       headers: this.getHeaders(),
     });
@@ -285,7 +285,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async getGroupDetail(groupId: number) {
-    const response = await fetch(`${BASE_URL}/api/v1/group/${groupId}/`, {
+    const response = await fetch(`${BASE_URL}/v1/group/${groupId}/`, {
       method: 'GET',
       headers: this.getHeaders(),
     });
@@ -293,7 +293,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async updateGroup(groupId: number, data: { name?: string; description?: string }) {
-    const response = await fetch(`${BASE_URL}/api/v1/group/edit/${groupId}/`, {
+    const response = await fetch(`${BASE_URL}/v1/group/edit/${groupId}/`, {
       method: 'PUT',
       headers: this.getHeaders(),
       body: JSON.stringify(data),
@@ -302,7 +302,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async deleteGroup(groupId: number) {
-    const response = await fetch(`${BASE_URL}/api/v1/group/delete/${groupId}/`, {
+    const response = await fetch(`${BASE_URL}/v1/group/delete/${groupId}/`, {
       method: 'DELETE',
       headers: this.getHeaders(),
     });
@@ -310,7 +310,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async addGroupMember(data: { group: number; user: number; role: 'owner' | 'admin' | 'member' }) {
-    const response = await fetch(`${BASE_URL}/api/v1/group/add-member/`, {
+    const response = await fetch(`${BASE_URL}/v1/group/add-member/`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(data),
@@ -319,7 +319,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async removeGroupMember(groupId: number, memberId: number) {
-    const response = await fetch(`${BASE_URL}/api/v1/group/remove-member/${groupId}/${memberId}/`, {
+    const response = await fetch(`${BASE_URL}/v1/group/remove-member/${groupId}/${memberId}/`, {
       method: 'DELETE',
       headers: this.getHeaders(),
     });
@@ -327,7 +327,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async getGroupMembers(groupId: number) {
-    const response = await fetch(`${BASE_URL}/api/v1/group/members/${groupId}/`, {
+    const response = await fetch(`${BASE_URL}/v1/group/members/${groupId}/`, {
       method: 'GET',
       headers: this.getHeaders(),
     });
@@ -335,7 +335,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async getGroupMessages(groupId: number) {
-    const response = await fetch(`${BASE_URL}/api/v1/group/group-messages/${groupId}/`, {
+    const response = await fetch(`${BASE_URL}/v1/group/group-messages/${groupId}/`, {
       method: 'GET',
       headers: this.getHeaders(),
     });
@@ -343,7 +343,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async markGroupMessageAsRead(groupId: number, messageId: number) {
-    const response = await fetch(`${BASE_URL}/api/v1/group/messages/${messageId}/read/`, {
+    const response = await fetch(`${BASE_URL}/v1/group/messages/${messageId}/read/`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({ group_id: groupId })
@@ -354,7 +354,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   getGroupWebSocketUrl(groupId: string): string {
     const token = localStorage.getItem('access_token');
 
-    return `${WS_BASE_URL}/ws/groups/${groupId}/?token=${token}`;
+    return `${WS_BASE_URL}/groups/${groupId}/?token=${token}`;
   },
 
   async handleResponse(response: Response) {
@@ -366,7 +366,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async updateGroupMemberRole(groupId: number, userId: number, role: string): Promise<any> {
-    const response = await fetch(`${BASE_URL}/api/v1/group/update-member-role/${groupId}/${userId}/`, {
+    const response = await fetch(`${BASE_URL}/v1/group/update-member-role/${groupId}/${userId}/`, {
       method: 'PUT',
       headers: this.getHeaders(),
       body: JSON.stringify({ role })
@@ -375,7 +375,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async leaveGroup(groupId: number): Promise<any> {
-    const response = await fetch(`${BASE_URL}/api/v1/group/${groupId}/leave/`, {
+    const response = await fetch(`${BASE_URL}/v1/group/${groupId}/leave/`, {
       method: 'POST',
       headers: this.getHeaders(),
     })
@@ -383,7 +383,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async searchUser(searchTerm: string = "") {
-    const response = await fetch(`${BASE_URL}/api/v1/accounts/filter/?search=${encodeURIComponent(searchTerm)}`, {
+    const response = await fetch(`${BASE_URL}/v1/accounts/filter/?search=${encodeURIComponent(searchTerm)}`, {
       method: 'GET',
       headers: this.getHeaders(),
     });
@@ -391,12 +391,12 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async getGroupUnreadCount(groupId: number): Promise<number> {
-    const response = await api.get(`/group/unread-count/${groupId}/`);
+    const response = await api.get(`/v1/group/unread-count/${groupId}/`);
     return response.data.unread_count;
   },
 
   async markGroupMessagesAsRead(groupId: number): Promise<any> {
-    const response = await api.post(`/group/mark-all-read/${groupId}/`);
+    const response = await api.post(`/v1/group/mark-all-read/${groupId}/`);
     return response.data;
   },
 
@@ -406,7 +406,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
     owner: string;
     username: string; 
   }) {
-    const response = await fetch(`${BASE_URL}/api/v1/channels/create/`, {
+    const response = await fetch(`${BASE_URL}/v1/channels/create/`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({
@@ -420,7 +420,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async getChannels() {
-    const response = await fetch(`${BASE_URL}/api/v1/channels/list/`, {
+    const response = await fetch(`${BASE_URL}/v1/channels/list/`, {
       method: 'GET',
       headers: this.getHeaders(),
     });
@@ -428,12 +428,12 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async getChannelsFilter(searchTerm: string) {
-    const response = await api.get(`channels/filter/?search=${encodeURIComponent(searchTerm)}`);
+    const response = await api.get(`/v1channels/filter/?search=${encodeURIComponent(searchTerm)}`);
     return response.data;
   },
 
   async getChannelDetail(channelId: number) {
-    const response = await fetch(`${BASE_URL}/api/v1/channels/${channelId}/`, {
+    const response = await fetch(`${BASE_URL}/v1/channels/${channelId}/`, {
       method: 'GET',
       headers: this.getHeaders(),
     });
@@ -441,7 +441,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async updateChannel(channelId: number, data: { name?: string; description?: string }) {
-    const response = await fetch(`${BASE_URL}/api/v1/channels/edit/${channelId}/`, {
+    const response = await fetch(`${BASE_URL}/v1/channels/edit/${channelId}/`, {
       method: 'PUT',
       headers: this.getHeaders(),
       body: JSON.stringify(data),
@@ -450,7 +450,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async deleteChannel(channelId: number) {
-    const response = await fetch(`${BASE_URL}/api/v1/channels/delete/${channelId}/`, {
+    const response = await fetch(`${BASE_URL}/v1/channels/delete/${channelId}/`, {
       method: 'DELETE',
       headers: this.getHeaders(),
     });
@@ -459,7 +459,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
 
 
   async followChannel(channelId: number, userId: number) {
-    const response = await fetch(`${BASE_URL}/api/v1/channels/follow/`, {
+    const response = await fetch(`${BASE_URL}/v1/channels/follow/`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({
@@ -471,7 +471,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async unfollowChannel(channelId: number, userId: number) {
-    const response = await fetch(`${BASE_URL}/api/v1/channels/unfollow/`, {
+    const response = await fetch(`${BASE_URL}/v1/channels/unfollow/`, {
       method: 'POST', 
       headers: this.getHeaders(),
       body: JSON.stringify({
@@ -483,7 +483,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async getChannelMembers(channelId: number) {
-    const response = await fetch(`${BASE_URL}/api/v1/channels/members/${channelId}/`, {
+    const response = await fetch(`${BASE_URL}/v1/channels/members/${channelId}/`, {
       method: 'GET',
       headers: this.getHeaders(),
     });
@@ -491,7 +491,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   },
 
   async getChannelMessages(channelId: number) {
-    const response = await fetch(`${BASE_URL}/api/v1/channels/messages/${channelId}/`, {
+    const response = await fetch(`${BASE_URL}/v1/channels/messages/${channelId}/`, {
       method: 'GET',
       headers: this.getHeaders(),
     });
@@ -500,7 +500,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
 
   getChannelWebSocketUrl(channelId: string): string {
     const token = localStorage.getItem('access_token');
-    return `${WS_BASE_URL}/ws/channel/${channelId}/?token=${token}`;
+    return `${WS_BASE_URL}/channel/${channelId}/?token=${token}`;
   },
 
   async downloadChannelFile(fileUrl: string): Promise<Blob> {

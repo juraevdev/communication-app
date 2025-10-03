@@ -1,6 +1,6 @@
 import axios from "axios";
 
-export const API_BASE_URL = "https://planshet2.stat.uz/";
+export const API_BASE_URL = "https://planshet2.stat.uz/api";
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -28,7 +28,7 @@ interface RegisterData {
 }
 
 export const registerUser = (data: RegisterData) =>
-  apiClient.post("/api/v1/accounts/register/", data);
+  apiClient.post("/v1/accounts/register/", data);
 
 
 
