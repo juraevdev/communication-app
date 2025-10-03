@@ -4,7 +4,7 @@ const BASE_URL = 'https://planshet2.stat.uz/api';
 const WS_BASE_URL = 'ws://planshet2.stat.uz/ws';
 
 const api = axios.create({
-  baseURL: `${BASE_URL}/api/v1`,
+  baseURL: `${BASE_URL}/v1`,
   headers: {
     'Content-Type': 'application/json',
   },
