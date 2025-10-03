@@ -70,7 +70,7 @@ export default function FilesPage() {
         }
 
         try {
-            const wsUrl = `ws://hisobot2.stat.uz/ws/files/?token=${token}`
+            const wsUrl = `ws://planshet2.stat.uz/ws/files/?token=${token}`
             ws.current = new WebSocket(wsUrl)
 
             ws.current.onopen = () => {

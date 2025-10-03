@@ -50,7 +50,7 @@ export default function ProfilePage() {
   const fetchUserData = async () => {
     try {
       const token = localStorage.getItem("access_token")
-      const response = await axios.get("https://hisobot2.stat.uz/api/v1/accounts/user", {
+      const response = await axios.get("https://planshet2.stat.uz/api/v1/accounts/user", {
         headers: { Authorization: `Bearer ${token}` },
       })
 
@@ -77,7 +77,7 @@ export default function ProfilePage() {
       const token = localStorage.getItem("access_token")
 
       await axios.patch(
-        `https://hisobot2.stat.uz/api/v1/accounts/user/`,
+        `https://planshet2.stat.uz/api/v1/accounts/user/`,
         {
           fullname: profileData.fullname,
           email: profileData.email,
@@ -88,7 +88,7 @@ export default function ProfilePage() {
 
       if (user?.profile) {
         await axios.patch(
-          `https://hisobot2.stat.uz/api/v1/accounts/profile/`,
+          `https://planshet2.stat.uz/api/v1/accounts/profile/`,
           {
             phone_number: profileData.phone_number,
           },
@@ -119,7 +119,7 @@ export default function ProfilePage() {
       const token = localStorage.getItem("access_token");
 
       await axios.post(
-        "https://hisobot2.stat.uz/api/v1/accounts/change-password/",
+        "https://planshet2.stat.uz/api/v1/accounts/change-password/",
         {
           password: profileData.password,
           new_password: profileData.new_password,
@@ -155,7 +155,7 @@ export default function ProfilePage() {
 
       if (user?.profile) {
         await axios.patch(
-          `https://hisobot2.stat.uz/api/v1/accounts/profile/`,
+          `https://planshet2.stat.uz/api/v1/accounts/profile/`,
           formData,
           {
             headers: {
@@ -166,7 +166,7 @@ export default function ProfilePage() {
         )
       } else {
         await axios.post(
-          "https://hisobot2.stat.uz/api/v1/accounts/profile/",
+          "https://planshet2.stat.uz/api/v1/accounts/profile/",
           formData,
           {
             headers: {

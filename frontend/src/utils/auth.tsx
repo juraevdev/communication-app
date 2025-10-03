@@ -25,7 +25,7 @@ export const fetchWithAuth = async <T = any>(
 
       try {
         const refreshResponse = await axios.post<{ access: string }>(
-          "https://hisobot2.stat.uz/api/token/refresh/",
+          "https://planshet2.stat.uz/api/token/refresh/",
           { refresh }
         );
 
