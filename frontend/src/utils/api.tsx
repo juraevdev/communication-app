@@ -15,7 +15,7 @@ interface LoginData {
 }
 
 export const loginUser = (data: LoginData) =>
-  apiClient.post("/api/v1/accounts/login", data);
+  apiClient.post("/v1/accounts/login", data);
 
 
 interface RegisterData {
