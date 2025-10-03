@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BASE_URL = 'http://hisobot2.stat.uz:8000';
+const BASE_URL = 'https://hisobot2.stat.uz:8000';
 const WS_BASE_URL = 'ws://hisobot2.stat.uz:8000';
 
 const api = axios.create({
