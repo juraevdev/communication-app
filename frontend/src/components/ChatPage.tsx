@@ -815,19 +815,19 @@ export default function ChatPage() {
       const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
       if (messageDate.getTime() === today.getTime()) {
-        return date.toLocaleTimeString("uz-UZ", {
+        return date.toLocaleTimeString("en-En", {
           hour: "2-digit",
           minute: "2-digit",
         });
       }
       else if (messageDate.getTime() === yesterday.getTime()) {
-        return "Kecha";
+        return "Yesterday";
       }
       else if (now.getTime() - date.getTime() < 7 * 24 * 60 * 60 * 1000) {
-        return date.toLocaleDateString("uz-UZ", { weekday: "long" });
+        return date.toLocaleDateString("en-En", { weekday: "long" });
       }
       else {
-        return date.toLocaleDateString("uz-UZ", {
+        return date.toLocaleDateString("en-En", {
           day: "2-digit",
           month: "2-digit",
           year: "2-digit",
