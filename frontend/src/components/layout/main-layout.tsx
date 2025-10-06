@@ -32,7 +32,7 @@ export function MainLayout({ children }: MainLayoutProps) {
 
         if (response.ok) {
           const freshUserData = await response.json();
-          localStorage.setItem('user_data', JSON.stringify(freshUserData));
+          localStorage.setItem('user', JSON.stringify(freshUserData));
           setIsAuthenticated(true);
         } else {
           localStorage.removeItem("user_data");

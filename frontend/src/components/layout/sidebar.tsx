@@ -38,7 +38,7 @@ export function Sidebar() {
       const response = await fetchWithAuth("https://planshet2.stat.uz/api/v1/accounts/user/");
       const freshUserData = response.data;
       
-      localStorage.setItem('user_data', JSON.stringify(freshUserData));
+      localStorage.setItem('user', JSON.stringify(freshUserData));
       
       setUser(freshUserData);
       setProfileData({
@@ -48,7 +48,7 @@ export function Sidebar() {
       });
     } catch (error) {
       console.error("Failed to fetch user data:", error);
-      const cachedUser = localStorage.getItem('user_data');
+      const cachedUser = localStorage.getItem('user');
       if (cachedUser) {
         const userData = JSON.parse(cachedUser);
         setUser(userData);
