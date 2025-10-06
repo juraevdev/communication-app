@@ -103,7 +103,7 @@ export function useChat() {
     const newUserData = { ...prev, ...updatedData };
     
     try {
-      localStorage.setItem('user_data', JSON.stringify(newUserData));
+      localStorage.setItem('user', JSON.stringify(newUserData));
     } catch (error) {
       console.error('[Chat] Failed to update user data in localStorage:', error);
     }
@@ -129,7 +129,7 @@ export function useChat() {
       const user = await apiClient.getMe()
       setCurrentUser(user)
       
-      localStorage.setItem('user_data', JSON.stringify(user));
+      localStorage.setItem('user', JSON.stringify(user));
       
       console.log("[Chat] Current user loaded:", user)
 
