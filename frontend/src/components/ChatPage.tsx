@@ -122,7 +122,6 @@ export default function ChatPage() {
     sendMessage,
     setMessages,
     connectToGroup,
-    setCurrentUser,
     getGroupMembers,
     sendGroupMessage,
     connectToChatRoom,
@@ -211,22 +210,6 @@ const handleProfileUpdate = async (updatedUser: any) => {
     console.error("Failed to update profile:", error);
   }
 };
-
-useEffect(() => {
-  const fetchUser = async () => {
-    try {
-      const response = await apiClient.getMe();
-      localStorage.setItem("user", JSON.stringify(response.data));
-      setCurrentUser(response.data);
-    } catch (err) {
-      console.error("User fetch error:", err);
-    }
-  };
-
-  fetchUser();
-}, []);
-
-
 
   const refreshGroupsList = (leftGroupId?: number) => {
     if (leftGroupId) {
