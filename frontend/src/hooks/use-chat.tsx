@@ -123,46 +123,38 @@ export function useChat() {
   }));
 }, [currentUser]);
 
-  useEffect(() => {
+useEffect(() => {
   const initializeUser = async () => {
     try {
-      const user = await apiClient.getMe()
-      setCurrentUser(user)
-      
+      const response = await apiClient.getMe();
+      const user = response.data; // 🔥 faqat ma'lumot qismini olish
+
+      setCurrentUser(user);
       localStorage.setItem('user_data', JSON.stringify(user));
-      
-      console.log("[Chat] Current user loaded:", user)
 
-      initializeStatusWebSocket()
-      initializeNotificationsWebSocket()
-      await loadGroups()
-      await loadChannels()
+      console.log("[Chat] Current user loaded:", user);
+
+      initializeStatusWebSocket();
+      initializeNotificationsWebSocket();
+      await loadGroups();
+      await loadChannels();
     } catch (error) {
-      console.error("[Chat] Failed to load user:", error)
-      window.location.href = "/login"
+      console.error("[Chat] Failed to load user:", error);
+      window.location.href = "/login";
     }
-  }
+  };
 
-  initializeUser()
+  initializeUser();
 
-    return () => {
-      if (statusWsRef.current) {
-        statusWsRef.current.close()
-      }
-      if (chatWsRef.current) {
-        chatWsRef.current.close()
-      }
-      if (groupWsRef.current) {
-        groupWsRef.current.close()
-      }
-      if (notificationsWsRef.current) {
-        notificationsWsRef.current.close()
-      }
-      groupConnectionsRef.current.forEach(ws => ws.close())
-      groupConnectionsRef.current.clear()
-    }
-  }, [])
-
+  return () => {
+    if (statusWsRef.current) statusWsRef.current.close();
+    if (chatWsRef.current) chatWsRef.current.close();
+    if (groupWsRef.current) groupWsRef.current.close();
+    if (notificationsWsRef.current) notificationsWsRef.current.close();
+    groupConnectionsRef.current.forEach(ws => ws.close());
+    groupConnectionsRef.current.clear();
+  };
+}, []);
 
 
   const loadGroups = useCallback(async () => {
