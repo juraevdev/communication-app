@@ -194,7 +194,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   // Add these methods to your apiClient object in api.tsx
 
   async downloadGroupFile(fileUrl: string): Promise<Blob> {
-    const response = await fetch(`${BASE_URL}${fileUrl}`, {
+    const response = await fetch(`planshet2.stat.uz/${fileUrl}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
@@ -217,7 +217,7 @@ async getVideoCallWebSocketUrl(roomId: any) {
   async downloadFile(fileUrl: string, _isGroupFile: boolean = false): Promise<Blob> {
     const fullUrl = fileUrl.startsWith('https')
       ? fileUrl
-      : `${BASE_URL}${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
+      : `planshet2.stat.uz/${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
 
     const response = await fetch(fullUrl, {
       method: 'GET',
