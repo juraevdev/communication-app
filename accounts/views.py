@@ -114,21 +114,20 @@ class UserFilterApiView(generics.ListAPIView):
     queryset = CustomUser.objects.all()
 
 
-class UserUpdateApiView(generics.GenericAPIView):
+class UserUpdateApiView(generics.UpdateAPIView):
     serializer_class = UserUpdateSerializer
+    permission_classes = (permissions.IsAuthenticated,)
 
     def put(self, request):
-        try:
-            user = request.user
-            serializer = self.get_serializer(user, data=request.data, partial=True)
-            if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data, status=status.HTTP_200_OK)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        except CustomUser.DoesNotExist:
-            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)        
-
-
+        user = request.user
+        print(request.data, "data1")
+        serializer = self.get_serializer(user, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            print(serializer.data, "data2")
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
 class GetUserApiView(generics.GenericAPIView):
     serializer_class = UserSerializer
 
