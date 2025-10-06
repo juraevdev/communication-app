@@ -419,9 +419,7 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
             file_data = base64.b64decode(file_str)
 
             file_extension = os.path.splitext(file_name)[1]
-            unique_filename = f"{uuid.uuid4()}{file_extension}"
-
-            file_content = ContentFile(file_data, name=unique_filename)
+            file_content = ContentFile(file_data, name=file_name)   
 
             file_upload = FileUpload.objects.create(
                 user=self.user,
@@ -429,6 +427,7 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                 file=file_content,
                 original_filename=file_name
             )
+
 
             file_message = GroupMessage.objects.create(
                 group_id=self.group_id,
