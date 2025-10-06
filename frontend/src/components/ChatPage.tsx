@@ -193,22 +193,17 @@ const handleProfileUpdate = async (updatedUser: any) => {
     const updatedData = await apiClient.updateUserProfile(updatedUser);
     console.log("Profile updated:", updatedData);
 
-    // Yangi ma'lumotlarni saqlash
     localStorage.setItem("user_data", JSON.stringify(updatedData));
 
     if (updateCurrentUserProfile) {
       updateCurrentUserProfile(updatedData);
     }
 
-    // CurrentUser state yangilash
     setCurrentUser(updatedData);
 
     if (selectedChat && selectedChat.type === "private" && selectedChat.sender_id === currentUser?.id) {
       setSelectedChat((prev: any) => prev ? { ...prev, ...updatedData } : prev);
     }
-
-    // Sahifani yangilash
-    window.location.reload();
 
   } catch (error) {
     console.error("Failed to update profile:", error);
