@@ -35,7 +35,7 @@ export function MainLayout({ children }: MainLayoutProps) {
           localStorage.setItem('user', JSON.stringify(freshUserData));
           setIsAuthenticated(true);
         } else {
-          localStorage.removeItem("user_data");
+          localStorage.removeItem("user");
           localStorage.removeItem("access_token");
           localStorage.removeItem("refresh_token");
           navigate("/login");
