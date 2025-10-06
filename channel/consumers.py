@@ -414,7 +414,7 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             return None
 
     @database_sync_to_async
-    def save_file_message(self, file_name, file_type, base64_data):
+    def save_file_message(self, file_name, file_type, base64_data, *args, **kwargs):
         try:
             from django.core.files.base import ContentFile
             import base64
