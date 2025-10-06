@@ -1309,7 +1309,7 @@ export default function ChatPage() {
 
       let downloadUrl = fileUrl;
       if (!fileUrl.startsWith('https')) {
-        downloadUrl = `https://planshet2.stat.uz/api/${fileUrl}`;
+        downloadUrl = `https://planshet2.stat.uz/${fileUrl}`;
       }
 
       console.log('Downloading file from:', downloadUrl);
