@@ -63,7 +63,6 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
   const [searchResults, setSearchResults] = useState<User[]>([])
   const [isSearching, setIsSearching] = useState(false)
 
-  // Tahrirlash uchun yangi state'lar
   const [editingContact, setEditingContact] = useState<Contact | null>(null)
   const [editAlias, setEditAlias] = useState("")
   const [isEditing, setIsEditing] = useState(false)

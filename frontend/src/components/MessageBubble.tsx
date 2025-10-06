@@ -46,10 +46,10 @@ const normalizeFileUrl = (url: string): string => {
   if (!url) return url;
   
   return url
-    .replace('http://127.0.0.1:8000', 'http://172.16.8.92:8008')
-    .replace('http://localhost:8000', 'http://172.16.8.92:8008')
-    .replace('127.0.0.1:8000', '172.16.8.92:8008')
-    .replace('localhost:8000', '172.16.8.92:8008');
+    .replace('http://127.0.0.1:8000', 'https://planshet2.stat.uz/')
+    .replace('http://localhost:8000', 'https://planshet2.stat.uz/')
+    .replace('127.0.0.1:8000', 'https://planshet2.stat.uz/')
+    .replace('localhost:8000', 'https://planshet2.stat.uz/');
 };
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({

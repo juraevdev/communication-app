@@ -52,7 +52,6 @@ import { EditMessageModal } from "./edit-message"
 import { VideoCallModal } from "./video-call-modal"
 import { useVideoCall } from "@/hooks/use-videocall"
 
-// Incoming Call Modal komponenti
 const IncomingCallModal = ({
   isOpen,
   onAccept,
@@ -75,11 +74,11 @@ const IncomingCallModal = ({
           </div>
 
           <h2 className="text-2xl font-bold text-white mb-2">
-            Kelayotgan {callInfo.callType === 'video' ? 'Video' : 'Audio'} Qo'ng'iroq
+            Incoming {callInfo.callType === 'video' ? 'Video' : 'Audio'} Call
           </h2>
 
           <p className="text-gray-300 mb-6">
-            {callInfo.fromUserName} sizga qo'ng'iroq qilmoqda...
+            {callInfo.fromUserName} someone calling you...
           </p>
 
           <div className="flex gap-4 justify-center">
@@ -88,7 +87,7 @@ const IncomingCallModal = ({
               className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-full font-semibold"
             >
               <Phone className="h-5 w-5 mr-2" />
-              Rad etish
+              Cancel
             </Button>
 
             <Button
@@ -96,7 +95,7 @@ const IncomingCallModal = ({
               className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-full font-semibold"
             >
               <Video className="h-5 w-5 mr-2" />
-              Qabul qilish
+              Answer
             </Button>
           </div>
         </div>
@@ -134,7 +133,6 @@ export default function ChatPage() {
     loadChannels,
   } = useChat();
 
-  // Video call state
   const [videoCallModalOpen, setVideoCallModalOpen] = useState(false)
   const [videoCallInfo, setVideoCallInfo] = useState<{
     roomId: string;
@@ -142,7 +140,6 @@ export default function ChatPage() {
     name: string;
   } | null>(null)
 
-  // Video call hook
   const videoCall = useVideoCall({
     currentUserId: currentUser?.id,
     currentUserName: currentUser?.name || currentUser?.username || 'User'
@@ -191,14 +188,12 @@ export default function ChatPage() {
   const isTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const handleProfileUpdate = (updatedUser: any) => {
-    console.log("Profil yangilandi:", updatedUser);
+    console.log("Profile updated:", updatedUser);
 
-    // useChat hook orqali currentUser ni yangilash
     if (updateCurrentUserProfile) {
       updateCurrentUserProfile(updatedUser);
     }
 
-    // Agar selectedChat o'z profilimiz bo'lsa, uni ham yangilash
     if (selectedChat && selectedChat.type === "private" && selectedChat.id === currentUser?.id) {
       setSelectedChat((prev: any) => prev ? { ...prev, ...updatedUser } : prev);
     }
@@ -212,14 +207,12 @@ export default function ChatPage() {
         setSelectedChat(null)
       }
     } else {
-      // Umumiy yangilash
       setRefreshGroupsTrigger(prev => prev + 1)
     }
   }
 
   const refreshChannelsList = (channelId?: number, isSubscribed?: boolean) => {
     if (channelId !== undefined) {
-      // Optimistic update - darhol UI ni yangilash
       setChannels(prev =>
         prev.map(channel =>
           channel.id === channelId
@@ -228,7 +221,6 @@ export default function ChatPage() {
         )
       );
 
-      // Agar tanlangan kanal bo'lsa, uni yangilash
       if (selectedChat?.id === channelId && selectedChat?.type === "channel") {
         setSelectedChat((prev: { isSubscribed: any }) =>
           prev ? { ...prev, isSubscribed: isSubscribed !== undefined ? isSubscribed : prev.isSubscribed } : prev
@@ -236,7 +228,6 @@ export default function ChatPage() {
       }
     }
 
-    // Backenddan yangi ma'lumotlarni olish
     setRefreshChannelsTrigger(prev => prev + 1);
   }
 
@@ -252,7 +243,6 @@ export default function ChatPage() {
     }
   }, [refreshChannelsTrigger])
 
-  // Video call funksiyalari
   const handleStartVideoCall = async () => {
     if (!selectedChat || !currentUser) return;
 
@@ -265,13 +255,10 @@ export default function ChatPage() {
         name: getChatName(selectedChat)
       });
 
-      // Avvalo call ni boshlash
       await videoCall.startCall(roomId);
 
-      // Keyin taklif yuborish
       if (selectedChat.type === 'private') {
-        // ✅ To'g'ri foydalanuvchi ID sini yuborish
-        const targetUserId = selectedChat.id; // yoki selectedChat.sender_id
+        const targetUserId = selectedChat.id;   
         videoCall.sendCallInvitation(roomId, targetUserId, 'video');
       }
 
@@ -289,13 +276,10 @@ export default function ChatPage() {
     setVideoCallInfo(null);
   };
 
-  // Scroll to bottom effect
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, selectedChat?.id])
 
-  // Mark as read effect
-  // Mark as read effect
   useEffect(() => {
     if (selectedChat && selectedChat.unread > 0 && selectedChat.type !== "group") {
       const roomId = selectedChat.room_id || selectedChat.id?.toString()
@@ -307,7 +291,6 @@ export default function ChatPage() {
         if (unreadMessages.length > 0) {
           console.log(`[UI] Marking ${unreadMessages.length} messages as read in room ${roomId}`);
 
-          // Bir vaqtning o'zida barcha o'qilmagan xabarlarni belgilash
           unreadMessages.forEach(msg => {
             if (msg.type === "file") {
               markAsRead(roomId, undefined, msg.id)
@@ -316,7 +299,6 @@ export default function ChatPage() {
             }
           })
 
-          // Chat ro'yxatidagi unread count ni yangilash
           setChats(prev => prev.map(chat => {
             const chatRoomId = chat.room_id || chat.id?.toString();
             if (chatRoomId === roomId) {
@@ -370,7 +352,6 @@ export default function ChatPage() {
     }
   }
 
-  // Channel action handler
   const handleChannelAction = async () => {
     if (!selectedChat || selectedChat.type !== "channel" || !currentUser) return
 
@@ -384,20 +365,17 @@ export default function ChatPage() {
 
       console.log("[ChannelAction] New subscription status:", newSubscriptionStatus)
 
-      // ✅ SelectedChat ni yangilash
       setSelectedChat((prev: any) => ({
         ...prev,
         isSubscribed: newSubscriptionStatus
       }))
 
-      // ✅ Channels ro'yxatini yangilash
       setChannels(prev => prev.map(channel =>
         channel.id === selectedChat.id
           ? { ...channel, isSubscribed: newSubscriptionStatus }
           : channel
       ))
 
-      // ✅ WebSocket ulanishni boshqarish
       if (newSubscriptionStatus) {
         const channelId = selectedChat.id.toString()
         connectToChannel(channelId)
@@ -407,18 +385,15 @@ export default function ChatPage() {
         }
       }
 
-      // ✅ Kanallar ro'yxatini qayta yuklash
       await loadChannels()
 
     } catch (error) {
       console.error("Failed to perform channel action:", error)
-      alert("Kanal amalini bajarish muvaffaqiyatsiz. Iltimos, qayta urinib ko'ring.")
     } finally {
       setIsChannelActionLoading(false)
     }
   }
 
-  // Reply handlers
   const handleReply = (msg: any) => {
     setReplyingTo(msg)
   }
@@ -427,7 +402,6 @@ export default function ChatPage() {
     setReplyingTo(null)
   }
 
-  // Typing handler
   const handleMessageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
     setMessage(value)
@@ -457,7 +431,6 @@ export default function ChatPage() {
     }
   }
 
-  // Cleanup typing timeout
   useEffect(() => {
     return () => {
       if (isTypingTimeoutRef.current) {
@@ -466,7 +439,6 @@ export default function ChatPage() {
     }
   }, [])
 
-  // Group messages mark as read
   useEffect(() => {
     if (selectedChat && selectedChat.type === "group") {
       const groupId = selectedChat.id.toString();
@@ -490,7 +462,6 @@ export default function ChatPage() {
   }, [selectedChat, messages, markGroupMessageAsRead, setGroups]);
 
 
-  // Kanal xabarlarini o'qilgan deb belgilash
   useEffect(() => {
     if (selectedChat && selectedChat.type === "channel") {
       const channelId = selectedChat.id.toString();
@@ -498,14 +469,13 @@ export default function ChatPage() {
 
       const unreadMessages = currentMessages.filter(msg =>
         !msg.is_read &&
-        !msg.isOwn && // O'z xabarlarimiz emas
-        msg.user?.id !== currentUser?.id // Boshqa foydalanuvchi xabarlari
+        !msg.isOwn &&   
+        msg.user?.id !== currentUser?.id  
       );
 
       if (unreadMessages.length > 0 && channelWsRef.current?.readyState === WebSocket.OPEN) {
         console.log(`[Channel] Marking ${unreadMessages.length} messages as read`);
 
-        // Har bir xabarni alohida belgilash
         unreadMessages.forEach(msg => {
           channelWsRef.current?.send(JSON.stringify({
             action: "mark_as_read",
@@ -513,7 +483,6 @@ export default function ChatPage() {
           }));
         });
 
-        // UI ni yangilash
         setChannels(prev => prev.map(channel =>
           channel.id.toString() === channelId ? { ...channel, unread: 0 } : channel
         ));
@@ -521,7 +490,6 @@ export default function ChatPage() {
     }
   }, [selectedChat, messages, channelWsRef, currentUser, setChannels]);
 
-  // Chat header click handler
   const handleChatHeaderClick = async () => {
     if (selectedChat?.type === "group") {
       try {
@@ -535,10 +503,8 @@ export default function ChatPage() {
     } else if (selectedChat?.type === "channel") {
       setShowChannelInfo(true)
     } else if (selectedChat?.type === "private") {
-      // Foydalanuvchi profili ma'lumotlarini tekshirish va yangilash
       if (!selectedChat.email || !selectedChat.username) {
         try {
-          // ✅ TO'G'RI: Foydalanuvchi ID sini olish
           const userId = selectedChat.sender_id || selectedChat.id;
           console.log("Loading profile for user ID:", userId);
 
@@ -561,7 +527,6 @@ export default function ChatPage() {
     }
   }
 
-  // Chat select handler
   const handleChatSelect = async (chat: any) => {
     console.log("Selected chat:", chat);
     setSelectedChat(chat)
@@ -583,19 +548,15 @@ export default function ChatPage() {
         connectToChannel(channelId)
       }
     } else {
-      // PRIVATE CHAT - Foydalanuvchi ma'lumotlarini to'ldirish
       const roomId = chat.room_id || chat.id?.toString()
 
       try {
-        // ✅ TO'G'RI: Foydalanuvchi ID sini olish - sender_id dan
         const userId = chat.sender_id || chat.id;
         console.log("Loading user profile for ID:", userId);
 
-        // Serverdan to'liq foydalanuvchi ma'lumotlarini olish
         const userData = await apiClient.getUserProfile(userId);
         console.log("User profile data from server:", userData);
 
-        // SelectedChat ni yangilash
         const updatedChat = {
           ...chat,
           username: userData.username || "user",
@@ -633,9 +594,8 @@ export default function ChatPage() {
 
       console.log("[StartChat] All contacts:", contacts);
 
-      // Kontaktlardan alias ni topish - contact_user ID bo'yicha
       const contact = contacts.find((c: any) =>
-        c.contact_user === contactUserId // contact_user ID raqam
+        c.contact_user === contactUserId  
       );
 
       console.log("[StartChat] Found contact:", contact);
@@ -674,8 +634,6 @@ export default function ChatPage() {
     }
   };
 
-  // Search user select handler
-  // Search user select handler ni yangilang
   const handleSearchUserSelect = async (user: any) => {
     try {
       setLoadingMessages(true);
@@ -684,15 +642,15 @@ export default function ChatPage() {
         id: user.id,
         sender_id: user.id,
         sender: user.username || user.email,
-        name: user.alias || user.username || user.email, // ✅ Alias birinchi
+        name: user.alias || user.username || user.email,  
         email: user.email,
         avatar: user.avatar,
         type: "private",
         unread: 0,
         last_message: "",
         timestamp: new Date().toISOString(),
-        alias: user.alias, // ✅ Alias ni saqlash
-        isContact: !!user.alias // ✅ Kontakt ekanligini belgilash
+        alias: user.alias,  
+        isContact: !!user.alias   
       }
 
       const response = await apiClient.startChat(user.id);
@@ -711,8 +669,6 @@ export default function ChatPage() {
     }
   };
 
-  // Channel select handler
-  // Channel select handler
   const handleChannelSelect = async (channel: any) => {
     console.log("Selected channel from search:", channel)
 
@@ -732,7 +688,6 @@ export default function ChatPage() {
       memberCount: channel.member_count || 0,
       isAdmin: channel.isOwner || channel.owner === currentUser?.id,
       isOwner: channel.isOwner || channel.owner === currentUser?.id,
-      // ✅ Backend dan kelgan is_subscribed ni to'g'ri o'rnatish
       isSubscribed: channel.is_subscribed !== undefined ? channel.is_subscribed : false,
       username: channel.username
     }
@@ -742,7 +697,6 @@ export default function ChatPage() {
     setChannelSearchResults([])
   }
 
-  // Create group handler
   const handleCreateGroup = async (groupData: { name: string; description?: string }) => {
     try {
       const response = await apiClient.createGroup({
@@ -750,7 +704,6 @@ export default function ChatPage() {
         created_by: currentUser.id
       })
 
-      // Guruh yaratilgandan so'ng guruhlar ro'yxatini yangilash
       await loadGroups();
 
       return response;
@@ -760,14 +713,11 @@ export default function ChatPage() {
     }
   }
 
-  // Guruh yaratilgandan keyin chaqiriladigan funksiya
   const handleGroupCreated = () => {
     console.log("Group created, refreshing groups list...");
-    // Guruhlar ro'yxatini yangilash
     loadGroups();
   }
 
-  // Create channel handler
   const handleCreateChannel = async (channelData: {
     name: string;
     description?: string;
@@ -780,7 +730,6 @@ export default function ChatPage() {
         owner: currentUser.id
       });
 
-      // Kanal yaratilgandan so'ng kanallar ro'yxatini yangilash
       await loadChannels();
 
     } catch (error) {
@@ -789,21 +738,17 @@ export default function ChatPage() {
     }
   };
 
-  // Kanal yaratilgandan keyin chaqiriladigan funksiya
   const handleChannelCreated = () => {
     console.log("Channel created, refreshing channels list...");
-    // Kanallar ro'yxatini yangilash
     loadChannels();
   };
 
-  // Logout handler
   const handleLogout = () => {
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     window.location.href = '/login'
   }
 
-  // Time formatting functions
   const formatMessageTime = (timestamp: string) => {
     if (!timestamp) return "";
     try {
@@ -864,7 +809,6 @@ export default function ChatPage() {
     }
   }
 
-  // Message grouping by date
   const groupMessagesByDate = (messages: any[]) => {
     const grouped: { [key: string]: any[] } = {};
 
@@ -887,8 +831,6 @@ export default function ChatPage() {
     return grouped;
   };
 
-  // Edit message handler
-  // handleEditMessage funksiyasini yangilang
   const handleEditMessage = async (messageId: string, newContent: string) => {
     if (!selectedChat || !isConnected) return;
 
@@ -925,7 +867,6 @@ export default function ChatPage() {
     }
   };
 
-  // handleDeleteMessage funksiyasini to'liq yangilang
   const handleDeleteMessage = async (messageId: string, msg: any) => {
     if (!selectedChat || !isConnected) return;
 
@@ -934,7 +875,6 @@ export default function ChatPage() {
 
     try {
       if (selectedChat.type === "group") {
-        // Optimistic update - darhol UI dan o'chirish
         setMessages(prev => {
           const roomKey = `group_${selectedChat.id}`;
           const updatedMessages = (prev[roomKey] || []).filter(m => m.id !== messageId);
@@ -946,13 +886,11 @@ export default function ChatPage() {
 
         if (groupWsRef.current?.readyState === WebSocket.OPEN) {
           if (isFile) {
-            // Fayl uchun alohida delete_file turi
             groupWsRef.current.send(JSON.stringify({
               type: "delete_file",
               file_id: messageId
             }));
           } else {
-            // Oddiy xabar uchun delete_message
             groupWsRef.current.send(JSON.stringify({
               type: "delete_message",
               message_id: messageId
@@ -960,7 +898,6 @@ export default function ChatPage() {
           }
         }
       } else if (selectedChat.type === "channel") {
-        // Optimistic update - darhol UI dan o'chirish
         setMessages(prev => {
           const roomKey = `channel_${selectedChat.id}`;
           const updatedMessages = (prev[roomKey] || []).filter(m => m.id !== messageId);
@@ -1007,7 +944,6 @@ export default function ChatPage() {
       console.error("Failed to delete message:", error);
       alert("Xabarni o'chirish muvaffaqiyatsiz. Iltimos, qayta urinib ko'ring.");
 
-      // Agar xatolik bo'lsa, UI ni qayta yuklash
       if (selectedChat.type === "group") {
         const groupId = selectedChat.id.toString();
         connectToGroup(groupId);
@@ -1023,7 +959,6 @@ export default function ChatPage() {
     }
   };
 
-  // Date header formatter
   const formatDateHeader = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -1088,18 +1023,14 @@ export default function ChatPage() {
   const getChatName = (chat: any): string => {
     if (!chat) return "Noma'lum Chat"
 
-    // Agar private chat bo'lsa va alias mavjud bo'lsa
     if (chat.type === "private") {
-      return chat.alias || chat.name || chat.sender || "Noma'lum Foydalanuvchi"
+      return chat.alias || chat.name || chat.sender || "Unknown user"
     }
 
-    return chat.name || chat.sender || "Noma'lum Foydalanuvchi"
+    return chat.name || chat.sender || "Unknown user"
   }
 
-  // ChatPage komponentiga useEffect qo'shing
-  // ChatPage komponentiga useEffect qo'shing
   useEffect(() => {
-    // Chatlar o'zgarganda alias larni yangilash
     if (chats.length > 0) {
       const refreshChatAliases = async () => {
         try {
@@ -1110,7 +1041,7 @@ export default function ChatPage() {
 
           contacts.forEach((contact: any) => {
             console.log(`[ChatPage] Contact:`, contact);
-            if (contact.contact_user) { // contact_user ID raqam
+            if (contact.contact_user) { 
               contactsMap.set(contact.contact_user, contact.alias);
             }
           });
@@ -1145,24 +1076,20 @@ export default function ChatPage() {
     }
   }, [chats.length]);
 
-  // Sender name getter funksiyasini yangilang
   const getSenderName = (sender: any): string => {
-    if (!sender) return "Noma'lum"
+    if (!sender) return "Unknown"
     if (typeof sender === "string") return sender
     if (typeof sender === "object") {
-      // Agar kontakt bo'lsa alias, bo'lmasa fullname
-      return sender.alias || sender.fullname || sender.full_name || sender.email || "Noma'lum Foydalanuvchi"
+      return sender.alias || sender.fullname || sender.full_name || sender.email || "Unknown user"
     }
-    return "Noma'lum"
+    return "Unknown"
   }
 
-  // Avatar letter getter
   const getAvatarLetter = (name: string): string => {
     if (!name || name === "undefined") return "U"
     return name.charAt(0).toUpperCase()
   }
 
-  // Filter chats based on active tab and search
   const getFilteredChats = () => {
     let chatsToFilter: any[] = []
 
@@ -1222,13 +1149,12 @@ export default function ChatPage() {
     return getFilteredChats()
   })()
 
-  // File handlers
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     if (file.size > 10 * 1024 * 1024) {
-      alert("Fayl hajmi 10MB dan kichik bo'lishi kerak");
+      alert("File size should be less than 10MB");
       return;
     }
 
@@ -1295,7 +1221,6 @@ export default function ChatPage() {
         reader.onerror = (error) => {
           console.error("[Upload] File read error:", error);
           setFileUpload(prev => ({ ...prev, uploading: false, progress: 0 }));
-          alert("Faylni o'qish muvaffaqiyatsiz. Iltimos, qayta urinib ko'ring.");
         };
 
         reader.readAsDataURL(fileUpload.file);
@@ -1438,8 +1363,8 @@ export default function ChatPage() {
 
   const safeCurrentUser = currentUser || {
     id: 0,
-    name: "Foydalanuvchi",
-    username: "foydalanuvchi",
+    name: "User",
+    username: "User",
     email: "",
     avatar: "",
     bio: "",
@@ -1452,7 +1377,7 @@ export default function ChatPage() {
   const safeSelectedChatUser = selectedChat ? {
     id: selectedChat.id || 0,
     name: getChatName(selectedChat),
-    username: selectedChat.username || "foydalanuvchi",
+    username: selectedChat.username || "User",
     email: selectedChat.email || "",
     avatar: selectedChat.avatar || "",
     bio: selectedChat.bio || "",
@@ -1625,10 +1550,10 @@ export default function ChatPage() {
               <div className="text-center py-8">
                 <MessageSquare className="h-8 w-8 text-gray-400 mx-auto mb-2" />
                 <p className="text-gray-400">
-                  {searchQuery.trim() ? "Foydalanuvchi topilmadi" : (
-                    activeTab === "private" && chats.length === 0 ? "Chatlar yo'q" :
-                      activeTab === "groups" && groups.length === 0 ? "Guruhlar yo'q" :
-                        activeTab === "channels" ? "Kanallar yo'q" : "Hech narsa topilmadi"
+                  {searchQuery.trim() ? "User not found" : (
+                    activeTab === "private" && chats.length === 0 ? "No chats" :
+                      activeTab === "groups" && groups.length === 0 ? "No groups" :
+                        activeTab === "channels" ? "No channels" : "Nothing found"
                   )}
                 </p>
               </div>
@@ -1685,7 +1610,6 @@ export default function ChatPage() {
                       <div className="flex items-center justify-between">
                         <h3 className="font-medium text-white truncate">
                           {isSearchResult ? (
-                            // Kanal qidiruvi natijalari uchun
                             activeTab === "channels" && item.type === "channel"
                               ? `${item.name}`
                               : item.username || item.email
@@ -1700,12 +1624,11 @@ export default function ChatPage() {
                       <div className="flex items-center justify-between">
                         <p className="text-sm text-gray-400 truncate">
                           {isSearchResult ? (
-                            // Kanal qidiruvi natijalari uchun tavsif
                             activeTab === "channels" && item.type === "channel"
-                              ? item.username || "Kanal tavsifi yo'q"
-                              : (item.email || "Foydalanuvchi")
+                              ? item.username || "No description"
+                              : (item.email || "No email")
                           ) : (
-                            item.message_type === "file" ? "📎 Fayl" : (item.last_message || "")
+                            item.message_type === "file" ? "📎 File" : (item.last_message || "")
                           )}
                         </p>
                         {!isSearchResult && item.unread > 0 && (
@@ -1723,7 +1646,6 @@ export default function ChatPage() {
         </ScrollArea>
       </div>
 
-      {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         {selectedChat ? (
           <>
@@ -1792,7 +1714,6 @@ export default function ChatPage() {
                   ) : (
                     Object.entries(groupMessagesByDate(currentMessages)).map(([dateKey, dateMessages]) => (
                       <div key={dateKey}>
-                        {/* Date header */}
                         <div className="flex justify-center my-4">
                           <div className="bg-gray-800 px-3 py-1 rounded-full">
                             <span className="text-xs text-gray-300 font-medium">
@@ -1804,13 +1725,11 @@ export default function ChatPage() {
                         {dateMessages.map((msg) => {
                           const isRightAligned = getIsOwnMessage(msg);
 
-                          // ✅ TO'G'RI: canEdit va canDelete ni aniqlash
                           const canEdit = msg.can_edit !== undefined ? msg.can_edit : isRightAligned;
                           const canDelete = msg.can_delete !== undefined ? msg.can_delete : isRightAligned;
 
                           return (
                             <div key={msg.id} className={`group flex gap-3 mb-4 ${isRightAligned ? "flex-row-reverse" : "flex-row"}`}>
-                              {/* Avatar - faqat chap tomondagi xabarlar uchun */}
                               {!isRightAligned && (
                                 <Avatar className="h-8 w-8 flex-shrink-0">
                                   <AvatarImage src={selectedChat?.type === "channel" ? "/channel-avatar.png" : "/diverse-group.png"} />
@@ -1821,7 +1740,6 @@ export default function ChatPage() {
                               )}
 
                               <div className={`max-w-xs lg:max-w-md ${isRightAligned ? "text-right" : "text-left"}`}>
-                                {/* Sender nomi - faqat chap tomonda */}
                                 {!isRightAligned && (selectedChat?.type === "channel" || selectedChat?.type === "group") && (
                                   <p className="text-sm font-medium text-white mb-1">
                                     {getSenderName(msg.sender)}
@@ -1829,11 +1747,8 @@ export default function ChatPage() {
                                 )}
 
                                 <div className="relative">
-                                  {/* ✅ Tahrirlash va o'chirish tugmalari - faqat o'z xabarlarimiz uchun */}
-                                  {/* âœ… Tahrirlash va o'chirish tugmalari - faqat o'z xabarlarimiz uchun */}
                                   {isRightAligned && (canEdit || canDelete) && (
                                     <div className="absolute -left-8 top-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col gap-1">
-                                      {/* Tahrirlash tugmasi - faqat text xabarlar uchun */}
                                       {!isFileMessage(msg) && canEdit && (
                                         <Button
                                           variant="ghost"
@@ -1852,7 +1767,6 @@ export default function ChatPage() {
                                         </Button>
                                       )}
 
-                                      {/* O'chirish tugmasi */}
                                       {canDelete && (
                                         <Button
                                           variant="ghost"
@@ -1871,7 +1785,6 @@ export default function ChatPage() {
                                     </div>
                                   )}
 
-                                  {/* âœ… Reply tugmasi - guruhlarda faqat */}
                                   {selectedChat?.type === "group" && !isRightAligned && (
                                     <div className="absolute -right-8 top-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                       <Button
@@ -1888,10 +1801,7 @@ export default function ChatPage() {
                                     </div>
                                   )}
 
-                                  {/* Xabar kontenti */}
-                                  {/* Xabar kontenti */}
                                   <div className={`rounded-lg px-3 py-2 ${isRightAligned ? "bg-blue-600 text-white" : "bg-gray-700 text-white"}`}>
-                                    {/* Reply preview */}
                                     {msg.reply_to && (
                                       <div className={`mb-2 pb-2 border-l-2 pl-2 ${isRightAligned ? "border-blue-300" : "border-gray-500"} opacity-80`}>
                                         <p className="text-xs font-semibold">
@@ -1931,12 +1841,10 @@ export default function ChatPage() {
                                     )}
                                   </div>
 
-                                  {/* Vaqt va status */}
                                   <div className={`flex items-center gap-1 mt-1 ${isRightAligned ? "justify-end" : "justify-start"}`}>
                                     <span className="text-xs text-gray-400">
                                       {formatMessageTime(msg.timestamp)}
                                     </span>
-                                    {/* Xabar statusini ko'rsatish */}
                                     {isRightAligned && (
                                       <MessageStatus status={getMessageStatus(msg)} isOwn={false} />
                                     )}
@@ -1955,7 +1863,6 @@ export default function ChatPage() {
               )}
             </ScrollArea>
 
-            {/* Reply preview bar */}
             {replyingTo && (
               <div className="px-4 py-2 bg-gray-800 border-t border-gray-600">
                 <div className="flex items-center justify-between bg-gray-700 rounded-lg p-3">
@@ -1967,7 +1874,7 @@ export default function ChatPage() {
                       </p>
                       <p className="text-sm text-white truncate">
                         {isFileMessage(replyingTo)
-                          ? `📎 ${replyingTo.file_name || "Fayl"}`
+                          ? `📎 ${replyingTo.file_name || "File"}`
                           : replyingTo.message
                         }
                       </p>
@@ -1985,7 +1892,6 @@ export default function ChatPage() {
               </div>
             )}
 
-            {/* File upload preview */}
             {fileUpload.file && (
               <div className="p-4 border-t border-gray-500 bg-gray-800">
                 <div className="flex items-center space-x-3 bg-gray-700 rounded-lg p-3">
@@ -2041,10 +1947,8 @@ export default function ChatPage() {
               </div>
             )}
 
-            {/* Message input */}
             <div className="p-4 border-t border-gray-500 bg-gray-900">
               {shouldShowChannelActions() ? (
-                // Channel join/leave button for non-owners
                 <div className="flex justify-center">
                   <Button
                     onClick={handleChannelAction}
@@ -2059,18 +1963,17 @@ export default function ChatPage() {
                     ) : selectedChat.isSubscribed ? (
                       <>
                         <UserMinus className="h-4 w-4" />
-                        Kanaldan Chiqish
+                        Leave channel
                       </>
                     ) : (
                       <>
                         <UserCheck className="h-4 w-4" />
-                        Kanalga Qo'shilish
+                        Join channel
                       </>
                     )}
                   </Button>
                 </div>
               ) : canSendMessage() ? (
-                // Normal message input for owners and non-channel chats
                 <form onSubmit={handleSendMessage} className="flex items-center gap-2">
                   <input
                     type="file"
@@ -2091,7 +1994,7 @@ export default function ChatPage() {
                   </Button>
                   <div className="flex-1 relative">
                     <Input
-                      placeholder={replyingTo ? `${getSenderName(replyingTo.sender)} ga javob...` : "Message..."}
+                      placeholder={replyingTo ? `${getSenderName(replyingTo.sender)} reply to...` : "Message..."}
                       value={message}
                       onChange={handleMessageChange}
                       className="pr-10 bg-gray-800 border-gray-600 text-white"
@@ -2106,7 +2009,6 @@ export default function ChatPage() {
                   </Button>
                 </form>
               ) : (
-                // Disabled state for non-subscribed channels (shouldn't normally show)
                 <div className="flex justify-center">
                   <p className="text-gray-400 text-sm">You can't send message!</p>
                 </div>
@@ -2123,7 +2025,6 @@ export default function ChatPage() {
         )}
       </div>
 
-      {/* Incoming Call Modal */}
       <IncomingCallModal
         isOpen={videoCall.isRinging}
         onAccept={videoCall.acceptCall}
@@ -2136,7 +2037,6 @@ export default function ChatPage() {
         }
       />
 
-      {/* Video Call Modal */}
       <VideoCallModal
         isOpen={videoCallModalOpen}
         onClose={handleEndVideoCall}
@@ -2144,7 +2044,6 @@ export default function ChatPage() {
         videoCall={videoCall}
       />
 
-      {/* Modals */}
       <UserProfileModal
         isOpen={showOwnProfile}
         onClose={() => setShowOwnProfile(false)}
@@ -2170,7 +2069,7 @@ export default function ChatPage() {
         isOpen={showCreateGroup}
         onClose={() => setShowCreateGroup(false)}
         onCreateGroup={handleCreateGroup}
-        onGroupCreated={handleGroupCreated} // <- Yangi prop
+        onGroupCreated={handleGroupCreated}   
       />
 
       <CreateChannelModal
@@ -2178,7 +2077,7 @@ export default function ChatPage() {
         onClose={() => setShowCreateChannel(false)}
         onCreateChannel={handleCreateChannel}
         currentUserId={currentUser?.id?.toString() || ""}
-        onChannelCreated={handleChannelCreated} // <- Yangi prop
+        onChannelCreated={handleChannelCreated}   
       />
 
       {selectedChat?.type === "group" && (
@@ -2204,7 +2103,7 @@ export default function ChatPage() {
             id: selectedChat.id || 0,
             name: getChatName(selectedChat),
             description: selectedChat.description || "No description",
-            username: selectedChat.username || selectedChat.name?.toLowerCase().replace(/\s+/g, '_') || "kanal",
+            username: selectedChat.username || selectedChat.name?.toLowerCase().replace(/\s+/g, '_') || "channel",
             avatar: selectedChat.avatar || "",
             subscriberCount: selectedChat.subscriberCount || 0,
             isOwner: selectedChat.isOwner || false,
@@ -2212,7 +2111,7 @@ export default function ChatPage() {
             isSubscribed: selectedChat.isSubscribed || false,
             isMuted: selectedChat.isMuted || false,
           }}
-          onChannelUpdate={refreshChannelsList} // ✅ Yangilangan funksiya
+          onChannelUpdate={refreshChannelsList}   
         />
       )}
 

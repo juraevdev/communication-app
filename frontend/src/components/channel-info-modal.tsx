@@ -15,7 +15,6 @@ import {
   X,
 } from "lucide-react"
 
-// ChannelInfoModalProps interfeysini yangilang
 interface ChannelInfoModalProps {
   isOpen: boolean
   onClose: () => void
@@ -31,7 +30,7 @@ interface ChannelInfoModalProps {
     isSubscribed: boolean
     isMuted: boolean
   }
-  onChannelUpdate?: (channelId?: number, isSubscribed?: boolean) => void  // ✅ Yangilangan
+  onChannelUpdate?: (channelId?: number, isSubscribed?: boolean) => void  
 }
 
 interface User {
@@ -93,9 +92,6 @@ export function ChannelInfoModal({ isOpen, onClose, channel, onChannelUpdate }: 
     }
   }
   
-  // channel-info-modal.txt faylida quyidagi funksiyalarni yangilang
-
-// channel-info-modal.txt faylida quyidagi funksiyalarni yangilang
 
 const handleSubscribe = async () => {
   if (!currentUser) {
@@ -115,9 +111,8 @@ const handleSubscribe = async () => {
     
     setIsSubscribed(!isSubscribed);
     
-    // ✅ Kanal yangilanishini chaqirish
     if (onChannelUpdate) {
-      onChannelUpdate(channel.id, !isSubscribed); // ID va yangi holatni o'tkazish
+      onChannelUpdate(channel.id, !isSubscribed);   
     }
   } catch (error) {
     console.error("Subscription error:", error);
@@ -135,9 +130,8 @@ const handleLeaveChannel = async () => {
     await apiClient.unfollowChannel(channel.id, currentUser.id);
     console.log("Left channel:", channel.id);
     
-    // ✅ Kanal yangilanishini chaqirish
     if (onChannelUpdate) {
-      onChannelUpdate(channel.id, false); // Chiqib ketganligi haqida ma'lumot
+      onChannelUpdate(channel.id, false);   
     }
     
     onClose();
