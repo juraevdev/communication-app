@@ -114,66 +114,47 @@ export function UserProfileModal({
     fetchCurrentUserProfile()
   }, [isOpen, isOwnProfile, isEditing])
 
-  // user-profile-modal.txt faylida
-const handleSave = async () => {
-  if (!editData.fullname?.trim()) {
-    setSaveMessage({ type: "error", text: "Name is required" });
-    return;
-  }
-
-  if (!editData.username.trim()) {
-    setSaveMessage({ type: "error", text: "Username is required" });
-    return;
-  }
-
-  setIsSaving(true);
-  setSaveMessage({ type: "", text: "" });
-
-  try {
-    const response = await apiClient.updateUserProfile({  
-      fullname: editData.fullname,
-      username: editData.username,
-      email: editData.email,
-      phone_number: editData.phone_number,
-    });
-
-    const updatedUser = {
-      ...user,
-      fullname: editData.fullname,
-      username: editData.username,
-      email: editData.email,
-      phone_number: editData.phone_number,
-    };
-
-    if (onProfileUpdate) {
-      onProfileUpdate(updatedUser);
+  const handleSave = async () => {
+    if (!editData.fullname?.trim()) {
+      setSaveMessage({ type: "error", text: "Name is required" })
+      return
     }
 
-    setSaveMessage({ type: "success", text: "Profile updated successfully" });
-    setIsEditing(false);
+    if (!editData.username.trim()) {
+      setSaveMessage({ type: "error", text: "Username is required" })
+      return
+    }
 
-    setTimeout(() => {
-      window.location.reload();
-    }, 1000);
+    setIsSaving(true)
+    setSaveMessage({ type: "", text: "" })
 
-  } catch (error: any) {
-    const errorMessage = error.response?.data?.message ||
-      error.message ||
-      "Failed to update profile";
-    setSaveMessage({ type: "error", text: errorMessage });
-  } finally {
-    setIsSaving(false);
+    try {
+      if (isOwnProfile) {
+        if (onProfileUpdate) {
+          onProfileUpdate({
+            ...user,
+            fullname: editData.fullname,
+            username: editData.username,
+            email: editData.email,
+            phone_number: editData.phone_number
+          })
+        }
+
+        setCurrentUserPhone(editData.phone_number)
+      }
+
+      setSaveMessage({ type: "success", text: "Profile updated successfully" })
+      setIsEditing(false)
+
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message ||
+        error.message ||
+        "Failed to update profile"
+      setSaveMessage({ type: "error", text: errorMessage })
+    } finally {
+      setIsSaving(false)
+    }
   }
-};
-
-useEffect(() => {
-  const fetchUser = async () => {
-    const data = await apiClient.getMe();
-    setCurrentUser(data);
-  };
-  fetchUser();
-}, []);   
-
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
@@ -518,8 +499,3 @@ useEffect(() => {
     </Dialog>
   )
 }
-
-function setCurrentUser(_data: any) {
-  throw new Error("Function not implemented.")
-}
-

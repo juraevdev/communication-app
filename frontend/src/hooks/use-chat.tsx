@@ -96,53 +96,54 @@ export function useChat() {
 
 
   const updateCurrentUserProfile = useCallback((updatedData: any) => {
-    console.log("[Chat] Updating current user profile:", updatedData);
+  console.log("[Chat] Updating current user profile:", updatedData);
 
-    setCurrentUser((prev: any) => {
-      if (!prev) return prev;
-      return { ...prev, ...updatedData };
-    });
-
-    const userData = localStorage.getItem('user_data');
-    if (userData) {
-      try {
-        const parsedData = JSON.parse(userData);
-        localStorage.setItem('user_data', JSON.stringify({ ...parsedData, ...updatedData }));
-      } catch (error) {
-        console.error('[Chat] Failed to update user data in localStorage:', error);
-      }
+  setCurrentUser((prev: any) => {
+    if (!prev) return prev;
+    const newUserData = { ...prev, ...updatedData };
+    
+    try {
+      localStorage.setItem('user_data', JSON.stringify(newUserData));
+    } catch (error) {
+      console.error('[Chat] Failed to update user data in localStorage:', error);
     }
+    
+    return newUserData;
+  });
 
-    setChats(prev => prev.map(chat => {
-      if (chat.sender_id === currentUser?.id) {
-        return {
-          ...chat,
-          name: updatedData.fullname || updatedData.username || chat.name,
-          sender: updatedData.fullname || updatedData.username || chat.sender
-        };
-      }
-      return chat;
-    }));
-  }, [currentUser]);
+  setChats(prev => prev.map(chat => {
+    if (chat.sender_id === currentUser?.id) {
+      return {
+        ...chat,
+        name: updatedData.fullname || updatedData.username || chat.name,
+        sender: updatedData.fullname || updatedData.username || chat.sender
+      };
+    }
+    return chat;
+  }));
+}, [currentUser]);
 
   useEffect(() => {
-    const initializeUser = async () => {
-      try {
-        const user = await apiClient.getMe()
-        setCurrentUser(user)
-        console.log("[Chat] Current user loaded:", user)
+  const initializeUser = async () => {
+    try {
+      const user = await apiClient.getMe()
+      setCurrentUser(user)
+      
+      localStorage.setItem('user_data', JSON.stringify(user));
+      
+      console.log("[Chat] Current user loaded:", user)
 
-        initializeStatusWebSocket()
-        initializeNotificationsWebSocket()
-        await loadGroups()
-        await loadChannels()
-      } catch (error) {
-        console.error("[Chat] Failed to load user:", error)
-        window.location.href = "/login"
-      }
+      initializeStatusWebSocket()
+      initializeNotificationsWebSocket()
+      await loadGroups()
+      await loadChannels()
+    } catch (error) {
+      console.error("[Chat] Failed to load user:", error)
+      window.location.href = "/login"
     }
+  }
 
-    initializeUser()
+  initializeUser()
 
     return () => {
       if (statusWsRef.current) {
