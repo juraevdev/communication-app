@@ -166,6 +166,15 @@ const handleSave = async () => {
   }
 };
 
+useEffect(() => {
+  const fetchUser = async () => {
+    const data = await apiClient.getMe();
+    setCurrentUser(data);
+  };
+  fetchUser();
+}, []);   
+
+
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       onClose()
@@ -508,4 +517,8 @@ const handleSave = async () => {
       </DialogContent>
     </Dialog>
   )
+}
+
+function setCurrentUser(data: any) {
+  throw new Error("Function not implemented.")
 }
