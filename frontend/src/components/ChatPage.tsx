@@ -121,6 +121,7 @@ export default function ChatPage() {
     markAsRead,
     sendMessage,
     setMessages,
+    setCurrentUser,
     connectToGroup,
     getGroupMembers,
     sendGroupMessage,
@@ -192,15 +193,27 @@ const handleProfileUpdate = async (updatedUser: any) => {
     const updatedData = await apiClient.updateUserProfile(updatedUser);
     console.log("Profile updated:", updatedData);
 
+    // localStorage'dan eski ma'lumotlarni tozalash
+    localStorage.removeItem('user_data');
+    localStorage.removeItem('user');
+
+    // Yangi ma'lumotlarni saqlash
+    localStorage.setItem("user_data", JSON.stringify(updatedData));
+    localStorage.setItem("user", JSON.stringify(updatedData));
+
     if (updateCurrentUserProfile) {
       updateCurrentUserProfile(updatedData);
     }
 
-    localStorage.setItem("user", JSON.stringify(updatedData));
+    // CurrentUser state yangilash
+    setCurrentUser(updatedData);
 
     if (selectedChat && selectedChat.type === "private" && selectedChat.sender_id === currentUser?.id) {
       setSelectedChat((prev: any) => prev ? { ...prev, ...updatedData } : prev);
     }
+
+    // Sahifani yangilash
+    window.location.reload();
 
   } catch (error) {
     console.error("Failed to update profile:", error);

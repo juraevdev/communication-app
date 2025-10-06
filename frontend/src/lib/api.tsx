@@ -125,9 +125,13 @@ export const apiClient = {
   },
 
   async getMe() {
-    const response = await api.get('/accounts/me/');
-    return response.data;
-  },
+  const response = await api.get('/accounts/me/', {
+    params: {
+      _t: Date.now()  
+    }
+  });
+  return response.data;
+},
 
   async getRecentConversations() {
     return null;

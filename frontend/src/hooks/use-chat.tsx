@@ -1560,6 +1560,7 @@ export function useChat() {
     sendGroupFile,
     updateMessage,
     removeMessage,
+    setCurrentUser,
     connectToGroup,
     addGroupMember,
     getGroupMembers,
