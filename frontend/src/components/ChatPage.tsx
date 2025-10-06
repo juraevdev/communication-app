@@ -187,17 +187,29 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  const handleProfileUpdate = (updatedUser: any) => {
-    console.log("Profile updated:", updatedUser);
+ const handleProfileUpdate = async (updatedUser: any) => {
+  try {
+    const updatedData = await apiClient.updateUserProfile(updatedUser);
+    console.log("Profile updated:", updatedData);
 
     if (updateCurrentUserProfile) {
-      updateCurrentUserProfile(updatedUser);
+      updateCurrentUserProfile(updatedData);
     }
 
-    if (selectedChat && selectedChat.type === "private" && selectedChat.id === currentUser?.id) {
-      setSelectedChat((prev: any) => prev ? { ...prev, ...updatedUser } : prev);
+    if (
+      selectedChat &&
+      selectedChat.type === "private" &&
+      selectedChat.id === currentUser?.id
+    ) {
+      setSelectedChat((prev: any) =>
+        prev ? { ...prev, ...updatedData } : prev
+      );
     }
-  };
+  } catch (error) {
+    console.error("Failed to update profile:", error);
+  }
+};
+
 
   const refreshGroupsList = (leftGroupId?: number) => {
     if (leftGroupId) {
@@ -258,21 +270,15 @@ export default function ChatPage() {
     await videoCall.startCall(roomId);
 
     if (selectedChat.type === 'private') {
-      // ✅ TO'G'RI TARGET USER ID NI OLISH
       let targetUserId;
       
-      // Turli xil chat strukturalari uchun tekshirish
       if (selectedChat.sender_id && selectedChat.sender_id !== currentUser.id) {
-        // Agar sender_id mavjud bo'lsa va joriy user emas
         targetUserId = selectedChat.sender_id;
       } else if (selectedChat.id && selectedChat.id !== currentUser.id) {
-        // Agar id mavjud bo'lsa va joriy user emas
         targetUserId = selectedChat.id;
       } else if (selectedChat.user_id && selectedChat.user_id !== currentUser.id) {
-        // Agar user_id mavjud bo'lsa
         targetUserId = selectedChat.user_id;
       } else {
-        // Hech qanday yaroqli ID topilmasa
         console.error('[ChatPage] No valid target user ID found:', selectedChat);
         alert('Cannot determine who to call. Please select a valid chat.');
         return;
@@ -280,7 +286,6 @@ export default function ChatPage() {
 
       console.log('[ChatPage] Current user ID:', currentUser.id, 'Target user ID:', targetUserId);
       
-      // ✅ Yakuniy tekshirish
       if (targetUserId === currentUser.id) {
         console.error('[ChatPage] Error: Final check - cannot call yourself');
         alert('You cannot call yourself');
@@ -290,7 +295,6 @@ export default function ChatPage() {
       console.log('[ChatPage] Sending call invitation to user:', targetUserId);
       videoCall.sendCallInvitation(roomId, targetUserId, 'video');
     } else if (selectedChat.type === 'group') {
-      // Group call logic here
       console.log('[ChatPage] Starting group call');
     }
 

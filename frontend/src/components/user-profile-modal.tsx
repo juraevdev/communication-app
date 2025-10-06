@@ -23,7 +23,7 @@ interface UserProfileModalProps {
     role?: string
   }
   isOwnProfile?: boolean
-  onProfileUpdate?: (updatedUser: any) => void // Yangi prop
+  onProfileUpdate?: (updatedUser: any) => void  
 }
 
 export function UserProfileModal({ 
@@ -55,28 +55,22 @@ export function UserProfileModal({
   const [passwordMessage, setPasswordMessage] = useState({ type: "", text: "" })
   const [currentUserPhone, setCurrentUserPhone] = useState(user.phone_number)
 
-  // Modal ochilganda va yopilganda input maydonlarini tozalash
   useEffect(() => {
     if (isOpen) {
-      // Barcha password inputlarni tozalash
       setTimeout(() => {
         const inputs = document.querySelectorAll('[data-form-type="password"]');
         inputs.forEach(input => {
           if (input instanceof HTMLInputElement) {
             input.value = '';
-            // Browser autocomplete cache-ni tozalash
             input.autocomplete = 'new-password';
           }
         });
 
-        // Search input maydonini ham tozalash (agar mavjud bo'lsa)
         const searchInput = document.getElementById('chat-search-users-input');
         if (searchInput instanceof HTMLInputElement) {
-          // Agar search maydonida password ma'lumotlari qolgan bo'lsa
           const currentValue = searchInput.value;
           if (currentValue && (currentValue.includes('@') || currentValue.length > 20)) {
             searchInput.value = '';
-            // React state-ni ham yangilash uchun event dispatch qilish
             const event = new Event('input', { bubbles: true });
             searchInput.dispatchEvent(event);
           }
@@ -85,7 +79,6 @@ export function UserProfileModal({
     }
   }, [isOpen]);
 
-  // User ma'lumotlari o'zgarganda editData ni yangilash
   useEffect(() => {
     if (isOpen) {
       setEditData({
@@ -98,7 +91,6 @@ export function UserProfileModal({
     }
   }, [isOpen, user])
 
-  // Joriy user profilini olish
   useEffect(() => {
     const fetchCurrentUserProfile = async () => {
       if (!isOwnProfile || !isOpen || !isEditing) return;
@@ -138,9 +130,6 @@ export function UserProfileModal({
 
     try {
       if (isOwnProfile) {
-        // API chaqiruvi
-
-        // Parent komponentga yangilangan ma'lumotlarni uzatish
         if (onProfileUpdate) {
           onProfileUpdate({
             ...user,
@@ -170,7 +159,6 @@ export function UserProfileModal({
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       onClose()
-      // Reset states when closing
       setIsEditing(false)
       setPasswordData({
         current_password: "",
@@ -179,7 +167,6 @@ export function UserProfileModal({
       })
       setPasswordMessage({ type: "", text: "" })
       setSaveMessage({ type: "", text: "" })
-      // Edit data'ni ham reset qilish
       setEditData({
         fullname: user.fullname,
         username: user.username,
@@ -366,7 +353,7 @@ export function UserProfileModal({
             <Tabs defaultValue="info" className="w-full">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger className="cursor-pointer" value="info">Info</TabsTrigger>
-                <TabsTrigger className="cursor-pointer" value="settings">Settings</TabsTrigger>
+                <TabsTrigger className="cursor-pointer" value="settings">Password</TabsTrigger>
               </TabsList>
 
               <TabsContent value="info" className="space-y-4">
