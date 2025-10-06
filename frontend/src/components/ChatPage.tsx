@@ -244,32 +244,47 @@ export default function ChatPage() {
   }, [refreshChannelsTrigger])
 
   const handleStartVideoCall = async () => {
-    if (!selectedChat || !currentUser) return;
+  if (!selectedChat || !currentUser) return;
 
-    try {
-      const roomId = `videocall_${selectedChat.id}_${Date.now()}`;
+  try {
+    const roomId = `videocall_${currentUser.id}_${Date.now()}`;
 
-      setVideoCallInfo({
-        roomId,
-        type: selectedChat.type === 'group' ? 'group' : 'private',
-        name: getChatName(selectedChat)
-      });
+    setVideoCallInfo({
+      roomId,
+      type: selectedChat.type === 'group' ? 'group' : 'private',
+      name: getChatName(selectedChat)
+    });
 
-      await videoCall.startCall(roomId);
+    await videoCall.startCall(roomId);
 
-      if (selectedChat.type === 'private') {
-        const targetUserId = selectedChat.id;   
-        videoCall.sendCallInvitation(roomId, targetUserId, 'video');
+    if (selectedChat.type === 'private') {
+      // Qarshi foydalanuvchini aniqlash
+      const targetUserId =
+        selectedChat.user1?.id === currentUser.id
+          ? selectedChat.user2?.id
+          : selectedChat.user1?.id;
+
+      if (!targetUserId) {
+        console.warn('[VideoCall] targetUserId topilmadi');
+        return;
       }
 
-      setVideoCallModalOpen(true);
-      console.log('[ChatPage] Video call started and invitation sent');
+      if (targetUserId === currentUser.id) {
+        alert("O'zingizga qo'ng'iroq qila olmaysiz.");
+        return;
+      }
 
-    } catch (error) {
-      console.error('Failed to start video call:', error);
-      alert('Video qo\'ng\'iroqni boshlash muvaffaqiyatsiz. Kamera/mikron ruxsatlarini tekshiring.');
+      videoCall.sendCallInvitation(roomId, targetUserId, 'video');
     }
-  };
+
+    setVideoCallModalOpen(true);
+    console.log('[ChatPage] Video call started and invitation sent');
+  } catch (error) {
+    console.error('Failed to start video call:', error);
+    alert("Video qo'ng'iroqni boshlashda xatolik. Kamera yoki mikrofon ruxsatlarini tekshiring.");
+  }
+};
+
   const handleEndVideoCall = () => {
     videoCall.endCall();
     setVideoCallModalOpen(false);
