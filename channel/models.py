@@ -60,7 +60,7 @@ class ChannelMessage(models.Model):
     def file_url(self):
         if self.file:
             from django.conf import settings
-            return f"{settings.BASE_URL}{self.file.url}"
+            return f"{settings.BASE_URL.rstrip('/')}{self.file.url}"
         return None
     
     
