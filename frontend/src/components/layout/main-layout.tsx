@@ -14,7 +14,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const user = localStorage.getItem("user");
+    const user = localStorage.getItem("user_data");
     if (!user) {
       navigate("/login"); 
     } else {

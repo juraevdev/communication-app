@@ -289,7 +289,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     try {
-      const userData = localStorage.getItem("user")
+      const userData = localStorage.getItem("user_data")
       if (userData && userData !== "undefined") {
         setUser(JSON.parse(userData))
       } else {

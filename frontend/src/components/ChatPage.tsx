@@ -195,11 +195,9 @@ const handleProfileUpdate = async (updatedUser: any) => {
 
     // localStorage'dan eski ma'lumotlarni tozalash
     localStorage.removeItem('user_data');
-    localStorage.removeItem('user');
 
     // Yangi ma'lumotlarni saqlash
     localStorage.setItem("user_data", JSON.stringify(updatedData));
-    localStorage.setItem("user", JSON.stringify(updatedData));
 
     if (updateCurrentUserProfile) {
       updateCurrentUserProfile(updatedData);
