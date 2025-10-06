@@ -193,9 +193,6 @@ const handleProfileUpdate = async (updatedUser: any) => {
     const updatedData = await apiClient.updateUserProfile(updatedUser);
     console.log("Profile updated:", updatedData);
 
-    // localStorage'dan eski ma'lumotlarni tozalash
-    localStorage.removeItem('user_data');
-
     // Yangi ma'lumotlarni saqlash
     localStorage.setItem("user_data", JSON.stringify(updatedData));
 
