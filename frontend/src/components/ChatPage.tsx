@@ -187,7 +187,7 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
- const handleProfileUpdate = async (updatedUser: any) => {
+const handleProfileUpdate = async (updatedUser: any) => {
   try {
     const updatedData = await apiClient.updateUserProfile(updatedUser);
     console.log("Profile updated:", updatedData);
@@ -196,15 +196,16 @@ export default function ChatPage() {
       updateCurrentUserProfile(updatedData);
     }
 
-    if (
-      selectedChat &&
-      selectedChat.type === "private" &&
-      selectedChat.id === currentUser?.id
-    ) {
-      setSelectedChat((prev: any) =>
-        prev ? { ...prev, ...updatedData } : prev
-      );
+    if (selectedChat && selectedChat.type === "private" && selectedChat.id === currentUser?.id) {
+      setSelectedChat((prev: any) => prev ? { ...prev, ...updatedData } : prev);
     }
+
+    const currentUserData = JSON.parse(localStorage.getItem('current_user') || '{}');
+    localStorage.setItem('current_user', JSON.stringify({
+      ...currentUserData,
+      ...updatedData
+    }));
+
   } catch (error) {
     console.error("Failed to update profile:", error);
   }

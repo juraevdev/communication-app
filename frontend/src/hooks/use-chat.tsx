@@ -98,13 +98,11 @@ export function useChat() {
   const updateCurrentUserProfile = useCallback((updatedData: any) => {
     console.log("[Chat] Updating current user profile:", updatedData);
 
-    // currentUser state ni yangilash
     setCurrentUser((prev: any) => {
       if (!prev) return prev;
       return { ...prev, ...updatedData };
     });
 
-    // localStorage ni yangilash
     const userData = localStorage.getItem('user_data');
     if (userData) {
       try {
@@ -115,7 +113,6 @@ export function useChat() {
       }
     }
 
-    // Agar kerak bo'lsa, chats ro'yxatidagi o'z xabarlarimizni yangilash
     setChats(prev => prev.map(chat => {
       if (chat.sender_id === currentUser?.id) {
         return {
