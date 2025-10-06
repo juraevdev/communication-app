@@ -51,6 +51,19 @@ class ChannelMessage(models.Model):
             return True
         return False
     
+    
+    def get_absolute_url(self):
+        from django.urls import reverse
+        return reverse('file_download', kwargs={'file_id': self.id})
+    
+    @property
+    def file_url(self):
+        if self.file:
+            from django.conf import settings
+            return f"{settings.BASE_URL}{self.file.url}"
+        return None
+    
+    
     class Meta:
         db_table = 'channel_messages'
         ordering = ['created_at']

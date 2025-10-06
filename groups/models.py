@@ -73,3 +73,15 @@ class GroupMessage(models.Model):
     
     def is_read_by(self, user):
         return self.sender == user or user in self.read_by.all()
+    
+    
+    def get_absolute_url(self):
+        from django.urls import reverse
+        return reverse('file_download', kwargs={'file_id': self.id})
+    
+    @property
+    def file_url(self):
+        if self.file:
+            from django.conf import settings
+            return f"{settings.BASE_URL}{self.file.url}"
+        return None
