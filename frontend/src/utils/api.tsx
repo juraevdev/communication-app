@@ -14,8 +14,18 @@ interface LoginData {
   password: string;
 }
 
-export const loginUser = (data: LoginData) =>
-  apiClient.post("/v1/accounts/login", data);
+export const loginUser = async (data: LoginData) => {
+  const response = await apiClient.post("/v1/token/", data); 
+  const accessToken = response.data.access;
+  const refreshToken = response.data.refresh;
+
+  localStorage.setItem("accessToken", accessToken);
+  localStorage.setItem("refreshToken", refreshToken);
+
+  apiClient.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
+
+  return response.data;
+};
 
 
 interface RegisterData {
