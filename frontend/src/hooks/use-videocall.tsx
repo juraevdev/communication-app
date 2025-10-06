@@ -347,17 +347,24 @@ export const useVideoCall = ({
   }, [createPeerConnection, sendWebSocketMessage, currentUserId]);
 
   // ✅ Yangilangan call invitation function
-  const sendCallInvitation = useCallback((roomId: string, toUserId: number, callType: 'video' | 'audio' = 'video'): void => {
+  // ✅ Tuzatilgan call invitation function
+const sendCallInvitation = useCallback((roomId: string, toUserId: number, callType: 'video' | 'audio' = 'video'): void => {
+  // ✅ Tekshirish: o'ziga taklif yubormaslik
+  if (toUserId === currentUserId) {
+    console.error('[VideoCall] Error: Cannot send call invitation to yourself');
+    return;
+  }
+
   const invitationMessage = {
     type: 'call_invitation',
     room_id: roomId,
     call_type: callType,
     from_user_id: currentUserId,
-    user_name: currentUserName,
-    to_user_id: toUserId  // ✅ Maqsadli foydalanuvchi ID si
+    from_user_name: currentUserName,
+    to_user_id: toUserId  // ✅ Endi bu haqiqiy maqsadli foydalanuvchi ID si
   };
 
-  console.log('[VideoCall] Sending call invitation:', invitationMessage);
+  console.log('[VideoCall] Sending call invitation to user:', toUserId, invitationMessage);
   sendWebSocketMessage(invitationMessage);
 }, [sendWebSocketMessage, currentUserId, currentUserName]);
 
