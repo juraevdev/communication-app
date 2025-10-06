@@ -46,7 +46,7 @@ export default function FilesPage() {
     const fileInputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
-        const userData = localStorage.getItem("user_data")
+        const userData = localStorage.getItem("user")
         if (userData) {
             setUser(JSON.parse(userData))
         }

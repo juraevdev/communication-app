@@ -15,7 +15,7 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   useEffect(() => {
     const checkAuthAndUpdateUser = async () => {
-      const user = localStorage.getItem("user_data");
+      const user = localStorage.getItem("user");
       const token = localStorage.getItem("access_token");
       
       if (!user || !token) {
