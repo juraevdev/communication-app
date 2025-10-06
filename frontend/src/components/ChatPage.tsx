@@ -258,18 +258,40 @@ export default function ChatPage() {
     await videoCall.startCall(roomId);
 
     if (selectedChat.type === 'private') {
-      // ✅ To'g'ri target user ID ni olish
-      const targetUserId = selectedChat.id;   
+      // ✅ TO'G'RI TARGET USER ID NI OLISH
+      let targetUserId;
       
-      // ✅ Tekshirish: o'ziga qo'ng'iroq qilmaslik
+      // Turli xil chat strukturalari uchun tekshirish
+      if (selectedChat.sender_id && selectedChat.sender_id !== currentUser.id) {
+        // Agar sender_id mavjud bo'lsa va joriy user emas
+        targetUserId = selectedChat.sender_id;
+      } else if (selectedChat.id && selectedChat.id !== currentUser.id) {
+        // Agar id mavjud bo'lsa va joriy user emas
+        targetUserId = selectedChat.id;
+      } else if (selectedChat.user_id && selectedChat.user_id !== currentUser.id) {
+        // Agar user_id mavjud bo'lsa
+        targetUserId = selectedChat.user_id;
+      } else {
+        // Hech qanday yaroqli ID topilmasa
+        console.error('[ChatPage] No valid target user ID found:', selectedChat);
+        alert('Cannot determine who to call. Please select a valid chat.');
+        return;
+      }
+
+      console.log('[ChatPage] Current user ID:', currentUser.id, 'Target user ID:', targetUserId);
+      
+      // ✅ Yakuniy tekshirish
       if (targetUserId === currentUser.id) {
-        console.error('[ChatPage] Error: Cannot call yourself');
+        console.error('[ChatPage] Error: Final check - cannot call yourself');
         alert('You cannot call yourself');
         return;
       }
       
       console.log('[ChatPage] Sending call invitation to user:', targetUserId);
       videoCall.sendCallInvitation(roomId, targetUserId, 'video');
+    } else if (selectedChat.type === 'group') {
+      // Group call logic here
+      console.log('[ChatPage] Starting group call');
     }
 
     setVideoCallModalOpen(true);
