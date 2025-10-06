@@ -211,6 +211,7 @@ const handleProfileUpdate = async (updatedUser: any) => {
   }
 };
 
+
   const refreshGroupsList = (leftGroupId?: number) => {
     if (leftGroupId) {
       setGroups(prev => prev.filter(group => group.id !== leftGroupId))

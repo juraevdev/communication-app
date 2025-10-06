@@ -78,26 +78,33 @@ export function GroupInfoModal({ isOpen, onClose, group, onGroupUpdate }: GroupI
   }, [isOpen, group.id])
 
   const loadGroupMembers = async () => {
-    try {
-      setLoading(true)
-      const membersData = await apiClient.getGroupMembers(group.id)
-      setMembers(membersData)
-      const currentUser = await apiClient.getMe();
-      const currentUserId = currentUser.id;
-      const currentUserMember = membersData.find((member: GroupMember) =>
-        member.user === currentUserId
-      );
+  try {
+    setLoading(true);
 
-      if (currentUserMember) {
-        setUserRole(currentUserMember.role);
-        setIsAdmin(currentUserMember.role === "owner" || currentUserMember.role === "admin");
-      }
-    } catch (error) {
-      console.error("Failed to load group members:", error)
-    } finally {
-      setLoading(false)
+    const membersData = await apiClient.getGroupMembers(group.id);
+    setMembers(membersData);
+
+    const response = await apiClient.getMe();
+    const currentUser = response.data;
+    const currentUserId = currentUser.id;
+
+    const currentUserMember = membersData.find(
+      (member: GroupMember) => member.user === currentUserId
+    );
+
+    if (currentUserMember) {
+      setUserRole(currentUserMember.role);
+      setIsAdmin(
+        currentUserMember.role === "owner" || currentUserMember.role === "admin"
+      );
     }
+  } catch (error) {
+    console.error("Failed to load group members:", error);
+  } finally {
+    setLoading(false);
   }
+};
+
 
   const checkPhoneNumber = async () => {
     if (!phoneNumber) {

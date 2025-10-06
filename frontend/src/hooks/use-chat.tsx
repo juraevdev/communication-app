@@ -127,7 +127,7 @@ useEffect(() => {
   const initializeUser = async () => {
     try {
       const response = await apiClient.getMe();
-      const user = response.data; // 🔥 faqat ma'lumot qismini olish
+      const user = response.data; 
 
       setCurrentUser(user);
       localStorage.setItem('user_data', JSON.stringify(user));

@@ -54,19 +54,20 @@ export function ChannelInfoModal({ isOpen, onClose, channel, onChannelUpdate }: 
   const [isSubscribed, setIsSubscribed] = useState(channel.isSubscribed)
 
   useEffect(() => {
-    const getCurrentUser = async () => {
-      try {
-        const user = await apiClient.getMe();
-        setCurrentUser(user);
-      } catch (error) {
-        console.error("Error getting current user:", error);
-      }
-    };
-
-    if (isOpen) {
-      getCurrentUser();
+  const getCurrentUser = async () => {
+    try {
+      const response = await apiClient.getMe();
+      setCurrentUser(response.data); // ✅ faqat user ma'lumotini oling
+    } catch (error) {
+      console.error("Error getting current user:", error);
     }
-  }, [isOpen]);
+  };
+
+  if (isOpen) {
+    getCurrentUser();
+  }
+}, [isOpen]);
+
 
   const handleSave = async () => {
     if (!channel.isOwner) {
