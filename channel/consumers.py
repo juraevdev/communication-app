@@ -414,14 +414,12 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             return None
 
     @database_sync_to_async
-    def save_file_message(self, file_name, file_type, base64_data, *args, **kwargs):
+    def save_file_message(self, file_name, file_type, base64_data, file_size=0):
         try:
             from django.core.files.base import ContentFile
-            import base64
-            from groups.models import FileUpload, GroupMessage
-            import os
-            from django.conf import settings
-
+            from channel.models import ChannelMessage
+            from chat.models import FileUpload
+        
             if ';base64,' in base64_data:
                 _, file_str = base64_data.split(';base64,')
             else:
@@ -432,14 +430,13 @@ class ChannelConsumer(AsyncWebsocketConsumer):
 
             file_upload = FileUpload.objects.create(
                 user=self.user,
-                group_id=self.group_id,
                 file=file_content,
                 original_filename=file_name
             )
 
-            file_message = GroupMessage.objects.create(
-                group_id=self.group_id,
-                sender=self.user,
+            file_message = ChannelMessage.objects.create(
+                channel_id=self.channel_id,
+                user=self.user,
                 content=f"File: {file_name}",
                 file=file_upload,
                 message_type='file'
@@ -453,7 +450,8 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             return file_message
         
         except Exception as e:
-            print(f"Error saving file: {e}")
+            logger.error(f"Error saving channel file: {e}")
+            print(f"Error saving channel file: {e}")
             return None
 
     @database_sync_to_async
