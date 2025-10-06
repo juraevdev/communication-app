@@ -519,6 +519,7 @@ useEffect(() => {
   )
 }
 
-function setCurrentUser(data: any) {
+function setCurrentUser(_data: any) {
   throw new Error("Function not implemented.")
 }
+
