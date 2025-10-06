@@ -250,56 +250,32 @@ const handleProfileUpdate = async (updatedUser: any) => {
   }, [refreshChannelsTrigger])
 
   const handleStartVideoCall = async () => {
-  if (!selectedChat || !currentUser) return;
+    if (!selectedChat || !currentUser) return;
 
-  try {
-    const roomId = `videocall_${selectedChat.id}_${Date.now()}`;
+    try {
+      const roomId = `videocall_${selectedChat.id}_${Date.now()}`;
 
-    setVideoCallInfo({
-      roomId,
-      type: selectedChat.type === 'group' ? 'group' : 'private',
-      name: getChatName(selectedChat)
-    });
+      setVideoCallInfo({
+        roomId,
+        type: selectedChat.type === 'group' ? 'group' : 'private',
+        name: getChatName(selectedChat)
+      });
 
-    await videoCall.startCall(roomId);
+      await videoCall.startCall(roomId);
 
-    if (selectedChat.type === 'private') {
-      let targetUserId;
-      
-      if (selectedChat.sender_id && selectedChat.sender_id !== currentUser.id) {
-        targetUserId = selectedChat.sender_id;
-      } else if (selectedChat.id && selectedChat.id !== currentUser.id) {
-        targetUserId = selectedChat.id;
-      } else if (selectedChat.user_id && selectedChat.user_id !== currentUser.id) {
-        targetUserId = selectedChat.user_id;
-      } else {
-        console.error('[ChatPage] No valid target user ID found:', selectedChat);
-        alert('Cannot determine who to call. Please select a valid chat.');
-        return;
+      if (selectedChat.type === 'private') {
+        const targetUserId = selectedChat.id;   
+        videoCall.sendCallInvitation(roomId, targetUserId, 'video');
       }
 
-      console.log('[ChatPage] Current user ID:', currentUser.id, 'Target user ID:', targetUserId);
-      
-      if (targetUserId === currentUser.id) {
-        console.error('[ChatPage] Error: Final check - cannot call yourself');
-        alert('You cannot call yourself');
-        return;
-      }
-      
-      console.log('[ChatPage] Sending call invitation to user:', targetUserId);
-      videoCall.sendCallInvitation(roomId, targetUserId, 'video');
-    } else if (selectedChat.type === 'group') {
-      console.log('[ChatPage] Starting group call');
+      setVideoCallModalOpen(true);
+      console.log('[ChatPage] Video call started and invitation sent');
+
+    } catch (error) {
+      console.error('Failed to start video call:', error);
+      alert('Video qo\'ng\'iroqni boshlash muvaffaqiyatsiz. Kamera/mikron ruxsatlarini tekshiring.');
     }
-
-    setVideoCallModalOpen(true);
-    console.log('[ChatPage] Video call started and invitation sent');
-
-  } catch (error) {
-    console.error('Failed to start video call:', error);
-    alert('Video qo\'ng\'iroqni boshlash muvaffaqiyatsiz. Kamera/mikron ruxsatlarini tekshiring.');
-  }
-};
+  };
 
   const handleEndVideoCall = () => {
     videoCall.endCall();
