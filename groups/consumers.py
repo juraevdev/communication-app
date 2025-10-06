@@ -407,19 +407,18 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
         try:
             from django.core.files.base import ContentFile
             import base64
-            from groups.models import FileUpload
-            import uuid
+            from groups.models import FileUpload, GroupMessage
             import os
+            from django.conf import settings
 
             if ';base64,' in base64_data:
-                format, file_str = base64_data.split(';base64,')
+                _, file_str = base64_data.split(';base64,')
             else:
                 file_str = base64_data
 
             file_data = base64.b64decode(file_str)
 
-            file_extension = os.path.splitext(file_name)[1]
-            file_content = ContentFile(file_data, name=file_name)   
+            file_content = ContentFile(file_data, name=file_name)
 
             file_upload = FileUpload.objects.create(
                 user=self.user,
@@ -428,7 +427,6 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                 original_filename=file_name
             )
 
-
             file_message = GroupMessage.objects.create(
                 group_id=self.group_id,
                 sender=self.user,
@@ -436,16 +434,16 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                 file=file_upload,
                 message_type='file'
             )
-        
+
             file_url = file_upload.file.url
             if not file_url.startswith('http'):
-                from django.conf import settings
-                file_url = f"{settings.BASE_URL}{file_url}"
+                file_url = f"{settings.BASE_URL.rstrip('/')}{file_url}"
 
             return file_message
         except Exception as e:
             print(f"Error saving file: {e}")
             return None
+
 
 
     @database_sync_to_async
