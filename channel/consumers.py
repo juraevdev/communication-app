@@ -414,44 +414,42 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             return None
 
     @database_sync_to_async
-    def save_file_message(self, file_name, file_type, base64_data, file_size=0):
-        try:
-            from django.core.files.base import ContentFile
-            from channel.models import ChannelMessage
-            from chat.models import FileUpload
+    def save_file_message(self, file_name, file_type, base64_data, file_size):
+        from channel.models import ChannelMessage
+        from chat.models import FileUpload
+        import uuid
+        import os
         
+        try:
             if ';base64,' in base64_data:
-                _, file_str = base64_data.split(';base64,')
+                format, file_str = base64_data.split(';base64,')
             else:
                 file_str = base64_data
 
             file_data = base64.b64decode(file_str)
+
+            file_extension = os.path.splitext(file_name)[1]
             file_content = ContentFile(file_data, name=file_name)
 
             file_upload = FileUpload.objects.create(
                 user=self.user,
+                channel_id=self.channel_id,
                 file=file_content,
                 original_filename=file_name
             )
 
-            file_message = ChannelMessage.objects.create(
+            message = ChannelMessage.objects.create(
                 channel_id=self.channel_id,
                 user=self.user,
                 content=f"File: {file_name}",
-                file=file_upload,
-                message_type='file'
+                message_type='file',
+                file=file_upload
             )
 
-            file_url = file_upload.file.url
-            if not file_url.startswith('https'):
-                file_url = f"{settings.BASE_URL.rstrip('/')}{file_url}"
+            return message
 
-            file_message.file_url = file_url
-            return file_message
-        
         except Exception as e:
             logger.error(f"Error saving channel file: {e}")
-            print(f"Error saving channel file: {e}")
             return None
 
     @database_sync_to_async
