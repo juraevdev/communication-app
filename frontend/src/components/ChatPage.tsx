@@ -125,6 +125,7 @@ export default function ChatPage() {
     getGroupMembers,
     sendGroupMessage,
     connectToChatRoom,
+    setCurrentUser,
     markGroupMessageAsRead,
     connectToChannel,
     sendChannelMessage,
@@ -190,19 +191,30 @@ export default function ChatPage() {
 
 const handleProfileUpdate = async (updatedUser: any) => {
   try {
-    const updatedData = await apiClient.updateUserProfile(updatedUser);
-    console.log("Profile updated:", updatedData);
+    // ✅ Agar updatedUser allaqachon serverdan kelgan bo'lsa
+    console.log("Profile updated:", updatedUser);
 
+    // ✅ localStorage ni yangilash
+    localStorage.setItem("user_data", JSON.stringify(updatedUser));
+
+    // ✅ Chat state ni yangilash
     if (updateCurrentUserProfile) {
-      updateCurrentUserProfile(updatedData);
+      updateCurrentUserProfile(updatedUser);
     }
-    if (
-      selectedChat &&
-      selectedChat.type === "private" &&
-      selectedChat.sender_id === currentUser?.id
-    ) {
-      setSelectedChat((prev: any) => (prev ? { ...prev, ...updatedData } : prev));
+
+    setCurrentUser(updatedUser);
+
+    // ✅ Agar selected chat o'z profilimiz bo'lsa
+    if (selectedChat && selectedChat.type === "private" && selectedChat.sender_id === currentUser?.id) {
+      setSelectedChat((prev: any) => prev ? { 
+        ...prev, 
+        name: updatedUser.fullname || updatedUser.username,
+        sender: updatedUser.fullname || updatedUser.username,
+        username: updatedUser.username,
+        email: updatedUser.email
+      } : prev);
     }
+
   } catch (error) {
     console.error("Failed to update profile:", error);
   }

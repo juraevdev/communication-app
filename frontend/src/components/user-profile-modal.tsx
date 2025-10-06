@@ -129,17 +129,31 @@ export function UserProfileModal({
   setSaveMessage({ type: "", text: "" })
 
   try {
+    await apiClient.updateUserProfile({
+      fullname: editData.fullname,
+      username: editData.username,
+      phone_number: editData.phone_number,
+      email: editData.email,
+    });
+
+    const response = await apiClient.getMe();
+    const freshUserData = response.data;  
+    
+    localStorage.setItem("user_data", JSON.stringify(freshUserData));
+
     if (isOwnProfile && onProfileUpdate) {
-      await onProfileUpdate({
-        fullname: editData.fullname,
-        username: editData.username,
-        email: editData.email,
-        phone_number: editData.phone_number
-      });
+      await onProfileUpdate(freshUserData);   
     }
 
     setSaveMessage({ type: "success", text: "Profile updated successfully" })
     setIsEditing(false)
+
+    setEditData({
+      fullname: freshUserData.fullname,
+      username: freshUserData.username,
+      email: freshUserData.email,
+      phone_number: freshUserData.phone_number || editData.phone_number,
+    })
 
   } catch (error: any) {
     const errorMessage = error.response?.data?.message ||
