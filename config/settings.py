@@ -160,7 +160,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 
 # settings.py faylida
-BASE_URL = 'http://172.16.8.92:8000'
+BASE_URL = 'https://planshet2.stat.uz/'
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
