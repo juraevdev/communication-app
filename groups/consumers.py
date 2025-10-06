@@ -436,7 +436,7 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
             )
 
             file_url = file_upload.file.url
-            if not file_url.startswith('http'):
+            if not file_url.startswith('https'):
                 file_url = f"{settings.BASE_URL.rstrip('/')}{file_url}"
 
             return file_message
