@@ -115,46 +115,41 @@ export function UserProfileModal({
   }, [isOpen, isOwnProfile, isEditing])
 
   const handleSave = async () => {
-    if (!editData.fullname?.trim()) {
-      setSaveMessage({ type: "error", text: "Name is required" })
-      return
-    }
-
-    if (!editData.username.trim()) {
-      setSaveMessage({ type: "error", text: "Username is required" })
-      return
-    }
-
-    setIsSaving(true)
-    setSaveMessage({ type: "", text: "" })
-
-    try {
-      if (isOwnProfile) {
-        if (onProfileUpdate) {
-          onProfileUpdate({
-            ...user,
-            fullname: editData.fullname,
-            username: editData.username,
-            email: editData.email,
-            phone_number: editData.phone_number
-          })
-        }
-
-        setCurrentUserPhone(editData.phone_number)
-      }
-
-      setSaveMessage({ type: "success", text: "Profile updated successfully" })
-      setIsEditing(false)
-
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message ||
-        error.message ||
-        "Failed to update profile"
-      setSaveMessage({ type: "error", text: errorMessage })
-    } finally {
-      setIsSaving(false)
-    }
+  if (!editData.fullname?.trim()) {
+    setSaveMessage({ type: "error", text: "Name is required" })
+    return
   }
+
+  if (!editData.username.trim()) {
+    setSaveMessage({ type: "error", text: "Username is required" })
+    return
+  }
+
+  setIsSaving(true)
+  setSaveMessage({ type: "", text: "" })
+
+  try {
+    if (isOwnProfile && onProfileUpdate) {
+      await onProfileUpdate({
+        fullname: editData.fullname,
+        username: editData.username,
+        email: editData.email,
+        phone_number: editData.phone_number
+      });
+    }
+
+    setSaveMessage({ type: "success", text: "Profile updated successfully" })
+    setIsEditing(false)
+
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message ||
+      error.message ||
+      "Failed to update profile"
+    setSaveMessage({ type: "error", text: errorMessage })
+  } finally {
+    setIsSaving(false)
+  }
+}
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
