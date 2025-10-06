@@ -126,10 +126,10 @@ export function useChat() {
 useEffect(() => {
   const initializeUser = async () => {
     try {
-      const response = await apiClient.getMe();
-      const user = response.data; 
+      const { data: user } = await apiClient.getMe();   
 
       setCurrentUser(user);
+
       localStorage.setItem('user', JSON.stringify(user));
 
       console.log("[Chat] Current user loaded:", user);

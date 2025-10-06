@@ -196,9 +196,6 @@ const handleProfileUpdate = async (updatedUser: any) => {
     if (updateCurrentUserProfile) {
       updateCurrentUserProfile(updatedData);
     }
-
-    localStorage.setItem("user", JSON.stringify(updatedData));
-
     if (
       selectedChat &&
       selectedChat.type === "private" &&
