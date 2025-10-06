@@ -33,18 +33,31 @@ export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const fetchUserData = async () => {
+   const fetchUserData = async () => {
     try {
-      const response = await fetchWithAuth("https://planshet2.stat.uz/api/v1/accounts/user");
-      setUser(response.data);
+      const response = await fetchWithAuth("https://planshet2.stat.uz/api/v1/accounts/user/");
+      const freshUserData = response.data;
+      
+      localStorage.setItem('user_data', JSON.stringify(freshUserData));
+      
+      setUser(freshUserData);
       setProfileData({
-        fullname: response.data.fullname,
-        username: response.data.username,
-        image: response.data.profile?.image || "",
+        fullname: freshUserData.fullname,
+        username: freshUserData.username,
+        image: freshUserData.profile?.image || "",
       });
     } catch (error) {
       console.error("Failed to fetch user data:", error);
-      alert("Failed to load user data");
+      const cachedUser = localStorage.getItem('user_data');
+      if (cachedUser) {
+        const userData = JSON.parse(cachedUser);
+        setUser(userData);
+        setProfileData({
+          fullname: userData.fullname,
+          username: userData.username,
+          image: userData.profile?.image || "",
+        });
+      }
     } finally {
       setIsLoading(false);
     }

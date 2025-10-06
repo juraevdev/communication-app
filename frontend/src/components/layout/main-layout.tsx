@@ -14,13 +14,41 @@ export function MainLayout({ children }: MainLayoutProps) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const user = localStorage.getItem("user_data");
-    if (!user) {
-      navigate("/login"); 
-    } else {
-      setIsAuthenticated(true);
-    }
-    setIsLoading(false);
+    const checkAuthAndUpdateUser = async () => {
+      const user = localStorage.getItem("user_data");
+      const token = localStorage.getItem("access_token");
+      
+      if (!user || !token) {
+        navigate("/login");
+        return;
+      }
+
+      try {
+        const response = await fetch('https://planshet2.stat.uz/api/v1/accounts/user/', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const freshUserData = await response.json();
+          localStorage.setItem('user_data', JSON.stringify(freshUserData));
+          setIsAuthenticated(true);
+        } else {
+          localStorage.removeItem("user_data");
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("refresh_token");
+          navigate("/login");
+        }
+      } catch (error) {
+        console.error('Failed to fetch fresh user data:', error);
+        navigate("/login");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkAuthAndUpdateUser();
   }, [navigate]);
 
   if (isLoading) {
