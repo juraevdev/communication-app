@@ -120,13 +120,13 @@ class UserUpdateApiView(generics.UpdateAPIView):
 
     def put(self, request):
         user = request.user
-        print(request.data, "data1")
-        serializer = self.get_serializer(user, data=request.data)
+        serializer = self.get_serializer(user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            print(serializer.data, "data2")
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
     
 class GetUserApiView(generics.GenericAPIView):
     serializer_class = UserSerializer

@@ -13,6 +13,16 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
         fields = ['fullname', 'username', 'email', 'phone_number']
+        
+        
+    def update(self, instance, validated_data):
+        instance.username = validated_data.get('username', instance.username)
+        instance.fullname = validated_data.get('fullname', instance.fullname)
+        instance.email = validated_data.get('email', instance.email)
+        instance.phone_number = validated_data.get('phone_number', instance.phone_number)
+        instance.save()
+        return instance
+
 
 
 class RegisterSerializer(serializers.Serializer):
