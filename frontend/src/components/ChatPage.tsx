@@ -121,8 +121,8 @@ export default function ChatPage() {
     markAsRead,
     sendMessage,
     setMessages,
-    setCurrentUser,
     connectToGroup,
+    setCurrentUser,
     getGroupMembers,
     sendGroupMessage,
     connectToChatRoom,
@@ -187,28 +187,46 @@ export default function ChatPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
 
 const handleProfileUpdate = async (updatedUser: any) => {
   try {
     const updatedData = await apiClient.updateUserProfile(updatedUser);
     console.log("Profile updated:", updatedData);
 
-    localStorage.setItem("user_data", JSON.stringify(updatedData));
-
     if (updateCurrentUserProfile) {
       updateCurrentUserProfile(updatedData);
     }
 
-    setCurrentUser(updatedData);
+    localStorage.setItem("user", JSON.stringify(updatedData));
 
-    if (selectedChat && selectedChat.type === "private" && selectedChat.sender_id === currentUser?.id) {
-      setSelectedChat((prev: any) => prev ? { ...prev, ...updatedData } : prev);
+    if (
+      selectedChat &&
+      selectedChat.type === "private" &&
+      selectedChat.sender_id === currentUser?.id
+    ) {
+      setSelectedChat((prev: any) => (prev ? { ...prev, ...updatedData } : prev));
     }
-
   } catch (error) {
     console.error("Failed to update profile:", error);
   }
 };
+
+useEffect(() => {
+  const fetchUser = async () => {
+    try {
+      const response = await apiClient.getMe();
+      localStorage.setItem("user", JSON.stringify(response.data));
+      setCurrentUser(response.data);
+    } catch (err) {
+      console.error("User fetch error:", err);
+    }
+  };
+
+  fetchUser();
+}, []);
+
+
 
   const refreshGroupsList = (leftGroupId?: number) => {
     if (leftGroupId) {
