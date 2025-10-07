@@ -130,8 +130,14 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
     // Agar user parameter berilmasa, targetUser state dan foydalanish
     const userToAdd = user || targetUser;
 
+    console.log("handleAddContact called");
+    console.log("user parameter:", user);
+    console.log("targetUser state:", targetUser);
+    console.log("userToAdd:", userToAdd);
+
     if (!userToAdd?.id) {
       setAddContactMessage({ type: "error", text: "Iltimos, avval foydalanuvchini tanlang" })
+      console.error("No user selected!");
       return
     }
 
@@ -139,10 +145,13 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
     setAddContactMessage({ type: "", text: "" })
 
     try {
+      console.log("Adding contact with ID:", userToAdd.id);
       const result = await apiClient.addContact(
         userToAdd.id,
         newAlias || userToAdd.name || userToAdd.username
       )
+
+      console.log("Contact added successfully:", result);
 
       setAddContactMessage({
         type: "success",
@@ -154,8 +163,6 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
       setNewAlias("")
       setSearchResults([])
       setTargetUser(null)
-
-      console.log("Contact added:", result)
 
       // Kontaktlar ro'yxatini yangilash
       const contactsData = await apiClient.getContacts()
@@ -198,10 +205,12 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
 
   // FIXED: handleUserSelect - targetUser ni o'rnatish va search natijalarini yopish
   const handleUserSelect = (user: User) => {
+    console.log("handleUserSelect called with:", user);
     setTargetUser(user);
     setNewUsername(user.username);
     setNewAlias(user.name || user.username);
     setSearchResults([]); // Search natijalarini yopish
+    console.log("Target user set to:", user);
   }
 
   // newUsername o'zgarganda targetUser va searchResults ni tozalash
@@ -416,24 +425,28 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
                   {/* FIXED: Search results display */}
                   {searchResults.length > 0 && !targetUser && (
                     <div className="space-y-2">
-                      <Label>Search Results:</Label>
+                      <Label>Search Results (Click to select):</Label>
                       <div className="space-y-2 max-h-60 overflow-y-auto">
                         {searchResults.map((user) => (
-                          <div
+                          <button
                             key={user.id}
-                            className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-accent transition-colors"
-                            onClick={() => handleUserSelect(user)}
+                            type="button"
+                            className="w-full flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-accent hover:border-blue-400 transition-all"
+                            onClick={() => {
+                              console.log("User selected:", user);
+                              handleUserSelect(user);
+                            }}
                           >
                             <Avatar className="h-8 w-8">
                               <AvatarImage src={user.avatar || "/placeholder.svg"} />
                               <AvatarFallback>{user.name?.charAt(0) || user.username?.charAt(0)}</AvatarFallback>
                             </Avatar>
-                            <div className="flex-1">
+                            <div className="flex-1 text-left">
                               <p className="font-medium text-sm">{user.name || user.username}</p>
                               <p className="text-xs text-muted-foreground">@{user.username}</p>
                             </div>
                             <UserPlus className="h-4 w-4 text-muted-foreground" />
-                          </div>
+                          </button>
                         ))}
                       </div>
                     </div>
@@ -441,7 +454,8 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
 
                   {/* FIXED: Selected user display */}
                   {targetUser && (
-                    <div className="p-3 rounded-lg border bg-blue-50 border-blue-200">
+                    <div className="p-3 rounded-lg border-2 border-blue-500 bg-blue-50">
+                      <p className="text-xs text-blue-600 font-semibold mb-2">Selected User:</p>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-10 w-10">
                           <AvatarImage src={targetUser.avatar || "/placeholder.svg"} />
@@ -455,6 +469,7 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
                           variant="ghost"
                           size="sm"
                           onClick={() => {
+                            console.log("Clearing target user");
                             setTargetUser(null);
                             setNewUsername("");
                             setNewAlias("");
