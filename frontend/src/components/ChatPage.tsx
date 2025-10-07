@@ -579,6 +579,8 @@ export default function ChatPage() {
 
       if (!chat.owner_id || chat.isOwner === undefined) {
         await refreshChannelOwnership(chat.id);
+
+        
       }
 
       if (chat.isSubscribed || chat.isOwner) {
