@@ -1123,41 +1123,44 @@ export default function ChatPage() {
   }
 
   const getFilteredChats = () => {
-    let chatsToFilter: any[] = []
+  let chatsToFilter: any[] = [];
 
-    switch (activeTab) {
-      case "private":
-        chatsToFilter = chats
-        break
-      case "groups":
-        chatsToFilter = groups
-        break
-      case "channels":
-        if (searchQuery.trim() && channelSearchResults.length > 0) {
-          chatsToFilter = channelSearchResults.map(channel => ({
-            ...channel,
-            type: "channel",
-            sender: channel.owner_name || "Noma'lum",
-            sender_id: channel.owner,
-            last_message: channel.description || "",
-            timestamp: channel.updated_at,
-            unread: channel.unread_count || 0,
-            avatar: "/channel-avatar.png",
-            message_type: "text",
-            room_id: `channel_${channel.id}`,
-            memberCount: channel.members?.length || 0,
-            isAdmin: channel.owner === currentUser?.id,
-            isOwner: channel.owner === currentUser?.id,
-            isSubscribed: channel.members?.includes(currentUser?.id) || channel.owner === currentUser?.id,
-            username: channel.username
-          }))
-        } else {
-          chatsToFilter = channels
-        }
-        break
-      default:
-        chatsToFilter = chats
-    }
+  switch (activeTab) {
+    case "private":
+      chatsToFilter = chats;
+      break;
+    case "groups":
+      chatsToFilter = groups;
+      break;
+    case "channels":
+      console.log("[ChatPage] Channels tab - channels:", channels);
+      console.log("[ChatPage] Channel search results:", channelSearchResults);
+      
+      if (searchQuery.trim() && channelSearchResults.length > 0) {
+        chatsToFilter = channelSearchResults.map(channel => ({
+          ...channel,
+          type: "channel",
+          sender: channel.owner_name || "Noma'lum",
+          sender_id: channel.owner,
+          last_message: channel.description || "",
+          timestamp: channel.updated_at,
+          unread: channel.unread_count || 0,
+          avatar: "/channel-avatar.png",
+          message_type: "text",
+          room_id: `channel_${channel.id}`,
+          memberCount: channel.members?.length || 0,
+          isAdmin: channel.owner === currentUser?.id,
+          isOwner: channel.owner === currentUser?.id,
+          isSubscribed: channel.is_subscribed !== undefined ? channel.is_subscribed : false,
+          username: channel.username
+        }));
+      } else {
+        chatsToFilter = channels;
+      }
+      break;
+    default:
+      chatsToFilter = chats;
+  }
 
     if (activeTab !== "channels" && searchQuery.trim()) {
       return chatsToFilter.filter((chat) => {
