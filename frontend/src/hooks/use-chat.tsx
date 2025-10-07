@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useCallback, useRef } from "react"
 import { apiClient } from "@/lib/api"
 
 export interface Message {
@@ -101,43 +101,48 @@ const updateCurrentUserProfile = useCallback((updatedData: any) => {
   console.log("[Chat] Updating current user profile:", updatedData);
 
   setCurrentUser((prev: any) => {
-    if (!prev) return updatedData;
     const newUserData = { ...prev, ...updatedData };
+
+    localStorage.setItem("user_data", JSON.stringify(newUserData));
+
     return newUserData;
   });
 
-  setChats(prev => prev.map(chat => {
-    if (chat.sender_id === updatedData.id || chat.sender_id === currentUser?.id) {
-      return {
-        ...chat,
-        name: updatedData.fullname || updatedData.username || chat.name,
-        sender: updatedData.fullname || updatedData.username || chat.sender,
-        username: updatedData.username || chat.username,
-        email: updatedData.email || chat.email
-      };
-    }
-    return chat;
-  }));
+  setChats(prevChats =>
+    prevChats.map(chat => {
+      if (chat.sender_id === updatedData.id) {
+        return {
+          ...chat,
+          name: updatedData.fullname || updatedData.username || chat.name,
+          sender: updatedData.fullname || updatedData.username || chat.sender,
+          username: updatedData.username || chat.username,
+          email: updatedData.email || chat.email,
+        };
+      }
+      return chat;
+    })
+  );
 
-  console.log("✅ Profile update completed in use-chat");
-}, [currentUser, setCurrentUser, setChats]);
+  console.log("✅ Profile update completed & localStorage synced");
+}, [setCurrentUser, setChats]);
 
-useEffect(() => {
-  const initializeUser = async () => {
-    try {
-      const response = await apiClient.getMe();
-      const user = response.data;
-      setCurrentUser(user);
-      console.log("[Chat] Current user loaded:", user);
-      initializeStatusWebSocket();
-      initializeNotificationsWebSocket();
-      await loadGroups();
-    } catch (error) {
-      console.error("Failed to load user:", error);
-    }
-  };
-  initializeUser();
-}, []);
+
+// useEffect(() => {
+//   const initializeUser = async () => {
+//     try {
+//       const response = await apiClient.getMe();
+//       const user = response.data;
+//       setCurrentUser(user);
+//       console.log("[Chat] Current user loaded:", user);
+//       initializeStatusWebSocket();
+//       initializeNotificationsWebSocket();
+//       await loadGroups();
+//     } catch (error) {
+//       console.error("Failed to load user:", error);
+//     }
+//   };
+//   initializeUser();
+// }, []);
 
   const loadGroups = useCallback(async () => {
     try {
