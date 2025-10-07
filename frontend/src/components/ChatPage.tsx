@@ -968,15 +968,21 @@ export default function ChatPage() {
         }
 
         if (roomId && chatWsRef.current?.readyState === WebSocket.OPEN) {
-          chatWsRef.current.send(JSON.stringify({
-            action: isFile ? "delete_file" : "delete_message",
-            message_id: messageId
-          }));
+          if (isFile) {
+            chatWsRef.current.send(JSON.stringify({
+              action: "delete_file",
+              file_id: messageId
+            }));
+          } else {
+            chatWsRef.current.send(JSON.stringify({
+              action: "delete_message",
+              message_id: messageId
+            }));
+          }
         }
       }
     } catch (error) {
       console.error("Failed to delete message:", error);
-      alert("Xabarni o'chirish muvaffaqiyatsiz. Iltimos, qayta urinib ko'ring.");
 
       if (selectedChat.type === "group") {
         const groupId = selectedChat.id.toString();
@@ -1892,7 +1898,11 @@ export default function ChatPage() {
                                       {formatMessageTime(msg.timestamp)}
                                     </span>
                                     {isRightAligned && (
-                                      <MessageStatus status={getMessageStatus(msg)} isOwn={false} />
+                                      <MessageStatus
+                                        status={getMessageStatus(msg)}
+                                        isOwn={true}
+                                        isGroup={selectedChat?.type === "group"}
+                                      />
                                     )}
                                   </div>
                                 </div>

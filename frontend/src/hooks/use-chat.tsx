@@ -531,8 +531,9 @@ export function useChat() {
                 if (!roomId) return prev;
 
                 const updatedRoomMessages = (prev[roomId] || []).filter(msg => {
-                  const isTargetMessage = msg.id === data.message_id?.toString() ||
-                    msg.id === data.file_id?.toString();
+                  const isTargetMessage =
+                    (data.message_id && msg.id === data.message_id.toString()) ||
+                    (data.file_id && msg.id === data.file_id.toString());
                   return !isTargetMessage;
                 });
 
@@ -574,17 +575,19 @@ export function useChat() {
               }
               break
 
-            // Chat WebSocket handler
             case "read":
+              console.log("[Chat] Message read confirmation:", data);
               setMessages(prev => {
                 const roomId = data.room_id?.toString();
                 if (!roomId) return prev;
 
                 const updatedRoomMessages = (prev[roomId] || []).map(msg => {
                   if (data.message_id && msg.id === data.message_id.toString()) {
+                    console.log(`[Chat] Marking message ${msg.id} as read`);
                     return { ...msg, is_read: true };
                   }
                   if (data.file_id && msg.id === data.file_id.toString()) {
+                    console.log(`[Chat] Marking file ${msg.id} as read`);
                     return { ...msg, is_read: true };
                   }
                   return msg;
@@ -596,12 +599,13 @@ export function useChat() {
                 };
               });
 
-              // Chat ro'yxatini ham yangilash
               if (data.room_id) {
                 setChats(prev => prev.map(chat => {
                   const chatRoomId = chat.room_id || chat.id?.toString();
                   if (chatRoomId === data.room_id.toString()) {
-                    return { ...chat, unread: data.unread_count || 0 };
+                    const newUnread = Math.max(0, (chat.unread || 0) - 1);
+                    console.log(`[Chat] Updating chat unread count: ${chat.unread} -> ${newUnread}`);
+                    return { ...chat, unread: newUnread };
                   }
                   return chat;
                 }));
@@ -999,10 +1003,10 @@ export function useChat() {
     (roomId: string, messageId?: string, fileId?: string) => {
       console.log("[Chat] Marking as read:", { roomId, messageId, fileId });
 
-      // Optimistic update - darhol UI ni yangilash
       setMessages(prev => {
         const updatedRoomMessages = (prev[roomId] || []).map(msg => {
           if ((messageId && msg.id === messageId) || (fileId && msg.id === fileId)) {
+            console.log(`[UI] Optimistic update: marking ${msg.id} as read`);
             return { ...msg, is_read: true };
           }
           return msg;
@@ -1014,16 +1018,16 @@ export function useChat() {
         };
       });
 
-      // Chat ro'yxatidagi unread count ni yangilash
       setChats(prev => prev.map(chat => {
         const chatRoomId = chat.room_id || chat.id?.toString();
         if (chatRoomId === roomId && chat.unread > 0) {
-          return { ...chat, unread: Math.max(0, chat.unread - 1) };
+          const newUnread = Math.max(0, chat.unread - 1);
+          console.log(`[UI] Updating chat unread: ${chat.unread} -> ${newUnread}`);
+          return { ...chat, unread: newUnread };
         }
         return chat;
       }));
 
-      // WebSocket orqali backendga xabar berish
       if (chatWsRef.current && chatWsRef.current.readyState === WebSocket.OPEN) {
         const payload: any = {
           action: "read",
@@ -1037,6 +1041,7 @@ export function useChat() {
           payload.file_id = fileId;
         }
 
+        console.log("[UI] Sending read confirmation to backend:", payload);
         chatWsRef.current.send(JSON.stringify(payload));
       }
     },
