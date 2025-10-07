@@ -55,7 +55,7 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
   const [contacts, setContacts] = useState<Contact[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  
+
   const [newUsername, setNewUsername] = useState("")
   const [newAlias, setNewAlias] = useState("")
   const [isAddingContact, setIsAddingContact] = useState(false)
@@ -66,11 +66,12 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
   const [editingContact, setEditingContact] = useState<Contact | null>(null)
   const [editAlias, setEditAlias] = useState("")
   const [isEditing, setIsEditing] = useState(false)
+  const [targetUser, setTargetUser] = useState<User | null>(null);
 
   useEffect(() => {
     const fetchContacts = async () => {
       if (!isOpen) return;
-      
+
       setIsLoading(true)
       setError(null)
       try {
@@ -108,16 +109,16 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
       }
     }
 
-    const timeoutId = setTimeout(searchUsers, 500) 
+    const timeoutId = setTimeout(searchUsers, 500)
     return () => clearTimeout(timeoutId)
   }, [newUsername])
 
   const filteredContacts = contacts.filter((contact) => {
     if (!contact) return false;
-    
+
     const alias = contact.alias || contact.name || ""
     const username = contact.username || ""
-    
+
     return (
       alias.toLowerCase().includes(searchQuery.toLowerCase()) ||
       username.toLowerCase().includes(searchQuery.toLowerCase())
@@ -125,64 +126,80 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
   })
 
   const handleAddContact = async (user?: User) => {
-  const targetUser = user || searchResults[0]
+    const targetUser = user || searchResults[0]
 
-  if (!targetUser?.id) {
-    setAddContactMessage({ type: "error", text: "Iltimos, avval foydalanuvchini tanlang" })
-    return
+    if (!targetUser?.id) {
+      setAddContactMessage({ type: "error", text: "Iltimos, avval foydalanuvchini tanlang" })
+      return
+    }
+
+    setIsAddingContact(true)
+    setAddContactMessage({ type: "", text: "" })
+
+    try {
+      const result = await apiClient.addContact(
+        targetUser.id,
+        newAlias || targetUser.name || targetUser.username
+      )
+
+      setAddContactMessage({
+        type: "success",
+        text: "Kontakt muvaffaqiyatli qo'shildi"
+      })
+      setNewUsername("")
+      setNewAlias("")
+      setSearchResults([])
+
+      console.log(result)
+
+      const contactsData = await apiClient.getContacts()
+      setContacts(Array.isArray(contactsData) ? contactsData : [])
+
+    } catch (error: any) {
+      console.error("Add contact error:", error)
+
+      const backendError = error.response?.data?.error ||
+        error.response?.data?.contact_user?.[0] ||
+        error.response?.data?.non_field_errors?.[0] ||
+        error.message
+
+      setAddContactMessage({
+        type: "error",
+        text: backendError || "Kontakt qo'shish muvaffaqiyatsiz tugadi"
+      })
+    } finally {
+      setIsAddingContact(false)
+    }
   }
-
-  setIsAddingContact(true)
-  setAddContactMessage({ type: "", text: "" })
-
-  try {
-    const result = await apiClient.addContact(
-      targetUser.id,
-      newAlias || targetUser.name || targetUser.username
-    )
-
-    setAddContactMessage({ 
-      type: "success", 
-      text: "Kontakt muvaffaqiyatli qo'shildi" 
-    })
-    setNewUsername("")
-    setNewAlias("")
-    setSearchResults([])
-
-    console.log(result)
-    
-    const contactsData = await apiClient.getContacts()
-    setContacts(Array.isArray(contactsData) ? contactsData : [])
-    
-  } catch (error: any) {
-    console.error("Add contact error:", error)
-    
-    const backendError = error.response?.data?.error || 
-                        error.response?.data?.contact_user?.[0] ||
-                        error.response?.data?.non_field_errors?.[0] ||
-                        error.message
-    
-    setAddContactMessage({ 
-      type: "error", 
-      text: backendError || "Kontakt qo'shish muvaffaqiyatsiz tugadi"
-    })
-  } finally {
-    setIsAddingContact(false)
-  }
-}
 
   const handleRemoveContact = async (contactId: number) => {
     try {
       await apiClient.removeContact(contactId)
-      
+
       const contactsData = await apiClient.getContacts()
       setContacts(Array.isArray(contactsData) ? contactsData : [])
-      
+
     } catch (error) {
       console.error("Failed to remove contact:", error)
       alert("Failed to remove contact")
     }
   }
+
+  const handleUserSelect = (user: User) => {
+    setNewUsername(user.username);
+    setNewAlias(user.name || user.username);
+    setTargetUser(user);
+    setSearchResults([]); // Search natijalarini yopish
+  }
+
+  // Search input o'zgarganda targetUser ni null qilish
+  useEffect(() => {
+    if (newUsername.trim()) {
+      setTargetUser(null);
+    }
+  }, [newUsername]);
+
+  const isAddButtonDisabled = isAddingContact || !newUsername.trim() || !targetUser;
 
   // Kontaktni tahrirlash funksiyasi
   const handleEditContact = (contact: Contact) => {
@@ -197,14 +214,14 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
     setIsEditing(true)
     try {
       await apiClient.updateContact(editingContact.id, editAlias)
-      
+
       // Kontaktlar ro'yxatini yangilash
       const contactsData = await apiClient.getContacts()
       setContacts(Array.isArray(contactsData) ? contactsData : [])
-      
+
       setEditingContact(null)
       setEditAlias("")
-      
+
     } catch (error) {
       console.error("Failed to update contact:", error)
       alert("Failed to update contact")
@@ -219,18 +236,18 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
   }
 
   const handleStartChat = (user: Contact) => {
-  console.log("Starting chat with:", user)
-  const userId = user.contact_user || user.id
-  console.log("Using user ID:", userId)
-  onStartChat(userId)
-  onClose()
-}
+    console.log("Starting chat with:", user)
+    const userId = user.contact_user || user.id
+    console.log("Using user ID:", userId)
+    onStartChat(userId)
+    onClose()
+  }
 
   const handleClose = () => {
     setSearchQuery("")
     setNewUsername("")
     setNewAlias("")
-    setAddContactMessage({ type: "", text: ""})
+    setAddContactMessage({ type: "", text: "" })
     setSearchResults([])
     setEditingContact(null)
     setEditAlias("")
@@ -282,16 +299,16 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
                         <div
                           key={contact.id}
                           className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent cursor-pointer transition-colors"
-                        > 
+                        >
                           <Avatar className="h-10 w-10">
                             <AvatarImage src={contact.avatar || contact.image || "/placeholder.svg"} />
                             <AvatarFallback>
                               {(contact.alias || contact.name || "U").charAt(0).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
-                          
-                          <div 
-                            className="flex-1 min-w-0" 
+
+                          <div
+                            className="flex-1 min-w-0"
                             onClick={() => handleUserClick(contact)}
                           >
                             <div className="flex items-center gap-2">
@@ -306,12 +323,12 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
                               @{contact.username || "user"}
                             </p>
                           </div>
-                          
+
                           <div className="flex items-center gap-1">
-                            <Button 
-                              className="cursor-pointer" 
-                              variant="ghost" 
-                              size="sm" 
+                            <Button
+                              className="cursor-pointer"
+                              variant="ghost"
+                              size="sm"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 handleStartChat(contact)
@@ -320,10 +337,10 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
                             >
                               <MessageSquare className="h-4 w-4" />
                             </Button>
-                            
-                            <Button 
-                              className="cursor-pointer" 
-                              variant="ghost" 
+
+                            <Button
+                              className="cursor-pointer"
+                              variant="ghost"
                               size="sm"
                               title="Edit contact"
                               onClick={(e) => {
@@ -333,10 +350,10 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
-                            
-                            <Button 
-                              className="cursor-pointer" 
-                              variant="ghost" 
+
+                            <Button
+                              className="cursor-pointer"
+                              variant="ghost"
                               size="sm"
                               title="Remove contact"
                               onClick={(e) => {
@@ -351,13 +368,13 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
                           </div>
                         </div>
                       ))}
-                      
+
                       {filteredContacts.length === 0 && searchQuery && (
                         <div className="text-center py-8">
                           <p className="text-muted-foreground">No contacts found</p>
                         </div>
                       )}
-                      
+
                       {filteredContacts.length === 0 && !searchQuery && !isLoading && (
                         <div className="text-center py-8">
                           <p className="text-muted-foreground">No contacts yet</p>
@@ -382,7 +399,7 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
                       <p className="text-sm text-muted-foreground">Searching...</p>
                     )}
                   </div>
-                  
+
                   {searchResults.length > 0 && (
                     <div className="space-y-2">
                       <Label>Search Results:</Label>
@@ -391,10 +408,7 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
                           <div
                             key={user.id}
                             className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-accent"
-                            onClick={() => {
-                              setNewUsername(user.username)
-                              setNewAlias(user.name || user.username)
-                            }}
+                            onClick={() => handleUserSelect(user)}
                           >
                             <Avatar className="h-8 w-8">
                               <AvatarImage src={user.avatar || "/placeholder.svg"} />
@@ -419,7 +433,7 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
                       </div>
                     </div>
                   )}
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="alias">Alias (Optional)</Label>
                     <Input
@@ -431,18 +445,17 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
                   </div>
 
                   {addContactMessage.text && (
-                    <div className={`p-3 rounded text-sm ${
-                      addContactMessage.type === "error" 
-                        ? "bg-red-100 text-red-700 border border-red-200" 
+                    <div className={`p-3 rounded text-sm ${addContactMessage.type === "error"
+                        ? "bg-red-100 text-red-700 border border-red-200"
                         : "bg-green-100 text-green-700 border border-green-200"
-                    }`}>
+                      }`}>
                       {addContactMessage.text}
                     </div>
                   )}
 
-                  <Button 
+                  <Button
                     onClick={() => handleAddContact()}
-                    disabled={isAddingContact || !newUsername.trim() || searchResults.length === 0}
+                    disabled={isAddButtonDisabled}
                     className="w-full"
                   >
                     {isAddingContact ? (
@@ -470,7 +483,7 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
           <DialogHeader>
             <DialogTitle>Edit Contact</DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             {editingContact && (
               <div className="flex items-center gap-3 p-3 rounded-lg">
@@ -486,7 +499,7 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
                 </div>
               </div>
             )}
-            
+
             <div className="space-y-2">
               <Label htmlFor="edit-alias">Alias *</Label>
               <Input
@@ -499,16 +512,16 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
               <p className="text-xs text-muted-foreground">
               </p>
             </div>
-            
+
             <div className="flex gap-2 justify-end pt-4">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setEditingContact(null)}
                 disabled={isEditing}
               >
                 Cancel
               </Button>
-              <Button 
+              <Button
                 onClick={handleSaveEdit}
                 disabled={isEditing || !editAlias.trim()}
                 className="cursor-pointer"
