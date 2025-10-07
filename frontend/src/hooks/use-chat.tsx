@@ -131,7 +131,6 @@ useEffect(() => {
   const initializeUser = async () => {
     try {
       const cachedUser = localStorage.getItem("user_data");
-      
       if (cachedUser) {
         const parsedUser = JSON.parse(cachedUser);
         setCurrentUser(parsedUser);
@@ -140,12 +139,9 @@ useEffect(() => {
 
       const response = await apiClient.getMe();
       const user = response.data;
-      
-      if (!cachedUser || JSON.stringify(user) !== cachedUser) {
-        setCurrentUser(user);
-        localStorage.setItem("user_data", JSON.stringify(user));
-        console.log("[Chat] Fresh user loaded from API:", user);
-      }
+      setCurrentUser(user);
+
+      console.log("[Chat] Fresh user loaded from API (not saved to localStorage):", user);
 
       initializeStatusWebSocket();
       initializeNotificationsWebSocket();
