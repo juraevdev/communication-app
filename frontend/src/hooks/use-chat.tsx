@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { apiClient } from "@/lib/api"
 
 export interface Message {
@@ -127,22 +127,22 @@ const updateCurrentUserProfile = useCallback((updatedData: any) => {
 }, [setCurrentUser, setChats]);
 
 
-// useEffect(() => {
-//   const initializeUser = async () => {
-//     try {
-//       const response = await apiClient.getMe();
-//       const user = response.data;
-//       setCurrentUser(user);
-//       console.log("[Chat] Current user loaded:", user);
-//       initializeStatusWebSocket();
-//       initializeNotificationsWebSocket();
-//       await loadGroups();
-//     } catch (error) {
-//       console.error("Failed to load user:", error);
-//     }
-//   };
-//   initializeUser();
-// }, []);
+useEffect(() => {
+  const initializeUser = async () => {
+    try {
+      const response = await apiClient.getMe();
+      const user = response.data;
+      setCurrentUser(user);
+      console.log("[Chat] Current user loaded:", user);
+      initializeStatusWebSocket();
+      initializeNotificationsWebSocket();
+      await loadGroups();
+    } catch (error) {
+      console.error("Failed to load user:", error);
+    }
+  };
+  initializeUser();
+}, []);
 
   const loadGroups = useCallback(async () => {
     try {
