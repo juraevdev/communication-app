@@ -94,21 +94,6 @@ export function UserProfileModal({
   useEffect(() => {
     const fetchCurrentUserProfile = async () => {
       if (!isOwnProfile || !isOpen || !isEditing) return;
-
-      try {
-        const profileData = await apiClient.getProfile()
-        console.log("Profil ma'lumotlari:", profileData)
-
-        if (profileData.phone_number) {
-          setCurrentUserPhone(profileData.phone_number)
-          setEditData(prev => ({
-            ...prev,
-            phone: profileData.phone_number
-          }))
-        }
-      } catch (error) {
-        console.error("Profil ma'lumotlarini olishda xato:", error)
-      }
     }
 
     fetchCurrentUserProfile()
@@ -129,7 +114,6 @@ export function UserProfileModal({
     setSaveMessage({ type: "", text: "" });
 
     try {
-      // 🔥 API so‘rov
       const updatedUser = await apiClient.updateUserProfile({
         fullname: editData.fullname,
         username: editData.username,
@@ -139,12 +123,10 @@ export function UserProfileModal({
 
       console.log("✅ Profile updated:", updatedUser);
 
-      // 🔥 Parentga xabar beramiz (ChatPage ichidagi handleProfileUpdate)
       if (onProfileUpdate) {
         onProfileUpdate(updatedUser);
       }
 
-      // 🔄 Local state yangilash
       setSaveMessage({ type: "success", text: "Profile updated successfully" });
       setIsEditing(false);
       setEditData({
