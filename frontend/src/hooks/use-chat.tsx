@@ -1484,12 +1484,12 @@ useEffect(() => {
 
   const loadChannels = useCallback(async () => {
   try {
-    console.log("[Chat] Loading channels...");
     const channelsData = await apiClient.getChannels();
     console.log("[Chat] Raw channels data:", channelsData);
 
     const formattedChannels: Chat[] = channelsData.map((channel: any) => {
-      console.log(`[Chat] Processing channel ${channel.id}:`, channel);
+      const isOwner = channel.owner === currentUser?.id;
+      const isSubscribed = channel.is_subscribed === true || isOwner;
       
       return {
         id: channel.id,
@@ -1505,10 +1505,11 @@ useEffect(() => {
         type: "channel",
         description: channel.description,
         memberCount: channel.member_count || 0,
-        isAdmin: channel.is_owner || channel.owner === currentUser?.id,
-        isOwner: channel.is_owner || channel.owner === currentUser?.id,
-        isSubscribed: channel.is_subscribed === true || channel.is_member === true,
-        username: channel.username
+        isAdmin: isOwner,   
+        isOwner: isOwner, 
+        isSubscribed: isSubscribed,
+        username: channel.username,
+        owner_id: channel.owner 
       }
     });
 

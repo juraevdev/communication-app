@@ -702,32 +702,34 @@ export default function ChatPage() {
   };
 
   const handleChannelSelect = async (channel: any) => {
-    console.log("Selected channel from search:", channel)
+  console.log("Selected channel from search:", channel);
 
-    const formattedChannel = {
-      id: channel.id,
-      name: channel.name,
-      sender: channel.owner_name || "Noma'lum",
-      sender_id: channel.owner,
-      last_message: channel.last_message || channel.description || "",
-      timestamp: channel.timestamp || channel.updated_at,
-      unread: channel.unread_count || 0,
-      avatar: "/channel-avatar.png",
-      message_type: "text",
-      room_id: `channel_${channel.id}`,
-      type: "channel",
-      description: channel.description,
-      memberCount: channel.member_count || 0,
-      isAdmin: channel.isOwner || channel.owner === currentUser?.id,
-      isOwner: channel.isOwner || channel.owner === currentUser?.id,
-      isSubscribed: channel.is_subscribed !== undefined ? channel.is_subscribed : false,
-      username: channel.username
-    }
-
-    handleChatSelect(formattedChannel)
-    setSearchQuery("")
-    setChannelSearchResults([])
+  const formattedChannel = {
+    id: channel.id,
+    name: channel.name,
+    sender: channel.owner_name || "Noma'lum",
+    sender_id: channel.owner,
+    last_message: channel.last_message || channel.description || "",
+    timestamp: channel.timestamp || channel.updated_at,
+    unread: channel.unread_count || 0,
+    avatar: "/channel-avatar.png",
+    message_type: "text",
+    room_id: `channel_${channel.id}`,
+    type: "channel",
+    description: channel.description,
+    memberCount: channel.member_count || 0,
+    isAdmin: channel.isOwner || channel.owner === currentUser?.id,
+    isOwner: channel.isOwner || channel.owner === currentUser?.id,  
+    isSubscribed: channel.is_subscribed !== undefined ? channel.is_subscribed : false,
+    username: channel.username,
+    owner_id: channel.owner   
   }
+
+  console.log("Formatted channel for selection:", formattedChannel);
+  handleChatSelect(formattedChannel);
+  setSearchQuery("");
+  setChannelSearchResults([]);
+}
 
   const handleCreateGroup = async (groupData: { name: string; description?: string }) => {
     try {
@@ -1434,10 +1436,10 @@ export default function ChatPage() {
     if (!selectedChat || selectedChat.type !== "channel") return false
 
     if (selectedChat.isOwner === true || selectedChat.owner_id === currentUser?.id) {
-      return false
+      return false;
     }
 
-    return true
+    return true;
   }
 
   useEffect(() => {
