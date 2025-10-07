@@ -7,7 +7,7 @@ from chat.models import Message
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
-        fields = ['username', 'fullname', 'email', 'phone_number', 'is_online', 'last_seen']
+        fields = ['id', 'username', 'fullname', 'email', 'phone_number', 'is_online', 'last_seen']
 
 class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:

@@ -100,7 +100,23 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
       setIsSearching(true)
       try {
         const results = await apiClient.searchUsers(newUsername)
-        setSearchResults(Array.isArray(results) ? results : [])
+        console.log("Raw API search results:", results)
+        
+        // API response'ni normalize qilish
+        const normalizedResults = Array.isArray(results) ? results.map(user => ({
+          id: user.id || user.user_id || user.pk,
+          name: user.name || user.fullname || user.full_name,
+          username: user.username,
+          email: user.email,
+          avatar: user.avatar,
+          phone_number: user.phone_number,
+          is_online: user.is_online,
+          last_seen: user.last_seen,
+          role: user.role
+        })) : []
+        
+        console.log("Normalized search results:", normalizedResults)
+        setSearchResults(normalizedResults)
       } catch (error) {
         console.error("Search error:", error)
         setSearchResults([])
@@ -206,10 +222,22 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
   // FIXED: handleUserSelect - targetUser ni o'rnatish va search natijalarini yopish
   const handleUserSelect = (user: User) => {
     console.log("handleUserSelect called with:", user);
+    console.log("User ID:", user.id);
+    
+    if (!user.id) {
+      console.error("User has no ID field!");
+      setAddContactMessage({ 
+        type: "error", 
+        text: "Xato: Foydalanuvchi ID topilmadi. Iltimos, qayta urinib ko'ring." 
+      });
+      return;
+    }
+    
     setTargetUser(user);
     setNewUsername(user.username);
     setNewAlias(user.name || user.username);
     setSearchResults([]); // Search natijalarini yopish
+    setAddContactMessage({ type: "", text: "" }); // Clear any previous errors
     console.log("Target user set to:", user);
   }
 
