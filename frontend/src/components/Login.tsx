@@ -47,8 +47,6 @@ const handleSubmit = async (e: React.FormEvent) => {
     console.log("✅ User data saved to localStorage");
 
     navigate("/");
-    
-    window.location.reload();
 
   } catch (error: any) {
     console.error("❌ Login error:", error.response?.data || error.message);

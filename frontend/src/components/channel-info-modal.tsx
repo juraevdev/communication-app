@@ -61,8 +61,9 @@ export function ChannelInfoModal({ isOpen, onClose, channel, onChannelUpdate }: 
       username: channel.username,
       isPrivate: channel.isPrivate,
     });
+    setIsSubscribed(channel.isSubscribed);
   }
-}, [channel]);
+}, [channel, isOpen]);
 
   useEffect(() => {
   const getCurrentUser = async () => {

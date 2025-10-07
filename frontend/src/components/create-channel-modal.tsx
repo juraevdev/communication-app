@@ -60,15 +60,6 @@ export function CreateChannelModal({
     }
   }
 
-  const generateUsername = (name: string) => {
-    const username = name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, "")
-      .replace(/\s+/g, "_")
-      .substring(0, 20)
-    setChannelData(prev => ({ ...prev, username }))
-  }
-
   // Modal yopilganda reset qilish
   const handleClose = () => {
     setChannelData({
@@ -97,7 +88,6 @@ export function CreateChannelModal({
               onChange={(e) => {
                 setChannelData(prev => ({ ...prev, name: e.target.value }))
                 if (!channelData.username) {
-                  generateUsername(e.target.value)
                 }
               }}
               required

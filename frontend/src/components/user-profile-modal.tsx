@@ -100,53 +100,69 @@ export function UserProfileModal({
   }, [isOpen, isOwnProfile, isEditing])
 
   const handleSave = async () => {
-    if (!editData.fullname?.trim()) {
-      setSaveMessage({ type: "error", text: "Name is required" });
-      return;
+  if (!editData.fullname?.trim()) {
+    setSaveMessage({ type: "error", text: "Name is required" });
+    return;
+  }
+
+  if (!editData.username.trim()) {
+    setSaveMessage({ type: "error", text: "Username is required" });
+    return;
+  }
+
+  setIsSaving(true);
+  setSaveMessage({ type: "", text: "" });
+
+  try {
+    const updatedUser = await apiClient.updateUserProfile({
+      fullname: editData.fullname,
+      username: editData.username,
+      phone_number: editData.phone_number,
+      email: editData.email,
+    });
+
+    console.log("✅ Profile updated:", updatedUser);
+
+    // ✅ 1. Parent component ni yangilash
+    if (onProfileUpdate) {
+      onProfileUpdate(updatedUser);
     }
 
-    if (!editData.username.trim()) {
-      setSaveMessage({ type: "error", text: "Username is required" });
-      return;
-    }
+    // ✅ 2. Local state larni yangilash
+    setEditData({
+      fullname: updatedUser.fullname,
+      username: updatedUser.username,
+      email: updatedUser.email,
+      phone_number: updatedUser.phone_number,
+    });
+    
+    setCurrentUserPhone(updatedUser.phone_number);
 
-    setIsSaving(true);
-    setSaveMessage({ type: "", text: "" });
-
-    try {
-      const updatedUser = await apiClient.updateUserProfile({
-        fullname: editData.fullname,
-        username: editData.username,
-        phone_number: editData.phone_number,
-        email: editData.email,
-      });
-
-      console.log("✅ Profile updated:", updatedUser);
-
-      if (onProfileUpdate) {
-        onProfileUpdate(updatedUser);
+    // ✅ 3. localStorage ni yangilash (agar kerak bo'lsa)
+    if (isOwnProfile) {
+      const currentUserData = localStorage.getItem('user_data');
+      if (currentUserData) {
+        const parsedData = JSON.parse(currentUserData);
+        const updatedUserData = { ...parsedData, ...updatedUser };
+        localStorage.setItem('user_data', JSON.stringify(updatedUserData));
+        console.log("✅ localStorage updated with new profile data");
       }
-
-      setSaveMessage({ type: "success", text: "Profile updated successfully" });
-      setIsEditing(false);
-      setEditData({
-        fullname: updatedUser.fullname,
-        username: updatedUser.username,
-        email: updatedUser.email,
-        phone_number: updatedUser.phone_number,
-      });
-
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.message ||
-        error.message ||
-        "Failed to update profile";
-      setSaveMessage({ type: "error", text: errorMessage });
-      console.error("❌ Profile update error:", error);
-    } finally {
-      setIsSaving(false);
     }
-  };
+
+    setSaveMessage({ type: "success", text: "Profile updated successfully" });
+    setIsEditing(false);
+
+  } catch (error: any) {
+    const errorMessage =
+      error.response?.data?.message ||
+      error.message ||
+      "Failed to update profile";
+    setSaveMessage({ type: "error", text: errorMessage });
+    console.error("❌ Profile update error:", error);
+  } finally {
+    setIsSaving(false);
+  }
+};
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {

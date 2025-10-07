@@ -213,10 +213,12 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
   }
 
   const handleStartChat = (user: Contact) => {
-    console.log("Starting chat with:", user.id)
-    onStartChat(user.contact_user || user.id)
-    onClose()
-  }
+  console.log("Starting chat with:", user)
+  const userId = user.contact_user || user.id
+  console.log("Using user ID:", userId)
+  onStartChat(userId)
+  onClose()
+}
 
   const handleClose = () => {
     setSearchQuery("")
