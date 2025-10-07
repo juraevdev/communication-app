@@ -84,19 +84,21 @@ export function GroupInfoModal({ isOpen, onClose, group, onGroupUpdate }: GroupI
     const membersData = await apiClient.getGroupMembers(group.id);
     setMembers(membersData);
 
-    const response = await apiClient.getMe();
-    const currentUser = response.data;
-    const currentUserId = currentUser.id;
+    const cachedUser = localStorage.getItem("user_data");
+    if (cachedUser) {
+      const currentUser = JSON.parse(cachedUser);
+      const currentUserId = currentUser.id;
 
-    const currentUserMember = membersData.find(
-      (member: GroupMember) => member.user === currentUserId
-    );
-
-    if (currentUserMember) {
-      setUserRole(currentUserMember.role);
-      setIsAdmin(
-        currentUserMember.role === "owner" || currentUserMember.role === "admin"
+      const currentUserMember = membersData.find(
+        (member: GroupMember) => member.user === currentUserId
       );
+
+      if (currentUserMember) {
+        setUserRole(currentUserMember.role);
+        setIsAdmin(
+          currentUserMember.role === "owner" || currentUserMember.role === "admin"
+        );
+      }
     }
   } catch (error) {
     console.error("Failed to load group members:", error);
@@ -104,7 +106,6 @@ export function GroupInfoModal({ isOpen, onClose, group, onGroupUpdate }: GroupI
     setLoading(false);
   }
 };
-
 
   const checkPhoneNumber = async () => {
     if (!phoneNumber) {

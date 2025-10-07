@@ -135,13 +135,18 @@ useEffect(() => {
         const parsedUser = JSON.parse(cachedUser);
         setCurrentUser(parsedUser);
         console.log("[Chat] Cached user loaded:", parsedUser);
+        
+        initializeStatusWebSocket();
+        initializeNotificationsWebSocket();
+        await loadGroups();
+        return;   
       }
 
       const response = await apiClient.getMe();
       const user = response.data;
       setCurrentUser(user);
 
-      console.log("[Chat] Fresh user loaded from API (not saved to localStorage):", user);
+      console.log("[Chat] Fresh user loaded from API:", user);
 
       initializeStatusWebSocket();
       initializeNotificationsWebSocket();

@@ -68,6 +68,14 @@ export function ChannelInfoModal({ isOpen, onClose, channel, onChannelUpdate }: 
   useEffect(() => {
   const getCurrentUser = async () => {
     try {
+      const cachedUser = localStorage.getItem("user_data");
+      if (cachedUser) {
+        const parsedUser = JSON.parse(cachedUser);
+        setCurrentUser(parsedUser);
+        console.log("[Profile] User loaded from localStorage:", parsedUser);
+        return;   
+      }
+
       const response = await apiClient.getMe();
       setCurrentUser(response.data);  
     } catch (error) {
