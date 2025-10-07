@@ -141,9 +141,9 @@ export default function ChatPage() {
   } | null>(null)
 
   const videoCall = useVideoCall({
-    currentUserId: currentUser?.id,
-    currentUserName: currentUser?.name || currentUser?.username || 'User'
-  })
+  currentUserId: currentUser?.id ? Number(currentUser.id) : undefined,
+  currentUserName: currentUser?.name || currentUser?.username || 'User'
+});
 
   const [selectedChat, setSelectedChat] = useState<any>(null)
   const [message, setMessage] = useState("")
@@ -274,33 +274,53 @@ export default function ChatPage() {
     }
   }, [refreshChannelsTrigger])
 
-  const handleStartVideoCall = async () => {
-    if (!selectedChat || !currentUser) return;
+const handleStartVideoCall = async () => {
+  if (!selectedChat || !currentUser) {
+    console.error('[ChatPage] Cannot start call: no selected chat or current user');
+    return;
+  }
 
-    try {
-      const roomId = `videocall_${selectedChat.id}_${Date.now()}`;
+  try {
+    const roomId = `videocall_${selectedChat.id}_${Date.now()}`;
+    const targetUserId = selectedChat.id;
 
-      setVideoCallInfo({
-        roomId,
-        type: selectedChat.type === 'group' ? 'group' : 'private',
-        name: getChatName(selectedChat)
-      });
+    console.log('[ChatPage] Starting video call:', {
+      selectedChat,
+      currentUser: currentUser.id,
+      targetUserId,
+      roomId
+    });
 
-      await videoCall.startCall(roomId);
-
-      if (selectedChat.type === 'private') {
-        const targetUserId = selectedChat.id;
-        videoCall.sendCallInvitation(roomId, targetUserId, 'video');
-      }
-
-      setVideoCallModalOpen(true);
-      console.log('[ChatPage] Video call started and invitation sent');
-
-    } catch (error) {
-      console.error('Failed to start video call:', error);
-      alert('Video qo\'ng\'iroqni boshlash muvaffaqiyatsiz. Kamera/mikron ruxsatlarini tekshiring.');
+    if (targetUserId === currentUser.id) {
+      console.error('[ChatPage] Error: Cannot call yourself');
+      return;
     }
-  };
+
+    setVideoCallInfo({
+      roomId,
+      type: selectedChat.type === 'group' ? 'group' : 'private',
+      name: getChatName(selectedChat)
+    });
+
+    await videoCall.startCall(roomId);
+
+    if (selectedChat.type === 'private') {
+      // ✅ Yana bir bor tekshirish
+      if (targetUserId === currentUser.id) {
+        console.error('[ChatPage] Critical: Attempted to call self after validation');
+        return;
+      }
+      
+      videoCall.sendCallInvitation(roomId, targetUserId, 'video');
+      console.log('[ChatPage] Video call invitation sent to:', targetUserId);
+    }
+
+    setVideoCallModalOpen(true);
+
+  } catch (error) {
+    console.error('Failed to start video call:', error);
+  }
+};
 
   const handleEndVideoCall = () => {
     videoCall.endCall();
