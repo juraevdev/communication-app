@@ -188,38 +188,51 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   
-
 const handleProfileUpdate = async (updatedUser: any) => {
   try {
-    // ✅ Agar updatedUser allaqachon serverdan kelgan bo'lsa
-    console.log("Profile updated:", updatedUser);
+    console.log("✅ Profile update received:", updatedUser);
 
-    // ✅ localStorage ni yangilash
+    localStorage.removeItem("user_data");
+    localStorage.removeItem("user");
     localStorage.setItem("user_data", JSON.stringify(updatedUser));
+    localStorage.setItem("user", JSON.stringify(updatedUser));
 
-    // ✅ Chat state ni yangilash
     if (updateCurrentUserProfile) {
       updateCurrentUserProfile(updatedUser);
     }
 
     setCurrentUser(updatedUser);
 
-    // ✅ Agar selected chat o'z profilimiz bo'lsa
     if (selectedChat && selectedChat.type === "private" && selectedChat.sender_id === currentUser?.id) {
       setSelectedChat((prev: any) => prev ? { 
         ...prev, 
         name: updatedUser.fullname || updatedUser.username,
         sender: updatedUser.fullname || updatedUser.username,
         username: updatedUser.username,
-        email: updatedUser.email
+        email: updatedUser.email,
+        phone_number: updatedUser.phone_number
       } : prev);
     }
 
+    setChats(prev => prev.map(chat => {
+      if (chat.sender_id === currentUser?.id) {
+        return {
+          ...chat,
+          name: updatedUser.fullname || updatedUser.username,
+          sender: updatedUser.fullname || updatedUser.username,
+          username: updatedUser.username,
+          email: updatedUser.email
+        };
+      }
+      return chat;
+    }));
+
+    console.log("✅ Profile update completed");
+
   } catch (error) {
-    console.error("Failed to update profile:", error);
+    console.error("❌ Failed to update profile:", error);
   }
 };
-
 
   const refreshGroupsList = (leftGroupId?: number) => {
     if (leftGroupId) {

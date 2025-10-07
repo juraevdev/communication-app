@@ -31,6 +31,8 @@ export interface Message {
 }
 
 export interface Chat {
+  username: any
+  email: any
   isOwner: boolean
   isSubscribed: boolean
   id: number
@@ -95,33 +97,40 @@ export function useChat() {
   const channelConnectionsRef = useRef<Map<string, WebSocket>>(new Map())
 
 
-  const updateCurrentUserProfile = useCallback((updatedData: any) => {
+const updateCurrentUserProfile = useCallback((updatedData: any) => {
   console.log("[Chat] Updating current user profile:", updatedData);
 
+  try {
+    localStorage.removeItem('user');
+    localStorage.removeItem('user_data');
+    localStorage.setItem('user', JSON.stringify(updatedData));
+    localStorage.setItem('user_data', JSON.stringify(updatedData));
+    console.log("✅ localStorage updated successfully");
+  } catch (error) {
+    console.error('❌ [Chat] Failed to update user data in localStorage:', error);
+  }
+
   setCurrentUser((prev: any) => {
-    if (!prev) return prev;
+    if (!prev) return updatedData;
     const newUserData = { ...prev, ...updatedData };
-    
-    try {
-      localStorage.setItem('user', JSON.stringify(newUserData));
-    } catch (error) {
-      console.error('[Chat] Failed to update user data in localStorage:', error);
-    }
-    
     return newUserData;
   });
 
   setChats(prev => prev.map(chat => {
-    if (chat.sender_id === currentUser?.id) {
+    if (chat.sender_id === updatedData.id || chat.sender_id === currentUser?.id) {
       return {
         ...chat,
         name: updatedData.fullname || updatedData.username || chat.name,
-        sender: updatedData.fullname || updatedData.username || chat.sender
+        sender: updatedData.fullname || updatedData.username || chat.sender,
+        username: updatedData.username || chat.username,
+        email: updatedData.email || chat.email
       };
     }
     return chat;
   }));
-}, [currentUser]);
+
+  console.log("✅ Profile update completed in use-chat");
+}, [currentUser, setCurrentUser, setChats]);
 
 useEffect(() => {
   const initializeUser = async () => {

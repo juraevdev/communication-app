@@ -76,14 +76,23 @@ export const apiClient = {
 
 
   async updateUserProfile(data: {
-    fullname?: string;
-    username: string;
-    email: string;
-    phone_number: string;
-  }) {
-    const response = await api.put('/accounts/user/edit/', data);
-    return response.data
-  },
+  fullname?: string;
+  username: string;
+  email: string;
+  phone_number: string;
+}) {
+  const response = await api.put('/accounts/user/edit/', data, {
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    }
+  });
+  
+  console.log("✅ updateUserProfile() response:", response.data);
+  
+  return response.data;
+},
 
   // async updateProfile(data: {
   //   phone_number: string;
@@ -106,9 +115,19 @@ export const apiClient = {
   // },
 
   async getUserProfile(contactUserId: any) {
-    const response = await api.get(`/accounts/user/${contactUserId}`)
-    return response.data
-  },
+  const timestamp = new Date().getTime();
+  const response = await api.get(`/accounts/user/${contactUserId}/?t=${timestamp}`, {
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    }
+  });
+  
+  console.log("✅ getUserProfile() response:", response.data);
+  
+  return response.data;
+},
 
   async getProfile() {
     const response = await api.get('/accounts/me/');
@@ -125,7 +144,17 @@ export const apiClient = {
   },
 
   async getMe() {
-  const response = await api.get('/accounts/me/');
+  const timestamp = new Date().getTime();
+  const response = await api.get(`/accounts/me/?t=${timestamp}`, {
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    }
+  });
+  
+  console.log("✅ getMe() response:", response.data);
+  
   return response;
 },
 

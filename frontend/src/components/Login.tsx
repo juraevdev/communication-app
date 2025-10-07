@@ -20,30 +20,44 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-  
-    try {
-      await apiClient.login(email, password);
-  
-      const accessToken = localStorage.getItem('access_token');
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setIsLoading(true);
 
-      if (!accessToken) {
-        throw new Error("No access token received");
-      }
-  
-      const userResponse = await getCurrentUserInfo(accessToken);
-      localStorage.setItem("user", JSON.stringify(userResponse.data));
-  
-      navigate("/");
-    } catch (error: any) {
-      console.error(error.response?.data || error.message);
-      alert("Login failed. Check your credentials.");
-    } finally {
-      setIsLoading(false);
+  try {
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    console.log("✅ All storage cleared before login");
+
+    await apiClient.login(email, password);
+
+    const accessToken = localStorage.getItem('access_token');
+
+    if (!accessToken) {
+      throw new Error("No access token received");
     }
-  };
+
+    const userResponse = await getCurrentUserInfo(accessToken);
+    
+    console.log("✅ Fresh user data received:", userResponse.data);
+
+    localStorage.setItem("user", JSON.stringify(userResponse.data));
+    localStorage.setItem("user_data", JSON.stringify(userResponse.data));
+
+    console.log("✅ User data saved to localStorage");
+
+    navigate("/");
+    
+    window.location.reload();
+
+  } catch (error: any) {
+    console.error("❌ Login error:", error.response?.data || error.message);
+    alert("Login failed. Check your credentials.");
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-gray-900 from-slate-50 to-blue-50 flex items-center justify-center p-4">

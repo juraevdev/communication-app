@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Edit, Save, X, Eye, EyeOff } from "lucide-react"
 import { apiClient } from "@/lib/api"
+import { clearUserDataCache, refreshUserData } from '@/utils/cache';
 
 interface UserProfileModalProps {
   isOpen: boolean
@@ -114,7 +115,7 @@ export function UserProfileModal({
     fetchCurrentUserProfile()
   }, [isOpen, isOwnProfile, isEditing])
 
-  const handleSave = async () => {
+const handleSave = async () => {
   if (!editData.fullname?.trim()) {
     setSaveMessage({ type: "error", text: "Name is required" })
     return
@@ -129,6 +130,8 @@ export function UserProfileModal({
   setSaveMessage({ type: "", text: "" })
 
   try {
+    clearUserDataCache();
+
     await apiClient.updateUserProfile({
       fullname: editData.fullname,
       username: editData.username,
@@ -136,13 +139,12 @@ export function UserProfileModal({
       email: editData.email,
     });
 
-    const response = await apiClient.getMe();
-    const freshUserData = response.data;  
-    
-    localStorage.setItem("user_data", JSON.stringify(freshUserData));
+    const freshUserData = await refreshUserData(apiClient);
+
+    console.log("✅ Fresh user data:", freshUserData);
 
     if (isOwnProfile && onProfileUpdate) {
-      await onProfileUpdate(freshUserData);   
+      await onProfileUpdate(freshUserData);
     }
 
     setSaveMessage({ type: "success", text: "Profile updated successfully" })
@@ -155,11 +157,16 @@ export function UserProfileModal({
       phone_number: freshUserData.phone_number || editData.phone_number,
     })
 
+    setTimeout(() => {
+      window.location.reload();
+    }, 1500);
+
   } catch (error: any) {
     const errorMessage = error.response?.data?.message ||
       error.message ||
       "Failed to update profile"
     setSaveMessage({ type: "error", text: errorMessage })
+    console.error("❌ Profile update error:", error);
   } finally {
     setIsSaving(false)
   }
@@ -236,6 +243,21 @@ export function UserProfileModal({
       setIsChangingPassword(false)
     }
   }
+
+  useEffect(() => {
+  if (isOpen && isOwnProfile) {
+    refreshUserData(apiClient).then(freshData => {
+      setEditData({
+        fullname: freshData.fullname,
+        username: freshData.username,
+        email: freshData.email,
+        phone_number: freshData.phone_number,
+      });
+    }).catch(error => {
+      console.error("❌ Error loading user data:", error);
+    });
+  }
+}, [isOpen, isOwnProfile]); 
 
   const handlePasswordChange = (field: string, value: string) => {
     setPasswordData(prev => ({
