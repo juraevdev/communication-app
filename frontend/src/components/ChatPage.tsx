@@ -2056,8 +2056,8 @@ export default function ChatPage() {
                     onClick={handleChannelAction}
                     disabled={isChannelActionLoading}
                     className={`flex items-center gap-2 ${selectedChat.isSubscribed
-                      ? "bg-red-600 hover:bg-red-700 text-white"
-                      : "bg-blue-600 hover:bg-blue-700 text-white"
+                        ? "bg-red-600 hover:bg-red-700 text-white"
+                        : "bg-blue-600 hover:bg-blue-700 text-white"
                       }`}
                   >
                     {isChannelActionLoading ? (
@@ -2075,47 +2075,66 @@ export default function ChatPage() {
                     )}
                   </Button>
                 </div>
-              ) : selectedChat?.type === "channel" && isChannelOwner(selectedChat) ? (
-                <form onSubmit={handleSendMessage} className="flex items-center gap-2">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileSelect}
-                    accept="*/*"
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-white hover:bg-gray-800"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={!isConnected}
-                  >
-                    <Paperclip className="h-4 w-4" />
-                  </Button>
-                  <div className="flex-1 relative">
-                    <Input
-                      placeholder={replyingTo ? `${getSenderName(replyingTo.sender)} reply to...` : "Message..."}
-                      value={message}
-                      onChange={handleMessageChange}
-                      className="pr-10 bg-gray-800 border-gray-600 text-white"
-                      disabled={!isConnected}
-                    />
-                    <Button type="button" variant="ghost" size="sm" className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:bg-gray-700">
-                      <Smile className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <Button type="submit" size="sm" disabled={!isConnected || !message.trim()} className="bg-blue-600 hover:bg-blue-700">
-                    <Send className="h-4 w-4" />
-                  </Button>
-                </form>
               ) : (
-                <div className="flex justify-center">
-                  <p className="text-gray-400 text-sm">You can't send message!</p>
-                </div>
+                (selectedChat?.type === "private" ||
+                  selectedChat?.type === "group" ||
+                  (selectedChat?.type === "channel" && isChannelOwner(selectedChat))) ? (
+                  <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileSelect}
+                      accept="*/*"
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-white hover:bg-gray-800"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={!isConnected}
+                    >
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
+                    <div className="flex-1 relative">
+                      <Input
+                        placeholder={
+                          replyingTo
+                            ? `${getSenderName(replyingTo.sender)} reply to...`
+                            : "Message..."
+                        }
+                        value={message}
+                        onChange={handleMessageChange}
+                        className="pr-10 bg-gray-800 border-gray-600 text-white"
+                        disabled={!isConnected}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:bg-gray-700"
+                      >
+                        <Smile className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={!isConnected || !message.trim()}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </form>
+                ) : (
+                  <div className="flex justify-center">
+                    {/* <p className="text-gray-400 text-sm">You can't send message!</p> */}
+                  </div>
+                )
               )}
             </div>
+
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center bg-gray-950">
