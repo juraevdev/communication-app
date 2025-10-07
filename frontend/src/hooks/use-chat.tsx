@@ -101,9 +101,7 @@ const updateCurrentUserProfile = useCallback((updatedData: any) => {
   console.log("[Chat] Updating current user profile:", updatedData);
 
   try {
-    localStorage.removeItem('user');
     localStorage.removeItem('user_data');
-    localStorage.setItem('user', JSON.stringify(updatedData));
     localStorage.setItem('user_data', JSON.stringify(updatedData));
     console.log("✅ localStorage updated successfully");
   } catch (error) {

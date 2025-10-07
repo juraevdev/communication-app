@@ -42,7 +42,6 @@ const handleSubmit = async (e: React.FormEvent) => {
     
     console.log("✅ Fresh user data received:", userResponse.data);
 
-    localStorage.setItem("user", JSON.stringify(userResponse.data));
     localStorage.setItem("user_data", JSON.stringify(userResponse.data));
 
     console.log("✅ User data saved to localStorage");

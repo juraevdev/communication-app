@@ -93,27 +93,6 @@ export const apiClient = {
   
   return response.data;
 },
-
-  // async updateProfile(data: {
-  //   phone_number: string;
-  // }) {
-  //   const response = await fetch('/api/v1/accounts/profile/', {
-  //     method: 'PATCH',
-  //     headers: {
-  //       'Content-Type': 'application/json',
-  //       'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-  //     },
-  //     body: JSON.stringify(data),
-  //   });
-
-  //   if (!response.ok) {
-  //     const errorData = await response.json();
-  //     throw new Error(errorData.message || 'Profile update failed');
-  //   }
-
-  //   return response.json();
-  // },
-
   async getUserProfile(contactUserId: any) {
   const timestamp = new Date().getTime();
   const response = await api.get(`/accounts/user/${contactUserId}/?t=${timestamp}`, {

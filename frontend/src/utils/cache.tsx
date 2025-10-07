@@ -37,7 +37,6 @@ export const refreshUserData = async (apiClient: any) => {
     const response = await apiClient.getMe();
     const freshUserData = response.data;
 
-    localStorage.setItem('user', JSON.stringify(freshUserData));
     localStorage.setItem('user_data', JSON.stringify(freshUserData));
 
     console.log("✅ User data refreshed from server");
