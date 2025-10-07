@@ -130,19 +130,33 @@ const updateCurrentUserProfile = useCallback((updatedData: any) => {
 useEffect(() => {
   const initializeUser = async () => {
     try {
+      const cachedUser = localStorage.getItem("user_data");
+      if (cachedUser) {
+        const parsedUser = JSON.parse(cachedUser);
+        setCurrentUser(parsedUser);
+        console.log("[Chat] Cached user loaded:", parsedUser);
+      }
+
       const response = await apiClient.getMe();
       const user = response.data;
       setCurrentUser(user);
-      console.log("[Chat] Current user loaded:", user);
+
+      localStorage.setItem("user_data", JSON.stringify(user));
+
+      console.log("[Chat] Fresh user loaded from API:", user);
+
       initializeStatusWebSocket();
       initializeNotificationsWebSocket();
       await loadGroups();
+
     } catch (error) {
-      console.error("Failed to load user:", error);
+      console.error("❌ Failed to load user:", error);
     }
   };
+
   initializeUser();
 }, []);
+
 
   const loadGroups = useCallback(async () => {
     try {
