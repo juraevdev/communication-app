@@ -385,9 +385,8 @@ export function GroupInfoModal({ isOpen, onClose, group, onGroupUpdate }: GroupI
 
           {!isEditing && (
             <Tabs defaultValue="members" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-1">
                 <TabsTrigger className="cursor-pointer" value="members">Members</TabsTrigger>
-                <TabsTrigger className="cursor-pointer" value="settings">Settings</TabsTrigger>
               </TabsList>
 
               <TabsContent value="members" className="space-y-4">
