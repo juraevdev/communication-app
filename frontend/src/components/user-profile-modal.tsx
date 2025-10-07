@@ -23,14 +23,15 @@ interface UserProfileModalProps {
     role?: string
   }
   isOwnProfile?: boolean
-  onProfileUpdate?: (updatedUser: any) => void  
+  onProfileUpdate?: (updatedUser: any) => void
 }
 
-export function UserProfileModal({ 
-  isOpen, 
-  onClose, 
-  user, 
+export function UserProfileModal({
+  isOpen,
+  onClose,
+  user,
   isOwnProfile = false,
+  onProfileUpdate,
 }: UserProfileModalProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState({
@@ -113,50 +114,57 @@ export function UserProfileModal({
     fetchCurrentUserProfile()
   }, [isOpen, isOwnProfile, isEditing])
 
-const handleSave = async () => {
-  if (!editData.fullname?.trim()) {
-    setSaveMessage({ type: "error", text: "Name is required" })
-    return
-  }
+  const handleSave = async () => {
+    if (!editData.fullname?.trim()) {
+      setSaveMessage({ type: "error", text: "Name is required" });
+      return;
+    }
 
-  if (!editData.username.trim()) {
-    setSaveMessage({ type: "error", text: "Username is required" })
-    return
-  }
+    if (!editData.username.trim()) {
+      setSaveMessage({ type: "error", text: "Username is required" });
+      return;
+    }
 
-  setIsSaving(true)
-  setSaveMessage({ type: "", text: "" })
+    setIsSaving(true);
+    setSaveMessage({ type: "", text: "" });
 
-  try {
+    try {
+      // 🔥 API so‘rov
+      const updatedUser = await apiClient.updateUserProfile({
+        fullname: editData.fullname,
+        username: editData.username,
+        phone_number: editData.phone_number,
+        email: editData.email,
+      });
 
-    await apiClient.updateUserProfile({
-      fullname: editData.fullname,
-      username: editData.username,
-      phone_number: editData.phone_number,
-      email: editData.email,
-    });
+      console.log("✅ Profile updated:", updatedUser);
 
+      // 🔥 Parentga xabar beramiz (ChatPage ichidagi handleProfileUpdate)
+      if (onProfileUpdate) {
+        onProfileUpdate(updatedUser);
+      }
 
-    setSaveMessage({ type: "success", text: "Profile updated successfully" })
-    setIsEditing(false)
+      // 🔄 Local state yangilash
+      setSaveMessage({ type: "success", text: "Profile updated successfully" });
+      setIsEditing(false);
+      setEditData({
+        fullname: updatedUser.fullname,
+        username: updatedUser.username,
+        email: updatedUser.email,
+        phone_number: updatedUser.phone_number,
+      });
 
-    setEditData({
-      fullname: editData.fullname,
-      username: editData.username,
-      email: editData.email,
-      phone_number: editData.phone_number || editData.phone_number,
-    })
-
-  } catch (error: any) {
-    const errorMessage = error.response?.data?.message ||
-      error.message ||
-      "Failed to update profile"
-    setSaveMessage({ type: "error", text: errorMessage })
-    console.error("❌ Profile update error:", error);
-  } finally {
-    setIsSaving(false)
-  }
-}
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to update profile";
+      setSaveMessage({ type: "error", text: errorMessage });
+      console.error("❌ Profile update error:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {

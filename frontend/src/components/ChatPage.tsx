@@ -190,18 +190,14 @@ export default function ChatPage() {
   try {
     console.log("✅ Profile update received:", updatedUser);
 
-    // 1️⃣ State yangilash
     setCurrentUser(updatedUser);
 
-    // 2️⃣ localStorage'ni yangilash
     localStorage.setItem("user_data", JSON.stringify(updatedUser));
 
-    // 3️⃣ Context yoki global state-ni yangilash
     if (updateCurrentUserProfile) {
       updateCurrentUserProfile(updatedUser);
     }
 
-    // 4️⃣ Tanlangan chat o‘zi bo‘lsa, uni ham yangilash
     if (selectedChat && selectedChat.type === "private" && selectedChat.sender_id === currentUser?.id) {
       setSelectedChat((prev: any) => prev ? {
         ...prev,
@@ -213,7 +209,6 @@ export default function ChatPage() {
       } : prev);
     }
 
-    // 5️⃣ Barcha chatlarda userni yangilash
     setChats(prev => prev.map(chat => {
       if (chat.sender_id === currentUser?.id) {
         return {
