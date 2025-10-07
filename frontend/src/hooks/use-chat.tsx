@@ -135,36 +135,20 @@ const updateCurrentUserProfile = useCallback((updatedData: any) => {
 useEffect(() => {
   const initializeUser = async () => {
     try {
-      const { data: user } = await apiClient.getMe();   
-
+      const response = await apiClient.getMe();
+      const user = response.data;
       setCurrentUser(user);
-
-      localStorage.setItem('user', JSON.stringify(user));
-
+      localStorage.setItem('user_data', JSON.stringify(user));
       console.log("[Chat] Current user loaded:", user);
-
       initializeStatusWebSocket();
       initializeNotificationsWebSocket();
       await loadGroups();
-      await loadChannels();
     } catch (error) {
-      console.error("[Chat] Failed to load user:", error);
-      window.location.href = "/login";
+      console.error("Failed to load user:", error);
     }
   };
-
   initializeUser();
-
-  return () => {
-    if (statusWsRef.current) statusWsRef.current.close();
-    if (chatWsRef.current) chatWsRef.current.close();
-    if (groupWsRef.current) groupWsRef.current.close();
-    if (notificationsWsRef.current) notificationsWsRef.current.close();
-    groupConnectionsRef.current.forEach(ws => ws.close());
-    groupConnectionsRef.current.clear();
-  };
 }, []);
-
 
   const loadGroups = useCallback(async () => {
     try {

@@ -46,7 +46,6 @@ import { CreateChannelModal } from "./create-channel-modal"
 import { GroupInfoModal } from "./group-info-modal"
 import { ChannelInfoModal } from "./channel-info-modal"
 import { MessageStatus } from "./message-status"
-import { TypingIndicator } from "./typing-indicator"
 import { useChat } from "@/hooks/use-chat"
 import { EditMessageModal } from "./edit-message"
 import { VideoCallModal } from "./video-call-modal"
@@ -159,7 +158,6 @@ export default function ChatPage() {
   const [showGroupInfo, setShowGroupInfo] = useState(false)
   const [showCreateChannel, setShowCreateChannel] = useState(false)
   const [showChannelInfo, setShowChannelInfo] = useState(false)
-  const [typingUsers,] = useState<Set<number>>(new Set())
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [activeTab, setActiveTab] = useState<"private" | "groups" | "channels">("private")
   const [, setGroupMembers] = useState<any[]>([])
@@ -187,52 +185,55 @@ export default function ChatPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  
-const handleProfileUpdate = async (updatedUser: any) => {
-  try {
-    console.log("✅ Profile update received:", updatedUser);
 
-    localStorage.removeItem("user_data");
-    localStorage.removeItem("user");
-    localStorage.setItem("user_data", JSON.stringify(updatedUser));
-    localStorage.setItem("user", JSON.stringify(updatedUser));
+  const handleProfileUpdate = async (updatedUser: any) => {
+    try {
+      console.log("✅ Profile update received:", updatedUser);
 
-    if (updateCurrentUserProfile) {
-      updateCurrentUserProfile(updatedUser);
-    }
+      localStorage.removeItem("user_data");
+      localStorage.removeItem("user");
+      localStorage.setItem("user", JSON.stringify(updatedUser));
 
-    setCurrentUser(updatedUser);
+      setCurrentUser(updatedUser);
+      localStorage.setItem("user_data", JSON.stringify(updatedUser));
 
-    if (selectedChat && selectedChat.type === "private" && selectedChat.sender_id === currentUser?.id) {
-      setSelectedChat((prev: any) => prev ? { 
-        ...prev, 
-        name: updatedUser.fullname || updatedUser.username,
-        sender: updatedUser.fullname || updatedUser.username,
-        username: updatedUser.username,
-        email: updatedUser.email,
-        phone_number: updatedUser.phone_number
-      } : prev);
-    }
+      if (updateCurrentUserProfile) {
+        updateCurrentUserProfile(updatedUser);
+      }
 
-    setChats(prev => prev.map(chat => {
-      if (chat.sender_id === currentUser?.id) {
-        return {
-          ...chat,
+
+      setCurrentUser(updatedUser);
+
+      if (selectedChat && selectedChat.type === "private" && selectedChat.sender_id === currentUser?.id) {
+        setSelectedChat((prev: any) => prev ? {
+          ...prev,
           name: updatedUser.fullname || updatedUser.username,
           sender: updatedUser.fullname || updatedUser.username,
           username: updatedUser.username,
-          email: updatedUser.email
-        };
+          email: updatedUser.email,
+          phone_number: updatedUser.phone_number
+        } : prev);
       }
-      return chat;
-    }));
 
-    console.log("✅ Profile update completed");
+      setChats(prev => prev.map(chat => {
+        if (chat.sender_id === currentUser?.id) {
+          return {
+            ...chat,
+            name: updatedUser.fullname || updatedUser.username,
+            sender: updatedUser.fullname || updatedUser.username,
+            username: updatedUser.username,
+            email: updatedUser.email
+          };
+        }
+        return chat;
+      }));
 
-  } catch (error) {
-    console.error("❌ Failed to update profile:", error);
-  }
-};
+      console.log("✅ Profile update completed");
+
+    } catch (error) {
+      console.error("❌ Failed to update profile:", error);
+    }
+  };
 
   const refreshGroupsList = (leftGroupId?: number) => {
     if (leftGroupId) {
@@ -293,7 +294,7 @@ const handleProfileUpdate = async (updatedUser: any) => {
       await videoCall.startCall(roomId);
 
       if (selectedChat.type === 'private') {
-        const targetUserId = selectedChat.id;   
+        const targetUserId = selectedChat.id;
         videoCall.sendCallInvitation(roomId, targetUserId, 'video');
       }
 
@@ -505,8 +506,8 @@ const handleProfileUpdate = async (updatedUser: any) => {
 
       const unreadMessages = currentMessages.filter(msg =>
         !msg.is_read &&
-        !msg.isOwn &&   
-        msg.user?.id !== currentUser?.id  
+        !msg.isOwn &&
+        msg.user?.id !== currentUser?.id
       );
 
       if (unreadMessages.length > 0 && channelWsRef.current?.readyState === WebSocket.OPEN) {
@@ -631,7 +632,7 @@ const handleProfileUpdate = async (updatedUser: any) => {
       console.log("[StartChat] All contacts:", contacts);
 
       const contact = contacts.find((c: any) =>
-        c.contact_user === contactUserId  
+        c.contact_user === contactUserId
       );
 
       console.log("[StartChat] Found contact:", contact);
@@ -678,15 +679,15 @@ const handleProfileUpdate = async (updatedUser: any) => {
         id: user.id,
         sender_id: user.id,
         sender: user.username || user.email,
-        name: user.alias || user.username || user.email,  
+        name: user.alias || user.username || user.email,
         email: user.email,
         avatar: user.avatar,
         type: "private",
         unread: 0,
         last_message: "",
         timestamp: new Date().toISOString(),
-        alias: user.alias,  
-        isContact: !!user.alias   
+        alias: user.alias,
+        isContact: !!user.alias
       }
 
       const response = await apiClient.startChat(user.id);
@@ -1077,7 +1078,7 @@ const handleProfileUpdate = async (updatedUser: any) => {
 
           contacts.forEach((contact: any) => {
             console.log(`[ChatPage] Contact:`, contact);
-            if (contact.contact_user) { 
+            if (contact.contact_user) {
               contactsMap.set(contact.contact_user, contact.alias);
             }
           });
@@ -1379,8 +1380,6 @@ const handleProfileUpdate = async (updatedUser: any) => {
       console.error('Download error:', error);
     }
   };
-
-  const isTyping = typingUsers.size > 0
 
   const getCurrentMessages = () => {
     if (!selectedChat) return []
@@ -1844,13 +1843,13 @@ const handleProfileUpdate = async (updatedUser: any) => {
                                           {msg.reply_to.sender_fullname || msg.reply_to.sender || "User"}
                                         </p>
                                         <p className="text-xs truncate">
-                                          {msg.reply_to.message_type === "file" 
-                                            ? `📎 ${msg.reply_to.file_name || "Fayl"}` 
+                                          {msg.reply_to.message_type === "file"
+                                            ? `📎 ${msg.reply_to.file_name || "Fayl"}`
                                             : msg.reply_to.content || msg.reply_to.message || ""}
                                         </p>
                                       </div>
                                     )}
-                                    
+
                                     {isFileMessage(msg) ? (
                                       <div className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:opacity-80 ${isRightAligned ? "bg-blue-700" : "bg-gray-600"}`}
                                         onClick={() => handleDownload(msg.file_url || "", msg.file_name || msg.message?.replace("File: ", "") || "file")}
@@ -1893,7 +1892,6 @@ const handleProfileUpdate = async (updatedUser: any) => {
                       </div>
                     ))
                   )}
-                  <TypingIndicator isVisible={isTyping} userName="Yozilmoqda..." />
                   <div ref={messagesEndRef} />
                 </div>
               )}
@@ -2105,7 +2103,7 @@ const handleProfileUpdate = async (updatedUser: any) => {
         isOpen={showCreateGroup}
         onClose={() => setShowCreateGroup(false)}
         onCreateGroup={handleCreateGroup}
-        onGroupCreated={handleGroupCreated}   
+        onGroupCreated={handleGroupCreated}
       />
 
       <CreateChannelModal
@@ -2113,7 +2111,7 @@ const handleProfileUpdate = async (updatedUser: any) => {
         onClose={() => setShowCreateChannel(false)}
         onCreateChannel={handleCreateChannel}
         currentUserId={currentUser?.id?.toString() || ""}
-        onChannelCreated={handleChannelCreated}   
+        onChannelCreated={handleChannelCreated}
       />
 
       {selectedChat?.type === "group" && (
@@ -2147,7 +2145,7 @@ const handleProfileUpdate = async (updatedUser: any) => {
             isSubscribed: selectedChat.isSubscribed || false,
             isMuted: selectedChat.isMuted || false,
           }}
-          onChannelUpdate={refreshChannelsList}   
+          onChannelUpdate={refreshChannelsList}
         />
       )}
 
