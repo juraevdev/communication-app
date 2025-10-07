@@ -187,45 +187,53 @@ export default function ChatPage() {
   const isTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const handleProfileUpdate = async (updatedUser: any) => {
-    try {
-      console.log("✅ Profile update received:", updatedUser);
+  try {
+    console.log("✅ Profile update received:", updatedUser);
 
-      setCurrentUser(updatedUser);
+    // 1️⃣ State yangilash
+    setCurrentUser(updatedUser);
 
-      if (updateCurrentUserProfile) {
-        updateCurrentUserProfile(updatedUser);
-      }
+    // 2️⃣ localStorage'ni yangilash
+    localStorage.setItem("user_data", JSON.stringify(updatedUser));
 
-      if (selectedChat && selectedChat.type === "private" && selectedChat.sender_id === currentUser?.id) {
-        setSelectedChat((prev: any) => prev ? {
-          ...prev,
+    // 3️⃣ Context yoki global state-ni yangilash
+    if (updateCurrentUserProfile) {
+      updateCurrentUserProfile(updatedUser);
+    }
+
+    // 4️⃣ Tanlangan chat o‘zi bo‘lsa, uni ham yangilash
+    if (selectedChat && selectedChat.type === "private" && selectedChat.sender_id === currentUser?.id) {
+      setSelectedChat((prev: any) => prev ? {
+        ...prev,
+        name: updatedUser.fullname || updatedUser.username,
+        sender: updatedUser.fullname || updatedUser.username,
+        username: updatedUser.username,
+        email: updatedUser.email,
+        phone_number: updatedUser.phone_number
+      } : prev);
+    }
+
+    // 5️⃣ Barcha chatlarda userni yangilash
+    setChats(prev => prev.map(chat => {
+      if (chat.sender_id === currentUser?.id) {
+        return {
+          ...chat,
           name: updatedUser.fullname || updatedUser.username,
           sender: updatedUser.fullname || updatedUser.username,
           username: updatedUser.username,
-          email: updatedUser.email,
-          phone_number: updatedUser.phone_number
-        } : prev);
+          email: updatedUser.email
+        };
       }
+      return chat;
+    }));
 
-      setChats(prev => prev.map(chat => {
-        if (chat.sender_id === currentUser?.id) {
-          return {
-            ...chat,
-            name: updatedUser.fullname || updatedUser.username,
-            sender: updatedUser.fullname || updatedUser.username,
-            username: updatedUser.username,
-            email: updatedUser.email
-          };
-        }
-        return chat;
-      }));
+    console.log("✅ Profile update completed & localStorage synced");
 
-      console.log("✅ Profile update completed");
+  } catch (error) {
+    console.error("❌ Failed to update profile:", error);
+  }
+};
 
-    } catch (error) {
-      console.error("❌ Failed to update profile:", error);
-    }
-  };
 
   const refreshGroupsList = (leftGroupId?: number) => {
     if (leftGroupId) {
