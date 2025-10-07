@@ -125,45 +125,51 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
   })
 
   const handleAddContact = async (user?: User) => {
-    const targetUser = user || searchResults[0]
-    const usernameToUse = user ? user.username : newUsername
+  const targetUser = user || searchResults[0]
 
-    if (!usernameToUse.trim()) {
-      setAddContactMessage({ type: "error", text: "Username is required" })
-      return
-    }
-
-    if (!targetUser && !user) {
-      setAddContactMessage({ type: "error", text: "Please select a user first" })
-      return
-    }
-
-    setIsAddingContact(true)
-    setAddContactMessage({ type: "", text: "" })
-
-    try {
-      await apiClient.addContact(
-        targetUser.id,
-        newAlias || targetUser.name || targetUser.username
-      )
-
-      setAddContactMessage({ type: "success", text: "Contact added successfully" })
-      setNewUsername("")
-      setNewAlias("")
-      setSearchResults([])
-      
-      const contactsData = await apiClient.getContacts()
-      setContacts(Array.isArray(contactsData) ? contactsData : [])
-      
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 
-                          error.message || 
-                          "Failed to add contact"
-      setAddContactMessage({ type: "error", text: errorMessage })
-    } finally {
-      setIsAddingContact(false)
-    }
+  if (!targetUser?.id) {
+    setAddContactMessage({ type: "error", text: "Iltimos, avval foydalanuvchini tanlang" })
+    return
   }
+
+  setIsAddingContact(true)
+  setAddContactMessage({ type: "", text: "" })
+
+  try {
+    const result = await apiClient.addContact(
+      targetUser.id,
+      newAlias || targetUser.name || targetUser.username
+    )
+
+    setAddContactMessage({ 
+      type: "success", 
+      text: "Kontakt muvaffaqiyatli qo'shildi" 
+    })
+    setNewUsername("")
+    setNewAlias("")
+    setSearchResults([])
+
+    console.log(result)
+    
+    const contactsData = await apiClient.getContacts()
+    setContacts(Array.isArray(contactsData) ? contactsData : [])
+    
+  } catch (error: any) {
+    console.error("Add contact error:", error)
+    
+    const backendError = error.response?.data?.error || 
+                        error.response?.data?.contact_user?.[0] ||
+                        error.response?.data?.non_field_errors?.[0] ||
+                        error.message
+    
+    setAddContactMessage({ 
+      type: "error", 
+      text: backendError || "Kontakt qo'shish muvaffaqiyatsiz tugadi"
+    })
+  } finally {
+    setIsAddingContact(false)
+  }
+}
 
   const handleRemoveContact = async (contactId: number) => {
     try {
