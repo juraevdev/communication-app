@@ -97,70 +97,70 @@ export function useChat() {
   const channelConnectionsRef = useRef<Map<string, WebSocket>>(new Map())
 
 
-const updateCurrentUserProfile = useCallback((updatedData: any) => {
-  console.log("[Chat] Updating current user profile:", updatedData);
+  const updateCurrentUserProfile = useCallback((updatedData: any) => {
+    console.log("[Chat] Updating current user profile:", updatedData);
 
-  setCurrentUser((prev: any) => {
-    const newUserData = { ...prev, ...updatedData };
+    setCurrentUser((prev: any) => {
+      const newUserData = { ...prev, ...updatedData };
 
-    localStorage.setItem("user_data", JSON.stringify(newUserData));
+      localStorage.setItem("user_data", JSON.stringify(newUserData));
 
-    return newUserData;
-  });
+      return newUserData;
+    });
 
-  setChats(prevChats =>
-    prevChats.map(chat => {
-      if (chat.sender_id === updatedData.id) {
-        return {
-          ...chat,
-          name: updatedData.fullname || updatedData.username || chat.name,
-          sender: updatedData.fullname || updatedData.username || chat.sender,
-          username: updatedData.username || chat.username,
-          email: updatedData.email || chat.email,
-        };
-      }
-      return chat;
-    })
-  );
+    setChats(prevChats =>
+      prevChats.map(chat => {
+        if (chat.sender_id === updatedData.id) {
+          return {
+            ...chat,
+            name: updatedData.fullname || updatedData.username || chat.name,
+            sender: updatedData.fullname || updatedData.username || chat.sender,
+            username: updatedData.username || chat.username,
+            email: updatedData.email || chat.email,
+          };
+        }
+        return chat;
+      })
+    );
 
-  console.log("✅ Profile update completed & localStorage synced");
-}, [setCurrentUser, setChats]);
+    console.log("✅ Profile update completed & localStorage synced");
+  }, [setCurrentUser, setChats]);
 
 
-useEffect(() => {
-  const initializeUser = async () => {
-    try {
-      const cachedUser = localStorage.getItem("user_data");
-      if (cachedUser) {
-        const parsedUser = JSON.parse(cachedUser);
-        setCurrentUser(parsedUser);
-        console.log("[Chat] Cached user loaded:", parsedUser);
-        
+  useEffect(() => {
+    const initializeUser = async () => {
+      try {
+        const cachedUser = localStorage.getItem("user_data");
+        if (cachedUser) {
+          const parsedUser = JSON.parse(cachedUser);
+          setCurrentUser(parsedUser);
+          console.log("[Chat] Cached user loaded:", parsedUser);
+
+          initializeStatusWebSocket();
+          initializeNotificationsWebSocket();
+          await loadGroups();
+          loadChannels();
+          return;
+        }
+
+        const response = await apiClient.getMe();
+        const user = response.data;
+        setCurrentUser(user);
+
+        console.log("[Chat] Fresh user loaded from API:", user);
+
         initializeStatusWebSocket();
         initializeNotificationsWebSocket();
         await loadGroups();
         loadChannels();
-        return;   
+
+      } catch (error) {
+        console.error("❌ Failed to load user:", error);
       }
+    };
 
-      const response = await apiClient.getMe();
-      const user = response.data;
-      setCurrentUser(user);
-
-      console.log("[Chat] Fresh user loaded from API:", user);
-
-      initializeStatusWebSocket();
-      initializeNotificationsWebSocket();
-      await loadGroups();
-      loadChannels();
-
-    } catch (error) {
-      console.error("❌ Failed to load user:", error);
-    }
-  };
-
-  initializeUser();
-}, []);
+    initializeUser();
+  }, []);
 
 
   const loadGroups = useCallback(async () => {
@@ -500,6 +500,7 @@ useEffect(() => {
               }
               break
 
+            // Chat WebSocket handlerda message_updated va message_deleted holatlarini qo'shing
             case "message_updated":
               setMessages(prev => {
                 const targetRoomId = data.room_id?.toString() || roomId;
@@ -522,7 +523,6 @@ useEffect(() => {
                 };
               });
               break;
-
 
             case "message_deleted":
               console.log("[Chat] Message deleted:", data);
@@ -730,7 +730,6 @@ useEffect(() => {
                 };
               });
 
-              // Unread count yangilanishi
               if (data.unread_count !== undefined) {
                 setGroups(prev => prev.map(group => {
                   if (group.id.toString() === groupId) {
@@ -1258,6 +1257,7 @@ useEffect(() => {
             }
             break
 
+          // Channel WebSocket handlerda message_updated va message_deleted holatlarini qo'shing
           case "message_updated":
             setMessages(prev => {
               const roomKey = `channel_${channelId}`;
@@ -1292,7 +1292,6 @@ useEffect(() => {
               };
             });
             break;
-
 
           case "chat_message":
             const msgUserId = data.message?.user?.id || data.message?.user_id;
@@ -1483,60 +1482,60 @@ useEffect(() => {
   }, [currentUser])
 
   const loadChannels = useCallback(async () => {
-  try {
-    const channelsData = await apiClient.getChannels();
-    console.log("[Chat] Raw channels data:", channelsData);
+    try {
+      const channelsData = await apiClient.getChannels();
+      console.log("[Chat] Raw channels data:", channelsData);
 
-    const formattedChannels: Chat[] = channelsData.map((channel: any) => {
-      const isOwner = channel.owner === currentUser?.id;
-      const isSubscribed = channel.is_subscribed === true || isOwner;
-      
-      return {
-        id: channel.id,
-        name: channel.name,
-        sender: channel.owner_name || "Noma'lum",
-        sender_id: channel.owner,
-        last_message: channel.last_message || channel.description || "",
-        timestamp: channel.last_message_time || channel.updated_at || new Date().toISOString(),
-        unread: channel.unread_count || 0,
-        avatar: "/channel-avatar.png",
-        message_type: "text",
-        room_id: `channel_${channel.id}`,
-        type: "channel",
-        description: channel.description,
-        memberCount: channel.member_count || 0,
-        isAdmin: isOwner,   
-        isOwner: isOwner, 
-        isSubscribed: isSubscribed,
-        username: channel.username,
-        owner_id: channel.owner 
-      }
-    });
+      const formattedChannels: Chat[] = channelsData.map((channel: any) => {
+        const isOwner = channel.owner === currentUser?.id;
+        const isSubscribed = channel.is_subscribed === true || isOwner;
 
-    console.log("[Chat] Formatted channels:", formattedChannels);
+        return {
+          id: channel.id,
+          name: channel.name,
+          sender: channel.owner_name || "Noma'lum",
+          sender_id: channel.owner,
+          last_message: channel.last_message || channel.description || "",
+          timestamp: channel.last_message_time || channel.updated_at || new Date().toISOString(),
+          unread: channel.unread_count || 0,
+          avatar: "/channel-avatar.png",
+          message_type: "text",
+          room_id: `channel_${channel.id}`,
+          type: "channel",
+          description: channel.description,
+          memberCount: channel.member_count || 0,
+          isAdmin: isOwner,
+          isOwner: isOwner,
+          isSubscribed: isSubscribed,
+          username: channel.username,
+          owner_id: channel.owner
+        }
+      });
 
-    // ✅ So'nggi faollik bo'yicha tartiblash
-    formattedChannels.sort((a, b) => {
-      const dateA = new Date(a.timestamp).getTime();
-      const dateB = new Date(b.timestamp).getTime();
-      return dateB - dateA; // Yangi xabarlar yuqorida
-    });
+      console.log("[Chat] Formatted channels:", formattedChannels);
 
-    setChannels(formattedChannels);
+      // ✅ So'nggi faollik bo'yicha tartiblash
+      formattedChannels.sort((a, b) => {
+        const dateA = new Date(a.timestamp).getTime();
+        const dateB = new Date(b.timestamp).getTime();
+        return dateB - dateA; // Yangi xabarlar yuqorida
+      });
 
-    // Background listeners
-    formattedChannels.forEach(channel => {
-      if (channel.isSubscribed) {
-        initializeChannelBackgroundListener(channel.id.toString());
-      }
-    });
+      setChannels(formattedChannels);
 
-  } catch (error) {
-    console.error("[Chat] Failed to load channels:", error);
-    // Xatolik yuz berganda bo'sh array bilan ishlash
-    setChannels([]);
-  }
-}, [currentUser, initializeChannelBackgroundListener]);
+      // Background listeners
+      formattedChannels.forEach(channel => {
+        if (channel.isSubscribed) {
+          initializeChannelBackgroundListener(channel.id.toString());
+        }
+      });
+
+    } catch (error) {
+      console.error("[Chat] Failed to load channels:", error);
+      // Xatolik yuz berganda bo'sh array bilan ishlash
+      setChannels([]);
+    }
+  }, [currentUser, initializeChannelBackgroundListener]);
 
   return {
     chats,

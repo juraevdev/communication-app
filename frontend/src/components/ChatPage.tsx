@@ -187,47 +187,47 @@ export default function ChatPage() {
   const isTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const handleProfileUpdate = async (updatedUser: any) => {
-  try {
-    console.log("✅ Profile update received:", updatedUser);
+    try {
+      console.log("✅ Profile update received:", updatedUser);
 
-    setCurrentUser(updatedUser);
+      setCurrentUser(updatedUser);
 
-    localStorage.setItem("user_data", JSON.stringify(updatedUser));
+      localStorage.setItem("user_data", JSON.stringify(updatedUser));
 
-    if (updateCurrentUserProfile) {
-      updateCurrentUserProfile(updatedUser);
-    }
+      if (updateCurrentUserProfile) {
+        updateCurrentUserProfile(updatedUser);
+      }
 
-    if (selectedChat && selectedChat.type === "private" && selectedChat.sender_id === currentUser?.id) {
-      setSelectedChat((prev: any) => prev ? {
-        ...prev,
-        name: updatedUser.fullname || updatedUser.username,
-        sender: updatedUser.fullname || updatedUser.username,
-        username: updatedUser.username,
-        email: updatedUser.email,
-        phone_number: updatedUser.phone_number
-      } : prev);
-    }
-
-    setChats(prev => prev.map(chat => {
-      if (chat.sender_id === currentUser?.id) {
-        return {
-          ...chat,
+      if (selectedChat && selectedChat.type === "private" && selectedChat.sender_id === currentUser?.id) {
+        setSelectedChat((prev: any) => prev ? {
+          ...prev,
           name: updatedUser.fullname || updatedUser.username,
           sender: updatedUser.fullname || updatedUser.username,
           username: updatedUser.username,
-          email: updatedUser.email
-        };
+          email: updatedUser.email,
+          phone_number: updatedUser.phone_number
+        } : prev);
       }
-      return chat;
-    }));
 
-    console.log("✅ Profile update completed & localStorage synced");
+      setChats(prev => prev.map(chat => {
+        if (chat.sender_id === currentUser?.id) {
+          return {
+            ...chat,
+            name: updatedUser.fullname || updatedUser.username,
+            sender: updatedUser.fullname || updatedUser.username,
+            username: updatedUser.username,
+            email: updatedUser.email
+          };
+        }
+        return chat;
+      }));
 
-  } catch (error) {
-    console.error("❌ Failed to update profile:", error);
-  }
-};
+      console.log("✅ Profile update completed & localStorage synced");
+
+    } catch (error) {
+      console.error("❌ Failed to update profile:", error);
+    }
+  };
 
 
   const refreshGroupsList = (leftGroupId?: number) => {
@@ -702,34 +702,34 @@ export default function ChatPage() {
   };
 
   const handleChannelSelect = async (channel: any) => {
-  console.log("Selected channel from search:", channel);
+    console.log("Selected channel from search:", channel);
 
-  const formattedChannel = {
-    id: channel.id,
-    name: channel.name,
-    sender: channel.owner_name || "Noma'lum",
-    sender_id: channel.owner,
-    last_message: channel.last_message || channel.description || "",
-    timestamp: channel.timestamp || channel.updated_at,
-    unread: channel.unread_count || 0,
-    avatar: "/channel-avatar.png",
-    message_type: "text",
-    room_id: `channel_${channel.id}`,
-    type: "channel",
-    description: channel.description,
-    memberCount: channel.member_count || 0,
-    isAdmin: channel.isOwner || channel.owner === currentUser?.id,
-    isOwner: channel.isOwner || channel.owner === currentUser?.id,  
-    isSubscribed: channel.is_subscribed !== undefined ? channel.is_subscribed : false,
-    username: channel.username,
-    owner_id: channel.owner   
+    const formattedChannel = {
+      id: channel.id,
+      name: channel.name,
+      sender: channel.owner_name || "Noma'lum",
+      sender_id: channel.owner,
+      last_message: channel.last_message || channel.description || "",
+      timestamp: channel.timestamp || channel.updated_at,
+      unread: channel.unread_count || 0,
+      avatar: "/channel-avatar.png",
+      message_type: "text",
+      room_id: `channel_${channel.id}`,
+      type: "channel",
+      description: channel.description,
+      memberCount: channel.member_count || 0,
+      isAdmin: channel.isOwner || channel.owner === currentUser?.id,
+      isOwner: channel.isOwner || channel.owner === currentUser?.id,
+      isSubscribed: channel.is_subscribed !== undefined ? channel.is_subscribed : false,
+      username: channel.username,
+      owner_id: channel.owner
+    }
+
+    console.log("Formatted channel for selection:", formattedChannel);
+    handleChatSelect(formattedChannel);
+    setSearchQuery("");
+    setChannelSearchResults([]);
   }
-
-  console.log("Formatted channel for selection:", formattedChannel);
-  handleChatSelect(formattedChannel);
-  setSearchQuery("");
-  setChannelSearchResults([]);
-}
 
   const handleCreateGroup = async (groupData: { name: string; description?: string }) => {
     try {
@@ -1125,44 +1125,44 @@ export default function ChatPage() {
   }
 
   const getFilteredChats = () => {
-  let chatsToFilter: any[] = [];
+    let chatsToFilter: any[] = [];
 
-  switch (activeTab) {
-    case "private":
-      chatsToFilter = chats;
-      break;
-    case "groups":
-      chatsToFilter = groups;
-      break;
-    case "channels":
-      console.log("[ChatPage] Channels tab - channels:", channels);
-      console.log("[ChatPage] Channel search results:", channelSearchResults);
-      
-      if (searchQuery.trim() && channelSearchResults.length > 0) {
-        chatsToFilter = channelSearchResults.map(channel => ({
-          ...channel,
-          type: "channel",
-          sender: channel.owner_name || "Noma'lum",
-          sender_id: channel.owner,
-          last_message: channel.description || "",
-          timestamp: channel.updated_at,
-          unread: channel.unread_count || 0,
-          avatar: "/channel-avatar.png",
-          message_type: "text",
-          room_id: `channel_${channel.id}`,
-          memberCount: channel.members?.length || 0,
-          isAdmin: channel.owner === currentUser?.id,
-          isOwner: channel.owner === currentUser?.id,
-          isSubscribed: channel.is_subscribed !== undefined ? channel.is_subscribed : false,
-          username: channel.username
-        }));
-      } else {
-        chatsToFilter = channels;
-      }
-      break;
-    default:
-      chatsToFilter = chats;
-  }
+    switch (activeTab) {
+      case "private":
+        chatsToFilter = chats;
+        break;
+      case "groups":
+        chatsToFilter = groups;
+        break;
+      case "channels":
+        console.log("[ChatPage] Channels tab - channels:", channels);
+        console.log("[ChatPage] Channel search results:", channelSearchResults);
+
+        if (searchQuery.trim() && channelSearchResults.length > 0) {
+          chatsToFilter = channelSearchResults.map(channel => ({
+            ...channel,
+            type: "channel",
+            sender: channel.owner_name || "Noma'lum",
+            sender_id: channel.owner,
+            last_message: channel.description || "",
+            timestamp: channel.updated_at,
+            unread: channel.unread_count || 0,
+            avatar: "/channel-avatar.png",
+            message_type: "text",
+            room_id: `channel_${channel.id}`,
+            memberCount: channel.members?.length || 0,
+            isAdmin: channel.owner === currentUser?.id,
+            isOwner: channel.owner === currentUser?.id,
+            isSubscribed: channel.is_subscribed !== undefined ? channel.is_subscribed : false,
+            username: channel.username
+          }));
+        } else {
+          chatsToFilter = channels;
+        }
+        break;
+      default:
+        chatsToFilter = chats;
+    }
 
     if (activeTab !== "channels" && searchQuery.trim()) {
       return chatsToFilter.filter((chat) => {
@@ -1760,8 +1760,19 @@ export default function ChatPage() {
                         {dateMessages.map((msg) => {
                           const isRightAligned = getIsOwnMessage(msg);
 
-                          const canEdit = msg.can_edit !== undefined ? msg.can_edit : isRightAligned;
-                          const canDelete = msg.can_delete !== undefined ? msg.can_delete : isRightAligned;
+                          let canEdit = false;
+                          let canDelete = false;
+
+                          if (selectedChat?.type === "group") {
+                            canEdit = isRightAligned || selectedChat.isAdmin;
+                            canDelete = isRightAligned || selectedChat.isAdmin;
+                          } else if (selectedChat?.type === "channel") {
+                            canEdit = msg.can_edit !== undefined ? msg.can_edit : (isRightAligned || selectedChat.isOwner);
+                            canDelete = msg.can_delete !== undefined ? msg.can_delete : (isRightAligned || selectedChat.isOwner);
+                          } else {
+                            canEdit = isRightAligned;
+                            canDelete = isRightAligned;
+                          }
 
                           return (
                             <div key={msg.id} className={`group flex gap-3 mb-4 ${isRightAligned ? "flex-row-reverse" : "flex-row"}`}>
