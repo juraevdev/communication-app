@@ -144,48 +144,13 @@ class ContactApiView(generics.GenericAPIView):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
-            try:
-                contact_user_id = request.data.get('contact_user')
-                if not contact_user_id:
-                    return Response(
-                        {"error": "contact_user maydoni talab qilinadi"}, 
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                
-                contact_user = get_object_or_404(CustomUser, id=contact_user_id)
-                
-                if contact_user.id == request.user.id:
-                    return Response(
-                        {"error": "O'zingizga kontakt qo'sha olmaysiz"}, 
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                
-                existing_contact = Contact.objects.filter(
-                    owner=request.user, 
-                    contact_user=contact_user
-                ).first()
-                
-                if existing_contact:
-                    return Response(
-                        {"error": "Bu foydalanuvchi allaqachon kontaktlaringizda mavjud"}, 
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                
-                contact = serializer.save(owner=request.user, contact_user=contact_user)
-                
-                room = get_or_create_room(request.user, contact_user)
-                
-                return Response({
-                    "contact": ContactSerializer(contact).data,
-                    "room_id": room.id
-                }, status=status.HTTP_201_CREATED)
-                
-            except Exception as e:
-                return Response(
-                    {"error": f"Kontakt yaratishda xato: {str(e)}"}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        
+            contact = serializer.save(owner=request.user)
+            target_user = get_object_or_404(CustomUser, id=contact.contact_user.id)
+            room = get_or_create_room(request.user, target_user)
+            return Response({
+                "contact": serializer.data,
+                "room_id": room.id
+            }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     
