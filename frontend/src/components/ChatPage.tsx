@@ -1039,26 +1039,22 @@ export default function ChatPage() {
   };
 
   const getMessageStatus = (msg: any): "sending" | "sent" | "delivered" | "read" | "read_file" => {
-    if (!msg) return "read"
+  if (!msg) return "sent"
 
-    if (selectedChat?.type === "channel") {
-      return msg.isOwn ? (msg.is_read ? "read" : "sent") : "read"
-    }
-
-    if (selectedChat?.type === "group") {
-      return msg.is_read ? "read" : "sent"
-    }
-
-    if (!msg.isOwn) {
-      return "read"
-    }
-
-    if (msg.type === "file") {
-      return msg.is_read ? "read_file" : "sent"
-    }
-
-    return msg.is_read ? "read" : "sent"
+  if (selectedChat?.type !== "private") {
+    return "sent"   
   }
+
+  if (!msg.isOwn) {
+    return "read"   
+  }
+
+  if (msg.type === "file") {
+    return msg.is_read ? "read_file" : "sent"
+  }
+
+  return msg.is_read ? "read" : "sent"
+}
 
   const getChatName = (chat: any): string => {
     if (!chat) return "Noma'lum Chat"
@@ -1897,11 +1893,11 @@ export default function ChatPage() {
                                     <span className="text-xs text-gray-400">
                                       {formatMessageTime(msg.timestamp)}
                                     </span>
-                                    {isRightAligned && (
+                                    {isRightAligned && selectedChat?.type === "private" && (
                                       <MessageStatus
                                         status={getMessageStatus(msg)}
                                         isOwn={true}
-                                        isGroup={selectedChat?.type === "group"}
+                                        isGroup={false}   
                                       />
                                     )}
                                   </div>

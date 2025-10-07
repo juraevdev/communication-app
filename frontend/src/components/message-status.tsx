@@ -15,8 +15,7 @@ export function MessageStatus({
   readCount = 0, 
   totalMembers = 0 
 }: MessageStatusProps) {
-  // Faqat o'z xabarlarimizni ko'rsatish
-  if (!isOwn) return null
+  if (!isOwn || isGroup) return null
 
   const getStatusIcon = () => {
     switch (status) {
