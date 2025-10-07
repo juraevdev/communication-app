@@ -282,17 +282,26 @@ const handleStartVideoCall = async () => {
 
   try {
     const roomId = `videocall_${selectedChat.id}_${Date.now()}`;
-    const targetUserId = selectedChat.id;
+    
+    const targetUserId = selectedChat.type === 'private' 
+      ? selectedChat.sender_id    
+      : selectedChat.id;
 
-    console.log('[ChatPage] Starting video call:', {
-      selectedChat,
-      currentUser: currentUser.id,
+    console.log('[ChatPage] Video call details:', {
+      currentUserId: currentUser.id,
       targetUserId,
+      selectedChatId: selectedChat.id,
+      selectedChatSenderId: selectedChat.sender_id,
       roomId
     });
 
     if (targetUserId === currentUser.id) {
-      console.error('[ChatPage] Error: Cannot call yourself');
+      console.error('[ChatPage] Error: Cannot call yourself', {
+        currentUserId: currentUser.id,
+        targetUserId,
+        selectedChat
+      });
+      alert('Siz o\'zingizga qo\'ng\'iroq qila olmaysiz');
       return;
     }
 
@@ -305,20 +314,15 @@ const handleStartVideoCall = async () => {
     await videoCall.startCall(roomId);
 
     if (selectedChat.type === 'private') {
-      // ✅ Yana bir bor tekshirish
-      if (targetUserId === currentUser.id) {
-        console.error('[ChatPage] Critical: Attempted to call self after validation');
-        return;
-      }
-      
       videoCall.sendCallInvitation(roomId, targetUserId, 'video');
-      console.log('[ChatPage] Video call invitation sent to:', targetUserId);
+      console.log('[ChatPage] Video call invitation sent to user:', targetUserId);
     }
 
     setVideoCallModalOpen(true);
 
   } catch (error) {
     console.error('Failed to start video call:', error);
+    alert('Video qo\'ng\'iroqni boshlash muvaffaqiyatsiz. Kamera/mikron ruxsatlarini tekshiring.');
   }
 };
 
