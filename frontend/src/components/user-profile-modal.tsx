@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Edit, Save, X, Eye, EyeOff } from "lucide-react"
 import { apiClient } from "@/lib/api"
-import { clearUserDataCache, refreshUserData } from '@/utils/cache';
 
 interface UserProfileModalProps {
   isOpen: boolean
@@ -32,7 +31,6 @@ export function UserProfileModal({
   onClose, 
   user, 
   isOwnProfile = false,
-  onProfileUpdate 
 }: UserProfileModalProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState({
@@ -130,7 +128,6 @@ const handleSave = async () => {
   setSaveMessage({ type: "", text: "" })
 
   try {
-    clearUserDataCache();
 
     await apiClient.updateUserProfile({
       fullname: editData.fullname,
@@ -139,22 +136,15 @@ const handleSave = async () => {
       email: editData.email,
     });
 
-    const freshUserData = await refreshUserData(apiClient);
-
-    console.log("✅ Fresh user data:", freshUserData);
-
-    if (isOwnProfile && onProfileUpdate) {
-      await onProfileUpdate(freshUserData);
-    }
 
     setSaveMessage({ type: "success", text: "Profile updated successfully" })
     setIsEditing(false)
 
     setEditData({
-      fullname: freshUserData.fullname,
-      username: freshUserData.username,
-      email: freshUserData.email,
-      phone_number: freshUserData.phone_number || editData.phone_number,
+      fullname: editData.fullname,
+      username: editData.username,
+      email: editData.email,
+      phone_number: editData.phone_number || editData.phone_number,
     })
 
     setTimeout(() => {
@@ -243,21 +233,6 @@ const handleSave = async () => {
       setIsChangingPassword(false)
     }
   }
-
-  useEffect(() => {
-  if (isOpen && isOwnProfile) {
-    refreshUserData(apiClient).then(freshData => {
-      setEditData({
-        fullname: freshData.fullname,
-        username: freshData.username,
-        email: freshData.email,
-        phone_number: freshData.phone_number,
-      });
-    }).catch(error => {
-      console.error("❌ Error loading user data:", error);
-    });
-  }
-}, [isOpen, isOwnProfile]); 
 
   const handlePasswordChange = (field: string, value: string) => {
     setPasswordData(prev => ({
