@@ -1486,61 +1486,72 @@ export function useChat() {
     }
   }, [currentUser])
 
-  const loadChannels = useCallback(async () => {
-    try {
-      const channelsData = await apiClient.getChannels();
-      console.log("[Chat] Raw channels data:", channelsData);
 
-      const formattedChannels: Chat[] = channelsData.map((channel: any) => {
-        const isOwner = channel.owner === currentUser?.id;
-        const isSubscribed = channel.is_subscribed === true || isOwner;
+  const getChannelOwnership = useCallback((channel: any, currentUser: any): boolean => {
+  if (channel.owner_id !== undefined) {
+    return channel.owner_id === currentUser?.id;
+  }
+  if (channel.owner !== undefined) {
+    return channel.owner === currentUser?.id;
+  }
+  if (channel.isOwner !== undefined) {
+    return channel.isOwner;
+  }
+  return false;
+}, []);
 
-        return {
-          id: channel.id,
-          name: channel.name,
-          sender: channel.owner_name || "Noma'lum",
-          sender_id: channel.owner,
-          last_message: channel.last_message || channel.description || "",
-          timestamp: channel.last_message_time || channel.updated_at || new Date().toISOString(),
-          unread: channel.unread_count || 0,
-          avatar: "/channel-avatar.png",
-          message_type: "text",
-          room_id: `channel_${channel.id}`,
-          type: "channel",
-          description: channel.description,
-          memberCount: channel.member_count || 0,
-          isAdmin: isOwner,
-          isOwner: isOwner,
-          isSubscribed: isSubscribed,
-          username: channel.username,
-          owner_id: channel.owner
-        }
-      });
+const loadChannels = useCallback(async () => {
+  try {
+    const channelsData = await apiClient.getChannels();
+    console.log("[Chat] Raw channels data:", channelsData);
 
-      console.log("[Chat] Formatted channels:", formattedChannels);
+    const formattedChannels: Chat[] = channelsData.map((channel: any) => {
+      const isOwner = getChannelOwnership(channel, currentUser);
+      const isSubscribed = channel.is_subscribed === true || isOwner;
 
-      // ✅ So'nggi faollik bo'yicha tartiblash
-      formattedChannels.sort((a, b) => {
-        const dateA = new Date(a.timestamp).getTime();
-        const dateB = new Date(b.timestamp).getTime();
-        return dateB - dateA; // Yangi xabarlar yuqorida
-      });
+      return {
+        id: channel.id,
+        name: channel.name,
+        sender: channel.owner_name || "Noma'lum",
+        sender_id: channel.owner,
+        last_message: channel.last_message || channel.description || "",
+        timestamp: channel.last_message_time || channel.updated_at || new Date().toISOString(),
+        unread: channel.unread_count || 0,
+        avatar: "/channel-avatar.png",
+        message_type: "text",
+        room_id: `channel_${channel.id}`,
+        type: "channel",
+        description: channel.description,
+        memberCount: channel.member_count || 0,
+        isAdmin: isOwner,
+        isOwner: isOwner,   
+        isSubscribed: isSubscribed,
+        username: channel.username,
+        owner_id: channel.owner 
+      }
+    });
 
-      setChannels(formattedChannels);
+    console.log("[Chat] Formatted channels:", formattedChannels);
 
-      // Background listeners
-      formattedChannels.forEach(channel => {
-        if (channel.isSubscribed) {
-          initializeChannelBackgroundListener(channel.id.toString());
-        }
-      });
+    formattedChannels.sort((a, b) => {
+      const dateA = new Date(a.timestamp).getTime();
+      const dateB = new Date(b.timestamp).getTime();
+      return dateB - dateA;
+    });
 
-    } catch (error) {
-      console.error("[Chat] Failed to load channels:", error);
-      // Xatolik yuz berganda bo'sh array bilan ishlash
-      setChannels([]);
-    }
-  }, [currentUser, initializeChannelBackgroundListener]);
+    setChannels(formattedChannels);
+
+    formattedChannels.forEach(channel => {
+      if (channel.isSubscribed) {
+        initializeChannelBackgroundListener(channel.id.toString());
+      }
+    });
+
+  } catch (error) {
+    console.error("[Chat] Failed to load channels:", error);
+    setChannels([]);
+  }
+}, [currentUser, initializeChannelBackgroundListener, getChannelOwnership]);
 
   return {
     chats,

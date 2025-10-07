@@ -575,9 +575,14 @@ export default function ChatPage() {
       const groupId = chat.id.toString()
       connectToGroup(groupId)
     } else if (chat.type === "channel") {
-      const channelId = chat.id.toString()
+      const channelId = chat.id.toString();
+
+      if (!chat.owner_id || chat.isOwner === undefined) {
+        await refreshChannelOwnership(chat.id);
+      }
+
       if (chat.isSubscribed || chat.isOwner) {
-        connectToChannel(channelId)
+        connectToChannel(channelId);
       }
     } else {
       const roomId = chat.room_id || chat.id?.toString()
@@ -1039,22 +1044,22 @@ export default function ChatPage() {
   };
 
   const getMessageStatus = (msg: any): "sending" | "sent" | "delivered" | "read" | "read_file" => {
-  if (!msg) return "sent"
+    if (!msg) return "sent"
 
-  if (selectedChat?.type !== "private") {
-    return "sent"   
+    if (selectedChat?.type !== "private") {
+      return "sent"
+    }
+
+    if (!msg.isOwn) {
+      return "read"
+    }
+
+    if (msg.type === "file") {
+      return msg.is_read ? "read_file" : "sent"
+    }
+
+    return msg.is_read ? "read" : "sent"
   }
-
-  if (!msg.isOwn) {
-    return "read"   
-  }
-
-  if (msg.type === "file") {
-    return msg.is_read ? "read_file" : "sent"
-  }
-
-  return msg.is_read ? "read" : "sent"
-}
 
   const getChatName = (chat: any): string => {
     if (!chat) return "Noma'lum Chat"
@@ -1424,25 +1429,69 @@ export default function ChatPage() {
     lastSeen: selectedChat.lastSeen || new Date().toISOString()
   } : safeCurrentUser
 
-  const canSendMessage = () => {
-    if (!selectedChat) return false
 
-    if (selectedChat.type === "channel") {
-      return selectedChat.isOwner === true || selectedChat.owner_id === currentUser?.id
+  const isChannelOwner = (chat: any): boolean => {
+    if (!chat || chat.type !== "channel") return false;
+
+    if (chat.owner_id !== undefined) {
+      return chat.owner_id === currentUser?.id;
+    }
+    if (chat.owner !== undefined) {
+      return chat.owner === currentUser?.id;
+    }
+    if (chat.isOwner !== undefined) {
+      return chat.isOwner;
     }
 
-    return true
-  }
+    return false;
+  };
+
+  const canSendMessage = () => {
+    if (!selectedChat) return false;
+
+    if (selectedChat.type === "channel") {
+      return isChannelOwner(selectedChat) || selectedChat.isAdmin === true;
+    }
+
+    return true;
+  };
+
+  const refreshChannelOwnership = async (channelId: number) => {
+    try {
+      const channelDetail = await apiClient.getChannelDetail(channelId);
+      const isOwner = channelDetail.owner === currentUser?.id;
+
+      setSelectedChat((prev: any) => prev ? {
+        ...prev,
+        owner_id: channelDetail.owner,
+        isOwner: isOwner,
+        isAdmin: isOwner
+      } : prev);
+
+      setChannels(prev => prev.map(channel =>
+        channel.id === channelId
+          ? {
+            ...channel,
+            owner_id: channelDetail.owner,
+            isOwner: isOwner,
+            isAdmin: isOwner
+          }
+          : channel
+      ));
+    } catch (error) {
+      console.error("Failed to refresh channel ownership:", error);
+    }
+  };
 
   const shouldShowChannelActions = () => {
-    if (!selectedChat || selectedChat.type !== "channel") return false
+    if (!selectedChat || selectedChat.type !== "channel") return false;
 
-    if (selectedChat.isOwner === true || selectedChat.owner_id === currentUser?.id) {
+    if (isChannelOwner(selectedChat)) {
       return false;
     }
 
     return true;
-  }
+  };
 
   useEffect(() => {
     console.log("[UI Debug] Messages updated:", messages)
@@ -1897,7 +1946,7 @@ export default function ChatPage() {
                                       <MessageStatus
                                         status={getMessageStatus(msg)}
                                         isOwn={true}
-                                        isGroup={false}   
+                                        isGroup={false}
                                       />
                                     )}
                                   </div>
@@ -2023,6 +2072,10 @@ export default function ChatPage() {
                       </>
                     )}
                   </Button>
+                </div>
+              ) : selectedChat?.type === "channel" && isChannelOwner(selectedChat) ? (
+                <div className="flex justify-center">
+                  <p className="text-gray-400 text-sm">You are the owner of this channel</p>
                 </div>
               ) : canSendMessage() ? (
                 <form onSubmit={handleSendMessage} className="flex items-center gap-2">
