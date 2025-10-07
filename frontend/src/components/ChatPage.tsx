@@ -190,18 +190,11 @@ export default function ChatPage() {
     try {
       console.log("✅ Profile update received:", updatedUser);
 
-      localStorage.removeItem("user_data");
-      localStorage.setItem("user_data", JSON.stringify(updatedUser));
-
       setCurrentUser(updatedUser);
-      localStorage.setItem("user_data", JSON.stringify(updatedUser));
 
       if (updateCurrentUserProfile) {
         updateCurrentUserProfile(updatedUser);
       }
-
-
-      setCurrentUser(updatedUser);
 
       if (selectedChat && selectedChat.type === "private" && selectedChat.sender_id === currentUser?.id) {
         setSelectedChat((prev: any) => prev ? {

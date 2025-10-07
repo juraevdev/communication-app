@@ -100,14 +100,6 @@ export function useChat() {
 const updateCurrentUserProfile = useCallback((updatedData: any) => {
   console.log("[Chat] Updating current user profile:", updatedData);
 
-  try {
-    localStorage.removeItem('user_data');
-    localStorage.setItem('user_data', JSON.stringify(updatedData));
-    console.log("✅ localStorage updated successfully");
-  } catch (error) {
-    console.error('❌ [Chat] Failed to update user data in localStorage:', error);
-  }
-
   setCurrentUser((prev: any) => {
     if (!prev) return updatedData;
     const newUserData = { ...prev, ...updatedData };
@@ -136,7 +128,6 @@ useEffect(() => {
       const response = await apiClient.getMe();
       const user = response.data;
       setCurrentUser(user);
-      localStorage.setItem('user_data', JSON.stringify(user));
       console.log("[Chat] Current user loaded:", user);
       initializeStatusWebSocket();
       initializeNotificationsWebSocket();

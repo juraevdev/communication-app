@@ -93,6 +93,7 @@ export const apiClient = {
   
   return response.data;
 },
+
   async getUserProfile(contactUserId: any) {
   const timestamp = new Date().getTime();
   const response = await api.get(`/accounts/user/${contactUserId}/?t=${timestamp}`, {
