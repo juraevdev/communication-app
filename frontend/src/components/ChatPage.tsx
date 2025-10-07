@@ -580,7 +580,7 @@ export default function ChatPage() {
       if (!chat.owner_id || chat.isOwner === undefined) {
         await refreshChannelOwnership(chat.id);
 
-        
+
       }
 
       if (chat.isSubscribed || chat.isOwner) {
@@ -1448,15 +1448,15 @@ export default function ChatPage() {
     return false;
   };
 
-  const canSendMessage = () => {
-    if (!selectedChat) return false;
+  // const canSendMessage = () => {
+  //   if (!selectedChat) return false;
 
-    if (selectedChat.type === "channel") {
-      return isChannelOwner(selectedChat) || selectedChat.isAdmin === true;
-    }
+  //   if (selectedChat.type === "channel") {
+  //     return isChannelOwner(selectedChat) || selectedChat.isAdmin === true;
+  //   }
 
-    return true;
-  };
+  //   return true;
+  // };
 
   const refreshChannelOwnership = async (channelId: number) => {
     try {
@@ -2076,10 +2076,6 @@ export default function ChatPage() {
                   </Button>
                 </div>
               ) : selectedChat?.type === "channel" && isChannelOwner(selectedChat) ? (
-                <div className="flex justify-center">
-                  <p className="text-gray-400 text-sm">You are the owner of this channel</p>
-                </div>
-              ) : canSendMessage() ? (
                 <form onSubmit={handleSendMessage} className="flex items-center gap-2">
                   <input
                     type="file"
