@@ -147,10 +147,6 @@ const handleSave = async () => {
       phone_number: editData.phone_number || editData.phone_number,
     })
 
-    setTimeout(() => {
-      window.location.reload();
-    }, 1500);
-
   } catch (error: any) {
     const errorMessage = error.response?.data?.message ||
       error.message ||
