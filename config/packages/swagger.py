@@ -8,4 +8,5 @@ SWAGGER_SETTINGS = {
         }
     },
     'USE_SESSION_AUTH': False,
+    'PERSIST_AUTH': True,
 }
