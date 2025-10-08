@@ -10,6 +10,19 @@ const api = axios.create({
   },
 });
 
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -31,16 +44,11 @@ api.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${access}`;
           return api(originalRequest);
         } catch (refreshError) {
-          console.error('Refresh token failed:', refreshError);
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
           window.location.href = '/login';
           return Promise.reject(refreshError);
         }
-      } else {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        window.location.href = '/login';
       }
     }
 
@@ -195,8 +203,18 @@ export const apiClient = {
   // Add these methods to your apiClient object in api.tsx
 
   async downloadGroupFile(fileUrl: string): Promise<Blob> {
-    const response = await api.get(`planshet2.stat.uz/${fileUrl}`);
-    return response.data;
+    const response = await fetch(`planshet2.stat.uz/${fileUrl}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+    }
+
+    return response.blob();
   },
 
   async getGroupFileUrl(fileId: number): Promise<string> {
@@ -204,14 +222,23 @@ export const apiClient = {
     return response.data.file_url;
   },
 
-  // Alternative method using the existing API structure
   async downloadFile(fileUrl: string, _isGroupFile: boolean = false): Promise<Blob> {
     const fullUrl = fileUrl.startsWith('https')
       ? fileUrl
       : `planshet2.stat.uz/${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
 
-    const response = await api.get(fullUrl);
-    return response.data;
+    const response = await fetch(fullUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+    }
+
+    return response.blob();
   },
 
   async getUserFiles() {
@@ -263,8 +290,11 @@ export const apiClient = {
   },
 
   async getGroupDetail(groupId: number) {
-    const response = await api.get(`${BASE_URL}/v1/group/${groupId}/`);
-    return response.data;
+    const response = await fetch(`${BASE_URL}/v1/group/${groupId}/`, {
+      method: 'GET',
+      headers: this.getHeaders(),
+    });
+    return this.handleResponse(response);
   },
 
   async updateGroup(groupId: number, data: { name?: string; description?: string }) {
