@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { apiClient } from "@/lib/api"
+import { isAxiosError } from "axios"
 
 export interface Message {
   [x: string]: any
@@ -128,39 +129,54 @@ export function useChat() {
 
 
   useEffect(() => {
-    const initializeUser = async () => {
-      try {
-        const cachedUser = localStorage.getItem("user_data");
-        if (cachedUser) {
-          const parsedUser = JSON.parse(cachedUser);
-          setCurrentUser(parsedUser);
-          console.log("[Chat] Cached user loaded:", parsedUser);
-
-          initializeStatusWebSocket();
-          initializeNotificationsWebSocket();
-          await loadGroups();
-          loadChannels();
-          return;
-        }
-
-        const response = await apiClient.getMe();
-        const user = response.data;
-        setCurrentUser(user);
-
-        console.log("[Chat] Fresh user loaded from API:", user);
+  const initializeUser = async () => {
+    try {
+      const cachedUser = localStorage.getItem("user_data");
+      if (cachedUser) {
+        const parsedUser = JSON.parse(cachedUser);
+        setCurrentUser(parsedUser);
+        console.log("[Chat] Cached user loaded:", parsedUser);
 
         initializeStatusWebSocket();
         initializeNotificationsWebSocket();
         await loadGroups();
         loadChannels();
-
-      } catch (error) {
-        console.error("❌ Failed to load user:", error);
+        return;
       }
-    };
 
-    initializeUser();
-  }, []);
+      const response = await apiClient.getMe();
+      const user = response.data;
+      setCurrentUser(user);
+
+      console.log("[Chat] Fresh user loaded from API:", user);
+
+      initializeStatusWebSocket();
+      initializeNotificationsWebSocket();
+      await loadGroups();
+      loadChannels();
+
+    } catch (error) {
+      console.error("❌ Failed to load user:", error);
+      
+      if (isAxiosError(error)) {
+        if (error.response?.status === 401) {
+          console.log("🔄 401 error detected, redirecting to login...");
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("refresh_token");
+          localStorage.removeItem("user_data");
+          window.location.href = '/login';
+          return;
+        }
+      } else if (error instanceof Error) {
+        console.log("Error message:", error.message);
+      }
+      
+      console.log("Unknown error type");
+    }
+  };
+
+  initializeUser();
+}, []);
 
 
   const loadGroups = useCallback(async () => {
