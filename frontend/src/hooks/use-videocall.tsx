@@ -1,4 +1,3 @@
-// hooks/use-videocall.tsx
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface UseVideoCallProps {
@@ -25,14 +24,14 @@ export const useVideoCall = ({
       callType: 'video' | 'audio' 
     } | null,
     isRinging: false,
-    isWsConnected: false, // ✅ Yangi state: WebSocket connection status
+    isWsConnected: false, // âœ… Yangi state: WebSocket connection status
   });
 
   const peerConnections = useRef<Map<number, RTCPeerConnection>>(new Map());
   const videoCallWs = useRef<WebSocket | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const currentRoomId = useRef<string | null>(null);
-  const pendingMessages = useRef<any[]>([]); // ✅ Yangi: Kutayotgan xabarlar
+  const pendingMessages = useRef<any[]>([]); // âœ… Yangi: Kutayotgan xabarlar
 
   const rtcConfig: RTCConfiguration = {
     iceServers: [
@@ -60,14 +59,14 @@ export const useVideoCall = ({
         console.log('[VideoCall] WebSocket connected to room:', roomId);
         setState(prev => ({ ...prev, isWsConnected: true }));
         
-        // ✅ Avvalo join_call xabarini yuborish
+        // âœ… Avvalo join_call xabarini yuborish
         sendWebSocketMessage({ 
           type: 'join_call',
           from_user_id: currentUserId,
           user_name: currentUserName
         });
 
-        // ✅ Kutayotgan xabarlarni yuborish
+        // âœ… Kutayotgan xabarlarni yuborish
         flushPendingMessages();
       };
 
@@ -100,7 +99,7 @@ export const useVideoCall = ({
     }
   }, [currentUserId, currentUserName, state.isInCall]);
 
-  // ✅ Yangi: Kutayotgan xabarlarni yuborish
+  // âœ… Yangi: Kutayotgan xabarlarni yuborish
   const flushPendingMessages = useCallback((): void => {
     if (pendingMessages.current.length > 0) {
       console.log('[VideoCall] Flushing pending messages:', pendingMessages.current.length);
@@ -111,14 +110,14 @@ export const useVideoCall = ({
     }
   }, []);
 
-  // ✅ Yangilangan WebSocket message sender
+  // âœ… Yangilangan WebSocket message sender
   const sendWebSocketMessage = useCallback((message: any): void => {
     if (videoCallWs.current?.readyState === WebSocket.OPEN && state.isWsConnected) {
       videoCallWs.current.send(JSON.stringify(message));
       console.log('[VideoCall] Sent message:', message);
     } else {
       console.warn('[VideoCall] WebSocket not ready, queuing message:', message);
-      // ✅ WebSocket tayyor bo'lmaganda xabarlarni saqlab qo'yish
+      // âœ… WebSocket tayyor bo'lmaganda xabarlarni saqlab qo'yish
       pendingMessages.current.push(message);
     }
   }, [state.isWsConnected]);
@@ -396,7 +395,7 @@ const sendCallInvitation = useCallback((roomId: string, toUserId: number, callTy
     accepted: accepted,
     from_user_id: currentUserId,
     user_name: currentUserName,
-    to_user_id: toUserId  // ✅ Maqsadli foydalanuvchi ID si
+    to_user_id: toUserId  // âœ… Maqsadli foydalanuvchi ID si
   };
 
   console.log('[VideoCall] Sending call response:', responseMessage);
@@ -475,7 +474,7 @@ const sendCallInvitation = useCallback((roomId: string, toUserId: number, callTy
     console.log('[VideoCall] Accepting call:', state.incomingCall.roomId);
     await joinCall(state.incomingCall.roomId);
     
-    // ✅ Jo'natuvchiga javob yuborish
+    // âœ… Jo'natuvchiga javob yuborish
     sendCallResponse(state.incomingCall.roomId, state.incomingCall.fromUserId, true);
     
     setState(prev => ({ 
@@ -491,7 +490,7 @@ const rejectCall = useCallback((): void => {
   if (state.incomingCall) {
     console.log('[VideoCall] Rejecting call:', state.incomingCall.roomId);
     
-    // ✅ Jo'natuvchiga javob yuborish
+    // âœ… Jo'natuvchiga javob yuborish
     sendCallResponse(state.incomingCall.roomId, state.incomingCall.fromUserId, false);
     
     setState(prev => ({ 

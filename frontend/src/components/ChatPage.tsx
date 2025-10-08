@@ -141,8 +141,8 @@ export default function ChatPage() {
   } | null>(null)
 
   const videoCall = useVideoCall({
-  currentUserId: currentUser?.id ? Number(currentUser.id) : 0,
-  currentUserName: currentUser?.fullname || currentUser?.name || currentUser?.username || 'User'
+  currentUserId: currentUser?.id ? Number(currentUser.id) : undefined,
+  currentUserName: currentUser?.name || currentUser?.username || 'User'
 });
 
   const [selectedChat, setSelectedChat] = useState<any>(null)
@@ -188,7 +188,7 @@ export default function ChatPage() {
 
   const handleProfileUpdate = async (updatedUser: any) => {
     try {
-      console.log("✅ Profile update received:", updatedUser);
+      console.log("âœ… Profile update received:", updatedUser);
 
       setCurrentUser(updatedUser);
 
@@ -222,10 +222,10 @@ export default function ChatPage() {
         return chat;
       }));
 
-      console.log("✅ Profile update completed & localStorage synced");
+      console.log("âœ… Profile update completed & localStorage synced");
 
     } catch (error) {
-      console.error("❌ Failed to update profile:", error);
+      console.error("âŒ Failed to update profile:", error);
     }
   };
 
@@ -1740,7 +1740,7 @@ const handleStartVideoCall = async () => {
                               ? item.username || "No description"
                               : (item.email || "No email")
                           ) : (
-                            item.message_type === "file" ? "📎 File" : (item.last_message || "")
+                            item.message_type === "file" ? "ðŸ“Ž File" : (item.last_message || "")
                           )}
                         </p>
                         {!isSearchResult && item.unread > 0 && (
@@ -1932,7 +1932,7 @@ const handleStartVideoCall = async () => {
                                         </p>
                                         <p className="text-xs truncate">
                                           {msg.reply_to.message_type === "file"
-                                            ? `📎 ${msg.reply_to.file_name || "Fayl"}`
+                                            ? `ðŸ“Ž ${msg.reply_to.file_name || "Fayl"}`
                                             : msg.reply_to.content || msg.reply_to.message || ""}
                                         </p>
                                       </div>
@@ -2000,7 +2000,7 @@ const handleStartVideoCall = async () => {
                       </p>
                       <p className="text-sm text-white truncate">
                         {isFileMessage(replyingTo)
-                          ? `📎 ${replyingTo.file_name || "File"}`
+                          ? `ðŸ“Ž ${replyingTo.file_name || "File"}`
                           : replyingTo.message
                         }
                       </p>

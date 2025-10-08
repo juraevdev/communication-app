@@ -1,4 +1,3 @@
-// components/video-call-modal.tsx
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -98,7 +97,7 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
                 <span className="text-green-400 text-sm font-medium">
                   {callStatus === 'connected' ? 'Connected' : callStatus}
                 </span>
-                <span className="text-gray-400 text-sm">•</span>
+                <span className="text-gray-400 text-sm">â€¢</span>
                 <span className="text-gray-400 text-sm">
                   {participants.length + 1} participants
                 </span>
@@ -132,8 +131,8 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
               />
               <div className="absolute top-4 left-4 bg-black bg-opacity-70 px-3 py-1.5 rounded-full text-white text-sm font-medium backdrop-blur-sm">
                 You 
-                {isAudioMuted && <span className="ml-2">🔇</span>}
-                {isVideoMuted && <span className="ml-1">📹❌</span>}
+                {isAudioMuted && <span className="ml-2">ðŸ”‡</span>}
+                {isVideoMuted && <span className="ml-1">ðŸ“¹âŒ</span>}
               </div>
               
               {/* Video muted bo'lsa */}
