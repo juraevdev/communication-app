@@ -437,10 +437,10 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
               <TabsContent value="add-contacts" className="space-y-4">
                 <div className="space-y-4 p-4">
                   <div className="space-y-2">
-                    <Label htmlFor="username">Username *</Label>
+                    <Label htmlFor="username">Phone Number *</Label>
                     <Input
                       id="username"
-                      placeholder="Enter username to search"
+                      placeholder="Enter phone number to search"
                       value={newUsername}
                       onChange={(e) => setNewUsername(e.target.value)}
                       disabled={isAddingContact}
