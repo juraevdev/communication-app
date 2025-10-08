@@ -1488,15 +1488,26 @@ export function useChat() {
 
 
   const getChannelOwnership = useCallback((channel: any, currentUser: any): boolean => {
-  if (channel.owner_id !== undefined) {
-    return channel.owner_id === currentUser?.id;
-  }
-  if (channel.owner !== undefined) {
-    return channel.owner === currentUser?.id;
-  }
+  if (!channel || !currentUser) return false;
+  
+  const ownerId = channel.owner_id || channel.owner;
+  const currentUserId = currentUser.id || currentUser.user_id;
+  
+  console.log("[Chat] Channel ownership check:", {
+    channelId: channel.id,
+    ownerId,
+    currentUserId,
+    isOwner: channel.isOwner
+  });
+  
   if (channel.isOwner !== undefined) {
-    return channel.isOwner;
+    return channel.isOwner === true;
   }
+  
+  if (ownerId !== undefined && currentUserId !== undefined) {
+    return ownerId.toString() === currentUserId.toString();
+  }
+  
   return false;
 }, []);
 
@@ -1508,6 +1519,14 @@ const loadChannels = useCallback(async () => {
     const formattedChannels: Chat[] = channelsData.map((channel: any) => {
       const isOwner = getChannelOwnership(channel, currentUser);
       const isSubscribed = channel.is_subscribed === true || isOwner;
+
+      console.log(`[Chat] Channel ${channel.id} ownership:`, {
+        channelName: channel.name,
+        ownerId: channel.owner,
+        currentUserId: currentUser?.id,
+        isOwner,
+        isSubscribed
+      });
 
       return {
         id: channel.id,
