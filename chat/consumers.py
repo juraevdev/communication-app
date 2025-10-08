@@ -1476,7 +1476,6 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
 
     async def disconnect(self, close_code):
         try:
-            # Foydalanuvchi ma'lumotlarini xavfsiz olish
             if hasattr(self.user, 'id') and not isinstance(self.user, AnonymousUser):
                 user_name = getattr(self.user, 'fullname', None) or getattr(self.user, 'username', 'Unknown User')
                 
@@ -1492,7 +1491,6 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
             print(f"[VideoCall] Error in disconnect: {e}")
         
         finally:
-            # Har doim group dan chiqish
             await self.channel_layer.group_discard(
                 self.room_group_name,
                 self.channel_name

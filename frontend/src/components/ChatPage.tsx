@@ -141,8 +141,8 @@ export default function ChatPage() {
   } | null>(null)
 
   const videoCall = useVideoCall({
-  currentUserId: currentUser?.id ? Number(currentUser.id) : undefined,
-  currentUserName: currentUser?.name || currentUser?.username || 'User'
+  currentUserId: currentUser?.id ? Number(currentUser.id) : 0,
+  currentUserName: currentUser?.fullname || currentUser?.name || currentUser?.username || 'User'
 });
 
   const [selectedChat, setSelectedChat] = useState<any>(null)
@@ -275,32 +275,30 @@ export default function ChatPage() {
   }, [refreshChannelsTrigger])
 
 const handleStartVideoCall = async () => {
-  if (!selectedChat || !currentUser) {
-    console.error('[ChatPage] Cannot start call: no selected chat or current user');
+  if (!currentUser || !currentUser.id) {
+    console.error('[ChatPage] Cannot start call: currentUser not initialized');
+    alert('Iltimos, sahifani yangilang va qayta urinib ko\'ring');
+    return;
+  }
+
+  if (!selectedChat) {
+    console.error('[ChatPage] Cannot start call: no selected chat');
     return;
   }
 
   try {
     const roomId = `videocall_${selectedChat.id}_${Date.now()}`;
-    
     const targetUserId = selectedChat.type === 'private' 
       ? selectedChat.sender_id    
       : selectedChat.id;
 
-    console.log('[ChatPage] Video call details:', {
+    console.log('[ChatPage] Starting call:', {
       currentUserId: currentUser.id,
       targetUserId,
-      selectedChatId: selectedChat.id,
-      selectedChatSenderId: selectedChat.sender_id,
       roomId
     });
 
-    if (targetUserId === currentUser.id) {
-      console.error('[ChatPage] Error: Cannot call yourself', {
-        currentUserId: currentUser.id,
-        targetUserId,
-        selectedChat
-      });
+    if (Number(targetUserId) === Number(currentUser.id)) {
       alert('Siz o\'zingizga qo\'ng\'iroq qila olmaysiz');
       return;
     }
@@ -315,14 +313,12 @@ const handleStartVideoCall = async () => {
 
     if (selectedChat.type === 'private') {
       videoCall.sendCallInvitation(roomId, targetUserId, 'video');
-      console.log('[ChatPage] Video call invitation sent to user:', targetUserId);
     }
 
     setVideoCallModalOpen(true);
-
   } catch (error) {
     console.error('Failed to start video call:', error);
-    alert('Video qo\'ng\'iroqni boshlash muvaffaqiyatsiz. Kamera/mikron ruxsatlarini tekshiring.');
+    alert('Video qo\'ng\'iroqni boshlash muvaffaqiyatsiz.');
   }
 };
 
