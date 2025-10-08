@@ -35,6 +35,7 @@ const handleSubmit = async (e: React.FormEvent) => {
     const accessToken = localStorage.getItem('access_token');
 
     if (!accessToken) {
+      localStorage.removeItem("user_data")
       throw new Error("No access token received");
     }
 
