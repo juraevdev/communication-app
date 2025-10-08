@@ -582,6 +582,20 @@ export const useVideoCall = ({
     return false;
   }, [state.localStream]);
 
+  const setIncomingCall = useCallback((callData: {
+    roomId: string;
+    fromUserId: number;
+    fromUserName: string;
+    callType: 'video' | 'audio';
+  } | null): void => {
+    console.log('[VideoCall] 📞 Setting incoming call:', callData);
+    setState(prev => ({
+      ...prev,
+      incomingCall: callData,
+      isRinging: !!callData
+    }));
+  }, []);
+
   const shareScreen = useCallback(async (): Promise<void> => {
     try {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
@@ -638,6 +652,7 @@ export const useVideoCall = ({
     shareScreen,
     localVideoRef,
     sendCallInvitation,
+    setIncomingCall,
     acceptCall,
     rejectCall,
   };

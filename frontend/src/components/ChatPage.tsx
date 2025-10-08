@@ -50,6 +50,7 @@ import { useChat } from "@/hooks/use-chat"
 import { EditMessageModal } from "./edit-message"
 import { VideoCallModal } from "./video-call-modal"
 import { useVideoCall } from "@/hooks/use-videocall"
+import { useNotificationWebSocket } from "@/hooks/use-notification-websocket"
 
 const IncomingCallModal = ({
   isOpen,
@@ -229,6 +230,23 @@ export default function ChatPage() {
       console.error("âŒ Failed to update profile:", error);
     }
   };
+
+  const notificationWs = useNotificationWebSocket({
+    userId: currentUser?.id,
+    onCallInvitation: (data) => {
+      console.log('[ChatPage] 📞 Call invitation received via notification WS:', data);
+      
+      videoCall.setIncomingCall({
+        roomId: data.roomId,
+        fromUserId: data.fromUserId,
+        fromUserName: data.fromUserName,
+        callType: data.callType
+      });
+    },
+    onCallResponse: (data) => {
+      console.log('[ChatPage] 📲 Call response received:', data, notificationWs);
+    }
+  });
 
 
   const refreshGroupsList = (leftGroupId?: number) => {
