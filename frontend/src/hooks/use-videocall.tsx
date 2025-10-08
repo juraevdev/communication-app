@@ -1,7 +1,8 @@
+// hooks/use-videocall.tsx
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface UseVideoCallProps {
-  currentUserId: number;
+  currentUserId?: number;
   currentUserName?: string;
 }
 
@@ -346,13 +347,32 @@ export const useVideoCall = ({
   }, [createPeerConnection, sendWebSocketMessage, currentUserId]);
 
 const sendCallInvitation = useCallback((roomId: string, toUserId: number, callType: 'video' | 'audio' = 'video'): void => {
-  if (!currentUserId || currentUserId === 0) {
-    console.error('[VideoCall] Cannot send invitation: currentUserId is invalid', currentUserId);
+  const currentId = Number(currentUserId);
+  const targetId = Number(toUserId);
+  
+  console.log('[VideoCall] Type-checked IDs:', {
+    currentId,
+    targetId,
+    currentUserId,
+    toUserId
+  });
+  
+  if (currentId === targetId) {
+    console.error('[VideoCall] Error: Cannot send call invitation to yourself (type-checked)');
     return;
   }
   
   if (toUserId === currentUserId) {
-    console.error('[VideoCall] Cannot call yourself');
+    console.error('[VideoCall] Error: Cannot send call invitation to yourself', {
+      toUserId,
+      currentUserId,
+      currentUserName
+    });
+    return;
+  }
+
+  if (!toUserId || toUserId <= 0) {
+    console.error('[VideoCall] Error: Invalid toUserId', toUserId);
     return;
   }
 
@@ -365,7 +385,7 @@ const sendCallInvitation = useCallback((roomId: string, toUserId: number, callTy
     to_user_id: toUserId
   };
 
-  console.log('[VideoCall] Sending invitation:', invitationMessage);
+  console.log('[VideoCall] Sending call invitation:', invitationMessage);
   sendWebSocketMessage(invitationMessage);
 }, [sendWebSocketMessage, currentUserId, currentUserName]);
 

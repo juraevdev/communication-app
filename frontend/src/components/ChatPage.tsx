@@ -275,30 +275,32 @@ export default function ChatPage() {
   }, [refreshChannelsTrigger])
 
 const handleStartVideoCall = async () => {
-  if (!currentUser || !currentUser.id) {
-    console.error('[ChatPage] Cannot start call: currentUser not initialized');
-    alert('Iltimos, sahifani yangilang va qayta urinib ko\'ring');
-    return;
-  }
-
-  if (!selectedChat) {
-    console.error('[ChatPage] Cannot start call: no selected chat');
+  if (!selectedChat || !currentUser) {
+    console.error('[ChatPage] Cannot start call: no selected chat or current user');
     return;
   }
 
   try {
     const roomId = `videocall_${selectedChat.id}_${Date.now()}`;
+    
     const targetUserId = selectedChat.type === 'private' 
       ? selectedChat.sender_id    
       : selectedChat.id;
 
-    console.log('[ChatPage] Starting call:', {
+    console.log('[ChatPage] Video call details:', {
       currentUserId: currentUser.id,
       targetUserId,
+      selectedChatId: selectedChat.id,
+      selectedChatSenderId: selectedChat.sender_id,
       roomId
     });
 
-    if (Number(targetUserId) === Number(currentUser.id)) {
+    if (targetUserId === currentUser.id) {
+      console.error('[ChatPage] Error: Cannot call yourself', {
+        currentUserId: currentUser.id,
+        targetUserId,
+        selectedChat
+      });
       alert('Siz o\'zingizga qo\'ng\'iroq qila olmaysiz');
       return;
     }
@@ -313,12 +315,14 @@ const handleStartVideoCall = async () => {
 
     if (selectedChat.type === 'private') {
       videoCall.sendCallInvitation(roomId, targetUserId, 'video');
+      console.log('[ChatPage] Video call invitation sent to user:', targetUserId);
     }
 
     setVideoCallModalOpen(true);
+
   } catch (error) {
     console.error('Failed to start video call:', error);
-    alert('Video qo\'ng\'iroqni boshlash muvaffaqiyatsiz.');
+    alert('Video qo\'ng\'iroqni boshlash muvaffaqiyatsiz. Kamera/mikron ruxsatlarini tekshiring.');
   }
 };
 
