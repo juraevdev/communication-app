@@ -5,23 +5,23 @@ interface UseVideoCallProps {
   currentUserName?: string;
 }
 
-export const useVideoCall = ({ 
-  currentUserId, 
-  currentUserName = 'User' 
+export const useVideoCall = ({
+  currentUserId,
+  currentUserName = 'User'
 }: UseVideoCallProps) => {
   const [state, setState] = useState({
     isInCall: false,
     localStream: null as MediaStream | null,
     remoteStreams: new Map<number, MediaStream>(),
     callStatus: 'idle' as 'idle' | 'calling' | 'ringing' | 'connected' | 'failed',
-    participants: [] as Array<{id: number, name: string}>,
+    participants: [] as Array<{ id: number, name: string }>,
     isAudioMuted: false,
     isVideoMuted: false,
-    incomingCall: null as { 
-      roomId: string; 
-      fromUserId: number; 
-      fromUserName: string; 
-      callType: 'video' | 'audio' 
+    incomingCall: null as {
+      roomId: string;
+      fromUserId: number;
+      fromUserName: string;
+      callType: 'video' | 'audio'
     } | null,
     isRinging: false,
     isWsConnected: false,
@@ -75,47 +75,39 @@ export const useVideoCall = ({
         currentRoomId.current = roomId;
         const token = localStorage.getItem('access_token');
         const wsUrl = `wss://planshet2.stat.uz/ws/videocall/${roomId}/?token=${token}`;
-        
+
         console.log('[VideoCall] 🔌 Connecting to WebSocket:', wsUrl);
-        
+
         videoCallWs.current = new WebSocket(wsUrl);
-        
-        // Connection timeout
-        connectionTimeout.current = setTimeout(() => {
-          if (videoCallWs.current?.readyState !== WebSocket.OPEN) {
-            console.error('[VideoCall] ❌ Connection timeout');
-            videoCallWs.current?.close();
-            reject(new Error('Connection timeout'));
-          }
-        }, 10000);
-        
+
+        // User-specific group qo'shish
         videoCallWs.current.onopen = (): void => {
           console.log('[VideoCall] ✅ WebSocket connected to room:', roomId);
-          
-          if (connectionTimeout.current) {
-            clearTimeout(connectionTimeout.current);
-            connectionTimeout.current = null;
+
+          // User groupga qo'shilish
+          if (currentUserId) {
+            const userGroupMessage = {
+              type: 'join_user_group',
+              user_id: currentUserId
+            };
+            videoCallWs.current?.send(JSON.stringify(userGroupMessage));
+            console.log('[VideoCall] ✅ Joined user group:', currentUserId);
           }
-          
+
           setState(prev => ({ ...prev, isWsConnected: true }));
-          
+
           // Join call xabarini yuborish
-          const joinMessage = { 
+          const joinMessage = {
             type: 'join_call',
             from_user_id: currentUserId,
             user_name: currentUserName
           };
-          console.log('[VideoCall] 📨 Sending join_call:', joinMessage);
-          
+
           setTimeout(() => {
             if (videoCallWs.current?.readyState === WebSocket.OPEN) {
               videoCallWs.current.send(JSON.stringify(joinMessage));
-              
-              // Kutayotgan xabarlarni yuborish
-              setTimeout(() => {
-                flushPendingMessages();
-                resolve();
-              }, 500);
+              flushPendingMessages();
+              resolve();
             }
           }, 500);
         };
@@ -124,6 +116,22 @@ export const useVideoCall = ({
           try {
             const data = JSON.parse(event.data);
             console.log('[VideoCall] 📩 Received message:', data.type, data);
+
+            if (data.type === 'call_invitation') {
+              console.log('[VideoCall] 📞 Received call invitation:', data);
+              setState(prev => ({
+                ...prev,
+                incomingCall: {
+                  roomId: data.room_id,
+                  fromUserId: data.from_user_id,
+                  fromUserName: data.from_user_name,
+                  callType: data.call_type || 'video'
+                },
+                isRinging: true
+              }));
+              return;   
+            }
+
             await handleSignalingMessage(data);
           } catch (error) {
             console.error('[VideoCall] ❌ Error parsing message:', error);
@@ -133,7 +141,7 @@ export const useVideoCall = ({
         videoCallWs.current.onclose = (event: CloseEvent): void => {
           console.log('[VideoCall] 🔌 WebSocket disconnected:', event.code, event.reason);
           setState(prev => ({ ...prev, isWsConnected: false }));
-          
+
           if (connectionTimeout.current) {
             clearTimeout(connectionTimeout.current);
             connectionTimeout.current = null;
@@ -143,7 +151,7 @@ export const useVideoCall = ({
         videoCallWs.current.onerror = (error: Event): void => {
           console.error('[VideoCall] ❌ WebSocket error:', error);
           setState(prev => ({ ...prev, callStatus: 'failed', isWsConnected: false }));
-          
+
           if (connectionTimeout.current) {
             clearTimeout(connectionTimeout.current);
             connectionTimeout.current = null;
@@ -162,9 +170,9 @@ export const useVideoCall = ({
   // Peer connection yaratish
   const createPeerConnection = useCallback((userId: number): RTCPeerConnection => {
     console.log('[VideoCall] 🔗 Creating peer connection for user:', userId);
-    
+
     const pc = new RTCPeerConnection(rtcConfig);
-    
+
     if (state.localStream) {
       state.localStream.getTracks().forEach(track => {
         console.log('[VideoCall] ➕ Adding local track:', track.kind);
@@ -175,14 +183,14 @@ export const useVideoCall = ({
     pc.ontrack = (event: RTCTrackEvent): void => {
       console.log('[VideoCall] 📺 Received remote track from user:', userId);
       const remoteStream = event.streams[0];
-      
+
       if (remoteStream) {
         setState(prev => {
           const newRemoteStreams = new Map(prev.remoteStreams);
           newRemoteStreams.set(userId, remoteStream);
           return { ...prev, remoteStreams: newRemoteStreams };
         });
-        
+
         console.log('[VideoCall] ✅ Remote stream added for user:', userId);
       }
     };
@@ -226,7 +234,7 @@ export const useVideoCall = ({
           ...prev,
           participants: [...prev.participants.filter(p => p.id !== from_user_id), { id: from_user_id, name: user_name }]
         }));
-        
+
         setTimeout(() => {
           createOffer(from_user_id);
         }, 1000);
@@ -243,7 +251,7 @@ export const useVideoCall = ({
             return newStreams;
           })(),
         }));
-        
+
         const pc = peerConnections.current.get(from_user_id);
         if (pc) {
           pc.close();
@@ -270,10 +278,10 @@ export const useVideoCall = ({
         if (data.accepted) {
           setState(prev => ({ ...prev, isRinging: false }));
         } else {
-          setState(prev => ({ 
-            ...prev, 
-            incomingCall: null, 
-            isRinging: false 
+          setState(prev => ({
+            ...prev,
+            incomingCall: null,
+            isRinging: false
           }));
         }
         break;
@@ -298,21 +306,21 @@ export const useVideoCall = ({
   // WebRTC handlers
   const handleOffer = useCallback(async (offer: RTCSessionDescriptionInit, fromUserId: number): Promise<void> => {
     console.log('[VideoCall] 📨 Processing offer from:', fromUserId);
-    
+
     const pc = createPeerConnection(fromUserId);
-    
+
     try {
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      
+
       sendWebSocketMessage({
         type: 'answer',
         answer: answer,
         to_user_id: fromUserId,
         from_user_id: currentUserId,
       });
-      
+
       console.log('[VideoCall] ✅ Answer sent to:', fromUserId);
     } catch (error) {
       console.error('[VideoCall] ❌ Error handling offer:', error);
@@ -345,24 +353,24 @@ export const useVideoCall = ({
 
   const createOffer = useCallback(async (userId: number): Promise<void> => {
     console.log('[VideoCall] 📤 Creating offer for user:', userId);
-    
+
     const pc = createPeerConnection(userId);
-    
+
     try {
       const offer = await pc.createOffer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: true,
       });
-      
+
       await pc.setLocalDescription(offer);
-      
+
       sendWebSocketMessage({
         type: 'offer',
         offer: offer,
         to_user_id: userId,
         from_user_id: currentUserId,
       });
-      
+
       console.log('[VideoCall] ✅ Offer sent to:', userId);
     } catch (error) {
       console.error('[VideoCall] ❌ Error creating offer:', error);
@@ -373,19 +381,19 @@ export const useVideoCall = ({
   const sendCallInvitation = useCallback((roomId: string, toUserId: number, callType: 'video' | 'audio' = 'video'): void => {
     const currentId = Number(currentUserId);
     const targetId = Number(toUserId);
-    
+
     console.log('[VideoCall] 📞 Sending call invitation:', {
       roomId,
       from: currentId,
       to: targetId,
       callType
     });
-    
+
     if (currentId === targetId) {
       console.error('[VideoCall] ❌ Cannot call yourself');
       return;
     }
-    
+
     if (!toUserId || toUserId <= 0) {
       console.error('[VideoCall] ❌ Invalid toUserId:', toUserId);
       return;
@@ -424,14 +432,14 @@ export const useVideoCall = ({
     try {
       console.log('[VideoCall] 🚀 Starting call in room:', roomId);
       setState(prev => ({ ...prev, callStatus: 'calling' }));
-      
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 1280, height: 720 },
         audio: true
       });
-      
+
       console.log('[VideoCall] ✅ Got local media stream');
-      
+
       setState(prev => ({
         ...prev,
         localStream: stream,
@@ -457,14 +465,14 @@ export const useVideoCall = ({
     try {
       console.log('[VideoCall] 🔗 Joining call in room:', roomId);
       setState(prev => ({ ...prev, callStatus: 'ringing' }));
-      
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 1280, height: 720 },
         audio: true
       });
-      
+
       console.log('[VideoCall] ✅ Got local media stream');
-      
+
       setState(prev => ({
         ...prev,
         localStream: stream,
@@ -490,13 +498,13 @@ export const useVideoCall = ({
     if (state.incomingCall) {
       console.log('[VideoCall] ✅ Accepting call:', state.incomingCall.roomId);
       await joinCall(state.incomingCall.roomId);
-      
+
       sendCallResponse(state.incomingCall.roomId, state.incomingCall.fromUserId, true);
-      
-      setState(prev => ({ 
-        ...prev, 
-        incomingCall: null, 
-        isRinging: false 
+
+      setState(prev => ({
+        ...prev,
+        incomingCall: null,
+        isRinging: false
       }));
     }
   }, [state.incomingCall, joinCall, sendCallResponse]);
@@ -504,20 +512,20 @@ export const useVideoCall = ({
   const rejectCall = useCallback((): void => {
     if (state.incomingCall) {
       console.log('[VideoCall] ❌ Rejecting call:', state.incomingCall.roomId);
-      
+
       sendCallResponse(state.incomingCall.roomId, state.incomingCall.fromUserId, false);
-      
-      setState(prev => ({ 
-        ...prev, 
-        incomingCall: null, 
-        isRinging: false 
+
+      setState(prev => ({
+        ...prev,
+        incomingCall: null,
+        isRinging: false
       }));
     }
   }, [state.incomingCall, sendCallResponse]);
 
   const endCall = useCallback((): void => {
     console.log('[VideoCall] 🛑 Ending call');
-    
+
     if (state.localStream) {
       state.localStream.getTracks().forEach(track => track.stop());
     }
@@ -532,7 +540,7 @@ export const useVideoCall = ({
       videoCallWs.current.close();
       videoCallWs.current = null;
     }
-    
+
     if (connectionTimeout.current) {
       clearTimeout(connectionTimeout.current);
       connectionTimeout.current = null;
@@ -550,7 +558,7 @@ export const useVideoCall = ({
       isRinging: false,
       isWsConnected: false,
     });
-    
+
     currentRoomId.current = null;
     pendingMessages.current = [];
   }, [state.localStream]);
@@ -582,20 +590,6 @@ export const useVideoCall = ({
     return false;
   }, [state.localStream]);
 
-  const setIncomingCall = useCallback((callData: {
-    roomId: string;
-    fromUserId: number;
-    fromUserName: string;
-    callType: 'video' | 'audio';
-  } | null): void => {
-    console.log('[VideoCall] 📞 Setting incoming call:', callData);
-    setState(prev => ({
-      ...prev,
-      incomingCall: callData,
-      isRinging: !!callData
-    }));
-  }, []);
-
   const shareScreen = useCallback(async (): Promise<void> => {
     try {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
@@ -604,9 +598,9 @@ export const useVideoCall = ({
       });
 
       const videoTrack = screenStream.getVideoTracks()[0];
-      
+
       peerConnections.current.forEach((pc, _userId) => {
-        const sender = pc.getSenders().find(s => 
+        const sender = pc.getSenders().find(s =>
           s.track && s.track.kind === 'video'
         );
         if (sender) {
@@ -618,7 +612,7 @@ export const useVideoCall = ({
         if (state.localStream) {
           const cameraTrack = state.localStream.getVideoTracks()[0];
           peerConnections.current.forEach((pc, _userId) => {
-            const sender = pc.getSenders().find(s => 
+            const sender = pc.getSenders().find(s =>
               s.track && s.track.kind === 'video'
             );
             if (sender && cameraTrack) {
@@ -652,7 +646,6 @@ export const useVideoCall = ({
     shareScreen,
     localVideoRef,
     sendCallInvitation,
-    setIncomingCall,
     acceptCall,
     rejectCall,
   };

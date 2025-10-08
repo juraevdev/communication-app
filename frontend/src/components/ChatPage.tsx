@@ -50,7 +50,6 @@ import { useChat } from "@/hooks/use-chat"
 import { EditMessageModal } from "./edit-message"
 import { VideoCallModal } from "./video-call-modal"
 import { useVideoCall } from "@/hooks/use-videocall"
-import { useNotificationWebSocket } from "@/hooks/use-notification-websocket"
 
 const IncomingCallModal = ({
   isOpen,
@@ -231,23 +230,6 @@ export default function ChatPage() {
     }
   };
 
-  const notificationWs = useNotificationWebSocket({
-    userId: currentUser?.id,
-    onCallInvitation: (data) => {
-      console.log('[ChatPage] 📞 Call invitation received via notification WS:', data);
-      
-      videoCall.setIncomingCall({
-        roomId: data.roomId,
-        fromUserId: data.fromUserId,
-        fromUserName: data.fromUserName,
-        callType: data.callType
-      });
-    },
-    onCallResponse: (data) => {
-      console.log('[ChatPage] 📲 Call response received:', data, notificationWs);
-    }
-  });
-
 
   const refreshGroupsList = (leftGroupId?: number) => {
     if (leftGroupId) {
@@ -345,6 +327,41 @@ export default function ChatPage() {
     }
   };
 
+  useEffect(() => {
+    const handleCallInvitation = (data: any) => {
+      console.log('[ChatPage] 📞 Received call invitation:', data);
+    };
+
+    const setupWebSocketListeners = (ws: WebSocket | null, name: string) => {
+      if (ws) {
+        ws.addEventListener('message', (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log(`[${name}] Received message:`, data);
+
+            if (data.type === 'call_invitation') {
+              handleCallInvitation(data);
+            }
+          } catch (error) {
+            console.error(`[${name}] Error parsing message:`, error);
+          }
+        });
+      }
+    };
+
+    setupWebSocketListeners(chatWsRef.current, 'ChatWS');
+    setupWebSocketListeners(groupWsRef.current, 'GroupWS');
+    setupWebSocketListeners(channelWsRef.current, 'ChannelWS');
+
+    return () => {
+      [chatWsRef.current, groupWsRef.current, channelWsRef.current].forEach(ws => {
+        if (ws) {
+          ws.removeEventListener('message', handleCallInvitation as any);
+        }
+      });
+    };
+  }, []);
+
   const handleEndVideoCall = () => {
     videoCall.endCall();
     setVideoCallModalOpen(false);
@@ -387,35 +404,35 @@ export default function ChatPage() {
   }, [selectedChat, messages, markAsRead])
 
   const getIsOwnMessage = (msg: any): boolean => {
-  const currentUserId = currentUser?.id?.toString();
-  
-  if (!msg || !currentUserId) return false;
+    const currentUserId = currentUser?.id?.toString();
 
-  console.log("[UI] Message ownership check:", {
-    messageId: msg.id,
-    currentUserId,
-    msgSender: msg.sender,
-    msgSenderId: msg.sender_id,
-    msgUser: msg.user
-  });
+    if (!msg || !currentUserId) return false;
 
-  const senderId = 
-    msg.sender?.id?.toString() ||
-    msg.sender_id?.toString() ||
-    msg.user?.id?.toString() ||
-    msg.user_id?.toString();
+    console.log("[UI] Message ownership check:", {
+      messageId: msg.id,
+      currentUserId,
+      msgSender: msg.sender,
+      msgSenderId: msg.sender_id,
+      msgUser: msg.user
+    });
 
-  const isOwn = senderId === currentUserId;
-  
-  console.log("[UI] Message ownership result:", {
-    messageId: msg.id,
-    senderId,
-    currentUserId,
-    isOwn
-  });
+    const senderId =
+      msg.sender?.id?.toString() ||
+      msg.sender_id?.toString() ||
+      msg.user?.id?.toString() ||
+      msg.user_id?.toString();
 
-  return isOwn;
-};
+    const isOwn = senderId === currentUserId;
+
+    console.log("[UI] Message ownership result:", {
+      messageId: msg.id,
+      senderId,
+      currentUserId,
+      isOwn
+    });
+
+    return isOwn;
+  };
 
 
   const handleSendMessage = (e: React.FormEvent) => {
@@ -616,65 +633,65 @@ export default function ChatPage() {
   }
 
   const handleChatSelect = async (chat: any) => {
-  console.log("Selected chat:", chat);
-  setSelectedChat(chat)
-  setLoadingMessages(true)
-  setReplyingTo(null)
-  setSearchQuery("")
-  setSearchResults([])
+    console.log("Selected chat:", chat);
+    setSelectedChat(chat)
+    setLoadingMessages(true)
+    setReplyingTo(null)
+    setSearchQuery("")
+    setSearchResults([])
 
-  if (chat.type === "group") {
-    setGroups(prev => prev.map(g =>
-      g.id === chat.id ? { ...g, unread: 0 } : g
-    ));
+    if (chat.type === "group") {
+      setGroups(prev => prev.map(g =>
+        g.id === chat.id ? { ...g, unread: 0 } : g
+      ));
 
-    const groupId = chat.id.toString()
-    connectToGroup(groupId)
-  } else if (chat.type === "channel") {
-    const channelId = chat.id.toString();
-    
-    await refreshChannelOwnership(chat.id);
-    
-    if (chat.isSubscribed || chat.isOwner) {
-      connectToChannel(channelId);
-    }
-  } else {
-    const roomId = chat.room_id || chat.id?.toString()
+      const groupId = chat.id.toString()
+      connectToGroup(groupId)
+    } else if (chat.type === "channel") {
+      const channelId = chat.id.toString();
 
-    try {
-      const userId = chat.sender_id || chat.id;
-      console.log("Loading user profile for ID:", userId);
+      await refreshChannelOwnership(chat.id);
 
-      const userData = await apiClient.getUserProfile(userId);
-      console.log("User profile data from server:", userData);
-
-      const updatedChat = {
-        ...chat,
-        username: userData.username || "user",
-        email: userData.email || "",
-        name: userData.fullname || chat.name || chat.sender,
-        bio: userData.bio || "",
-        phone_number: userData.phone_number || "",
-        avatar: userData.avatar || chat.avatar,
-        room_id: roomId
-      };
-
-      console.log("Updated chat with user data:", updatedChat);
-      setSelectedChat(updatedChat);
-
-      if (roomId) {
-        connectToChatRoom(roomId)
+      if (chat.isSubscribed || chat.isOwner) {
+        connectToChannel(channelId);
       }
-    } catch (error) {
-      console.error("Failed to load user details:", error);
-      if (roomId) {
-        connectToChatRoom(roomId)
+    } else {
+      const roomId = chat.room_id || chat.id?.toString()
+
+      try {
+        const userId = chat.sender_id || chat.id;
+        console.log("Loading user profile for ID:", userId);
+
+        const userData = await apiClient.getUserProfile(userId);
+        console.log("User profile data from server:", userData);
+
+        const updatedChat = {
+          ...chat,
+          username: userData.username || "user",
+          email: userData.email || "",
+          name: userData.fullname || chat.name || chat.sender,
+          bio: userData.bio || "",
+          phone_number: userData.phone_number || "",
+          avatar: userData.avatar || chat.avatar,
+          room_id: roomId
+        };
+
+        console.log("Updated chat with user data:", updatedChat);
+        setSelectedChat(updatedChat);
+
+        if (roomId) {
+          connectToChatRoom(roomId)
+        }
+      } catch (error) {
+        console.error("Failed to load user details:", error);
+        if (roomId) {
+          connectToChatRoom(roomId)
+        }
       }
     }
+
+    setLoadingMessages(false)
   }
-
-  setLoadingMessages(false)
-}
 
   const handleStartChatFromContacts = async (contactUserId: number) => {
     try {
@@ -1485,28 +1502,28 @@ export default function ChatPage() {
 
 
   const isChannelOwner = (chat: any): boolean => {
-  if (!chat || chat.type !== "channel" || !currentUser) return false;
+    if (!chat || chat.type !== "channel" || !currentUser) return false;
 
-  console.log("[UI] Channel ownership check:", {
-    chatId: chat.id,
-    chatOwnerId: chat.owner_id || chat.owner,
-    currentUserId: currentUser.id,
-    isOwner: chat.isOwner
-  });
+    console.log("[UI] Channel ownership check:", {
+      chatId: chat.id,
+      chatOwnerId: chat.owner_id || chat.owner,
+      currentUserId: currentUser.id,
+      isOwner: chat.isOwner
+    });
 
-  const ownerId = chat.owner_id || chat.owner;
-  const currentUserId = currentUser.id;
+    const ownerId = chat.owner_id || chat.owner;
+    const currentUserId = currentUser.id;
 
-  if (chat.isOwner !== undefined) {
-    return chat.isOwner === true;
-  }
+    if (chat.isOwner !== undefined) {
+      return chat.isOwner === true;
+    }
 
-  if (ownerId !== undefined && currentUserId !== undefined) {
-    return ownerId.toString() === currentUserId.toString();
-  }
+    if (ownerId !== undefined && currentUserId !== undefined) {
+      return ownerId.toString() === currentUserId.toString();
+    }
 
-  return false;
-};
+    return false;
+  };
 
   const refreshChannelOwnership = async (channelId: number) => {
     try {

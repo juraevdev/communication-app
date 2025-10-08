@@ -1468,22 +1468,18 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
             await self.close()
             return
 
-        # Room guruhiga qo'shish
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
 
-        # MUHIM: User guruhiga qo'shish - qo'ng'iroqlar uchun
         await self.channel_layer.group_add(f"user_{self.user.id}", self.channel_name)
 
         await self.accept()
-        print(f"[VideoCall] ✅ User {self.user.id} connected to room {self.room_id}")
-        print(f"[VideoCall] ✅ User {self.user.id} added to user group: user_{self.user.id}")
+        print(f"[VideoCall] User {self.user.id} connected to room {self.room_id}")
 
     async def disconnect(self, close_code):
         try:
             if hasattr(self.user, 'id') and not isinstance(self.user, AnonymousUser):
                 user_name = getattr(self.user, 'fullname', None) or getattr(self.user, 'username', 'Unknown User')
 
-                # Boshqa foydalanuvchilarga xabar yuborish
                 await self.channel_layer.group_send(
                     self.room_group_name,
                     {
@@ -1494,11 +1490,10 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
                 )
 
         except Exception as e:
-            print(f"[VideoCall] ❌ Error in disconnect: {e}")
+            print(f"[VideoCall] Error in disconnect: {e}")
         finally:
             await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
             await self.channel_layer.group_discard(f"user_{self.user.id}", self.channel_name)
-            print(f"[VideoCall] 🔌 User {self.user.id} disconnected from room {self.room_id}")
 
     async def receive(self, text_data):
         try:
@@ -1536,7 +1531,6 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
                 )
 
             elif message_type == 'join_call':
-                print(f"[VideoCall] 👤 User {self.user.id} joining call")
                 await self.channel_layer.group_send(
                     self.room_group_name,
                     {
@@ -1559,12 +1553,8 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
             elif message_type == 'call_invitation':
                 to_user_id = data.get('to_user_id')
                 if to_user_id:
-                    print(f"[VideoCall] 📞 Sending call invitation from user {self.user.id} to user {to_user_id}")
-                    print(f"[VideoCall] 📤 Target group: user_{to_user_id}")
-                    
-                    # MUHIM: To'g'ri formatda yuborish
                     await self.channel_layer.group_send(
-                        f"user_{to_user_id}",
+                        f"user_{to_user_id}",   
                         {
                             'type': 'call_invitation',
                             'room_id': data['room_id'],
@@ -1573,17 +1563,15 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
                             'call_type': data.get('call_type', 'video')
                         }
                     )
-                    print(f"[VideoCall] ✅ Call invitation sent to user_{to_user_id}")
+                    print(f"[VideoCall] Call invitation sent to user_{to_user_id}")
                 else:
-                    print("[VideoCall] ❌ Error: to_user_id missing in call_invitation")
+                    print("[VideoCall] Error: to_user_id missing in call_invitation")
 
             elif message_type == 'call_response':
                 to_user_id = data.get('to_user_id')
                 if to_user_id:
-                    print(f"[VideoCall] 📲 Sending call response from user {self.user.id} to user {to_user_id}")
-                    
                     await self.channel_layer.group_send(
-                        f"user_{to_user_id}",
+                        f"user_{to_user_id}",       
                         {
                             'type': 'call_response',
                             'room_id': data['room_id'],
@@ -1592,14 +1580,12 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
                             'accepted': data['accepted']
                         }
                     )
-                    print(f"[VideoCall] ✅ Call response sent to user_{to_user_id}")
+                    print(f"[VideoCall] Call response sent to user_{to_user_id}")
                 else:
-                    print("[VideoCall] ❌ Error: to_user_id missing in call_response")
+                    print("[VideoCall] Error: to_user_id missing in call_response")
 
         except Exception as e:
-            print(f"[VideoCall] ❌ Error in receive: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"[VideoCall] Error in receive: {e}")
 
     async def offer(self, event):
         if self.user.id != event['from_user_id']:
@@ -1622,20 +1608,23 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json(event)
 
     async def call_invitation(self, event):
-        """Call invitation qabul qiluvchi"""
-        print(f"[VideoCall] 📨 Delivering call invitation to user {self.user.id}")
-        await self.send_json({
-            'type': 'call_invitation',
-            'room_id': event['room_id'],
-            'from_user_id': event['from_user_id'],
-            'from_user_name': event['from_user_name'],
-            'call_type': event.get('call_type', 'video')
-        })
-        print(f"[VideoCall] ✅ Call invitation delivered to user {self.user.id}")
+        try:
+            print(f"[VideoCall] 📞 Sending call invitation to user_{event['to_user_id']}")
+            await self.channel_layer.group_send(
+                f"user_{event['to_user_id']}",
+                {
+                    'type': 'call_invitation',
+                    'room_id': event['room_id'],
+                    'from_user_id': event['from_user_id'],
+                    'from_user_name': event['from_user_name'],
+                    'call_type': event.get('call_type', 'video')
+                }
+            )
+            print(f"[VideoCall] ✅ Call invitation sent successfully to user_{event['to_user_id']}")
+        except Exception as e:
+            print(f"[VideoCall] ❌ Error sending call invitation: {e}")
 
     async def call_response(self, event):
-        """Call response qabul qiluvchi"""
-        print(f"[VideoCall] 📨 Delivering call response to user {self.user.id}")
         await self.send_json({
             'type': 'call_response',
             'room_id': event['room_id'],
@@ -1643,4 +1632,3 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
             'from_user_name': event['from_user_name'],
             'accepted': event['accepted']
         })
-        print(f"[VideoCall] ✅ Call response delivered to user {self.user.id}")
