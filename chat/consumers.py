@@ -1456,8 +1456,8 @@ class FilesConsumer(AsyncJsonWebsocketConsumer):
             size_bytes /= 1024.0
             i += 1
         return f"{size_bytes:.1f}{size_names[i]}"
-    
-    
+
+
 class VideoCallConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
         self.room_id = self.scope['url_route']['kwargs']['room_id']
@@ -1468,17 +1468,18 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
             await self.close()
             return
 
-        await self.channel_layer.group_add(
-            self.room_group_name,
-            self.channel_name
-        )
+        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
+
+        await self.channel_layer.group_add(f"user_{self.user.id}", self.channel_name)
+
         await self.accept()
+        print(f"[VideoCall] User {self.user.id} connected to room {self.room_id}")
 
     async def disconnect(self, close_code):
         try:
             if hasattr(self.user, 'id') and not isinstance(self.user, AnonymousUser):
                 user_name = getattr(self.user, 'fullname', None) or getattr(self.user, 'username', 'Unknown User')
-                
+
                 await self.channel_layer.group_send(
                     self.room_group_name,
                     {
@@ -1487,20 +1488,17 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
                         'user_name': user_name
                     }
                 )
+
         except Exception as e:
             print(f"[VideoCall] Error in disconnect: {e}")
-        
         finally:
-            await self.channel_layer.group_discard(
-                self.room_group_name,
-                self.channel_name
-            )
+            await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+            await self.channel_layer.group_discard(f"user_{self.user.id}", self.channel_name)
 
     async def receive(self, text_data):
         try:
             data = json.loads(text_data)
             message_type = data.get('type')
-
             user_name = getattr(self.user, 'fullname', None) or getattr(self.user, 'username', 'Unknown User')
 
             if message_type == 'offer':
@@ -1531,6 +1529,7 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
                         'from_user_id': self.user.id
                     }
                 )
+
             elif message_type == 'join_call':
                 await self.channel_layer.group_send(
                     self.room_group_name,
@@ -1540,6 +1539,7 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
                         'user_name': user_name
                     }
                 )
+
             elif message_type == 'leave_call':
                 await self.channel_layer.group_send(
                     self.room_group_name,
@@ -1549,105 +1549,78 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
                         'user_name': user_name
                     }
                 )
-                
-            if message_type == 'call_invitation':
+
+            elif message_type == 'call_invitation':
                 to_user_id = data.get('to_user_id')
                 if to_user_id:
                     await self.channel_layer.group_send(
-                        self.room_group_name,
+                        f"user_{to_user_id}",   
                         {
                             'type': 'call_invitation',
                             'room_id': data['room_id'],
                             'from_user_id': self.user.id,
                             'from_user_name': user_name,
-                            'call_type': data.get('call_type', 'video'),
-                            'to_user_id': to_user_id    
+                            'call_type': data.get('call_type', 'video')
                         }
                     )
+                    print(f"[VideoCall] Call invitation sent to user_{to_user_id}")
                 else:
                     print("[VideoCall] Error: to_user_id missing in call_invitation")
+
             elif message_type == 'call_response':
                 to_user_id = data.get('to_user_id')
                 if to_user_id:
                     await self.channel_layer.group_send(
-                        self.room_group_name,
+                        f"user_{to_user_id}",       
                         {
                             'type': 'call_response',
                             'room_id': data['room_id'],
                             'from_user_id': self.user.id,
                             'from_user_name': user_name,
-                            'accepted': data['accepted'],
-                            'to_user_id': to_user_id    
+                            'accepted': data['accepted']
                         }
                     )
+                    print(f"[VideoCall] Call response sent to user_{to_user_id}")
                 else:
                     print("[VideoCall] Error: to_user_id missing in call_response")
-                
-        except json.JSONDecodeError:
-            print("[VideoCall] Error decoding JSON")
+
         except Exception as e:
             print(f"[VideoCall] Error in receive: {e}")
 
     async def offer(self, event):
         if self.user.id != event['from_user_id']:
-            await self.send(text_data=json.dumps({
-                'type': 'offer',
-                'offer': event['offer'],
-                'from_user_id': event['from_user_id'],
-                'from_user_name': event['from_user_name']
-            }))
+            await self.send_json(event)
 
     async def answer(self, event):
         if self.user.id != event['from_user_id']:
-            await self.send(text_data=json.dumps({
-                'type': 'answer',
-                'answer': event['answer'],
-                'from_user_id': event['from_user_id']
-            }))
+            await self.send_json(event)
 
     async def ice_candidate(self, event):
         if self.user.id != event['from_user_id']:
-            await self.send(text_data=json.dumps({
-                'type': 'ice_candidate',
-                'candidate': event['candidate'],
-                'from_user_id': event['from_user_id']
-            }))
+            await self.send_json(event)
 
     async def user_joined(self, event):
         if self.user.id != event['user_id']:
-            await self.send(text_data=json.dumps({
-                'type': 'user_joined',
-                'user_id': event['user_id'],
-                'user_name': event['user_name']
-            }))
+            await self.send_json(event)
 
     async def user_left(self, event):
         if self.user.id != event['user_id']:
-            await self.send(text_data=json.dumps({
-                'type': 'user_left',
-                'user_id': event['user_id'],
-                'user_name': event['user_name']
-            }))
-            
-            
+            await self.send_json(event)
+
     async def call_invitation(self, event):
-        target_user_id = event.get('to_user_id')
-        if self.user.id == target_user_id and self.user.id != event['from_user_id']:
-            await self.send(text_data=json.dumps({
-                'type': 'call_invitation',
-                'room_id': event['room_id'],
-                'from_user_id': event['from_user_id'],
-                'from_user_name': event['from_user_name'],
-                'call_type': event['call_type']
-            }))
+        await self.send_json({
+            'type': 'call_invitation',
+            'room_id': event['room_id'],
+            'from_user_id': event['from_user_id'],
+            'from_user_name': event['from_user_name'],
+            'call_type': event['call_type']
+        })
 
     async def call_response(self, event):
-        target_user_id = event.get('to_user_id')
-        if self.user.id == target_user_id and self.user.id != event['from_user_id']:
-            await self.send(text_data=json.dumps({
-                'type': 'call_response',
-                'room_id': event['room_id'],
-                'from_user_id': event['from_user_id'],
-                'from_user_name': event['from_user_name'],
-                'accepted': event['accepted']
-            }))
+        await self.send_json({
+            'type': 'call_response',
+            'room_id': event['room_id'],
+            'from_user_id': event['from_user_id'],
+            'from_user_name': event['from_user_name'],
+            'accepted': event['accepted']
+        })
