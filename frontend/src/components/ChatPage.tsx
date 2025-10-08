@@ -141,9 +141,9 @@ export default function ChatPage() {
   } | null>(null)
 
   const videoCall = useVideoCall({
-  currentUserId: currentUser?.id ?? 0,
-  currentUserName: currentUser?.fullname || currentUser?.username || "User"
-});
+    currentUserId: currentUser?.id ?? 0,
+    currentUserName: currentUser?.fullname || currentUser?.username || "User"
+  });
 
 
   const [selectedChat, setSelectedChat] = useState<any>(null)
@@ -1175,8 +1175,8 @@ export default function ChatPage() {
             message_type: "text",
             room_id: `channel_${channel.id}`,
             memberCount: channel.members?.length || 0,
-            isAdmin: channel.owner === currentUser?.id,
-            isOwner: channel.owner === currentUser?.id,
+            isAdmin: channel.isOwner || channel.owner === currentUser?.id,
+            isOwner: channel.isOwner || channel.owner === currentUser?.id,
             isSubscribed: channel.is_subscribed !== undefined ? channel.is_subscribed : false,
             username: channel.username
           }));
