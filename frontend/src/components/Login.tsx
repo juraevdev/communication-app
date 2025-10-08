@@ -39,6 +39,8 @@ const handleSubmit = async (e: React.FormEvent) => {
       throw new Error("No access token received");
     }
 
+    navigate("/login");
+
     const userResponse = await getCurrentUserInfo(accessToken);
     
     console.log("✅ Fresh user data received:", userResponse.data);
