@@ -286,11 +286,8 @@ export const apiClient = {
   },
 
   async getGroups() {
-    const response = await fetch(`${BASE_URL}/v1/group/all/`, {
-      method: 'GET',
-      headers: this.getHeaders(),
-    });
-    return this.handleResponse(response);
+    const response = await api.get(`${BASE_URL}/v1/group/all/`,);
+    return response.data;
   },
 
   async getGroupDetail(groupId: number) {
