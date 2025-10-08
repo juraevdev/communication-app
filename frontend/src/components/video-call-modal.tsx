@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { 
   Phone, 
   Video, 
@@ -11,7 +11,6 @@ import {
   X,
   Users,
 } from "lucide-react";
-import type { VideoCallState, VideoCallControls } from '@/types/video-call';
 
 interface VideoCallModalProps {
   isOpen: boolean;
@@ -21,7 +20,17 @@ interface VideoCallModalProps {
     type: 'private' | 'group';
     name: string;
   } | null;
-  videoCall: VideoCallState & VideoCallControls;
+  videoCall: {
+    localStream: MediaStream | null;
+    remoteStreams: Map<number, MediaStream>;
+    callStatus: 'idle' | 'calling' | 'ringing' | 'connected' | 'failed';
+    participants: Array<{id: number, name: string}>;
+    isAudioMuted: boolean;
+    isVideoMuted: boolean;
+    endCall: () => void;
+    toggleAudio: () => boolean;
+    toggleVideo: () => boolean;
+  };
 }
 
 export const VideoCallModal: React.FC<VideoCallModalProps> = ({
@@ -40,33 +49,133 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
     endCall,
     toggleAudio,
     toggleVideo,
-    localVideoRef
   } = videoCall;
+
+  // Har bir remote stream uchun alohida ref
+  const remoteVideoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
 
   const remoteStreamsArray = Array.from(remoteStreams.entries());
 
-  // Local video stream o'zgarganda yangilash
+  // Local video stream o'rnatish
   useEffect(() => {
+    if (!isOpen) return;
+
+    console.log('[VideoCallModal] 📹 Local stream status:', {
+      hasStream: !!localStream,
+      hasVideo: localStream?.getVideoTracks().length || 0,
+      hasAudio: localStream?.getAudioTracks().length || 0,
+      videoMuted: isVideoMuted
+    });
+
     if (localVideoRef.current && localStream) {
-      console.log('[VideoCallModal] Updating local video stream');
-      localVideoRef.current.srcObject = localStream;
+      console.log('[VideoCallModal] 🎬 Setting local video srcObject');
       
-      // Autoplay ni majburiy qilish
-      localVideoRef.current.play().catch(error => {
-        console.error('[VideoCallModal] Autoplay error:', error);
-        // Autoplay blocked bo'lsa, user interaction dan keyin play qilish
-        const playVideo = () => {
-          localVideoRef.current?.play();
-          document.removeEventListener('click', playVideo);
+      try {
+        localVideoRef.current.srcObject = localStream;
+        
+        // Forcefully play
+        const playPromise = localVideoRef.current.play();
+        
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              console.log('[VideoCallModal] ✅ Local video playing successfully');
+              setVideoError(null);
+            })
+            .catch(error => {
+              console.error('[VideoCallModal] ❌ Local video play error:', error);
+              setVideoError('Video playback failed. Click to enable.');
+              
+              // User interaction orqali play qilish
+              const enableVideo = () => {
+                localVideoRef.current?.play()
+                  .then(() => {
+                    console.log('[VideoCallModal] ✅ Manual play successful');
+                    setVideoError(null);
+                  })
+                  .catch(console.error);
+                document.removeEventListener('click', enableVideo);
+              };
+              document.addEventListener('click', enableVideo);
+            });
+        }
+
+        // Video metadata yuklanganda
+        localVideoRef.current.onloadedmetadata = () => {
+          console.log('[VideoCallModal] 📊 Local video metadata loaded:', {
+            width: localVideoRef.current?.videoWidth,
+            height: localVideoRef.current?.videoHeight,
+            duration: localVideoRef.current?.duration
+          });
         };
-        document.addEventListener('click', playVideo);
-      });
+
+        // Video play bo'lganda
+        localVideoRef.current.onplay = () => {
+          console.log('[VideoCallModal] ▶️ Local video started playing');
+        };
+
+        // Video pause bo'lganda
+        localVideoRef.current.onpause = () => {
+          console.log('[VideoCallModal] ⏸️ Local video paused');
+        };
+
+      } catch (error) {
+        console.error('[VideoCallModal] ❌ Error setting local video:', error);
+        setVideoError('Failed to setup video');
+      }
     }
-  }, [localStream, localVideoRef]);
+  }, [localStream, isOpen, isVideoMuted]);
+
+  // Remote video streams o'rnatish
+  useEffect(() => {
+    if (!isOpen) return;
+
+    remoteStreamsArray.forEach((entry) => {
+      const [userId, stream] = entry;
+      const videoElement = remoteVideoRefs.current.get(userId);
+      
+      if (videoElement && stream) {
+        console.log('[VideoCallModal] 📹 Setting remote video for user:', userId);
+        
+        try {
+          videoElement.srcObject = stream;
+          
+          const playPromise = videoElement.play();
+          
+          if (playPromise !== undefined) {
+            playPromise
+              .then(() => {
+                console.log('[VideoCallModal] ✅ Remote video playing for user:', userId);
+              })
+              .catch(error => {
+                console.error('[VideoCallModal] ❌ Remote video play error for user:', userId, error);
+              });
+          }
+
+          videoElement.onloadedmetadata = () => {
+            console.log('[VideoCallModal] 📊 Remote video metadata loaded for user:', userId);
+          };
+
+        } catch (error) {
+          console.error('[VideoCallModal] ❌ Error setting remote video:', error);
+        }
+      }
+    });
+  }, [remoteStreamsArray, isOpen]);
 
   const handleEndCall = (): void => {
     endCall();
     onClose();
+  };
+
+  // Manual video enable
+  const handleVideoClick = () => {
+    if (localVideoRef.current) {
+      localVideoRef.current.play().catch(console.error);
+      setVideoError(null);
+    }
   };
 
   if (!isOpen) return null;
@@ -97,7 +206,7 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
                 <span className="text-green-400 text-sm font-medium">
                   {callStatus === 'connected' ? 'Connected' : callStatus}
                 </span>
-                <span className="text-gray-400 text-sm">â€¢</span>
+                <span className="text-gray-400 text-sm">•</span>
                 <span className="text-gray-400 text-sm">
                   {participants.length + 1} participants
                 </span>
@@ -118,25 +227,44 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
         <ScrollArea className="flex-1 p-6 bg-gray-950">
           <div className={`grid gap-6 ${getGridClass()} mx-auto h-full`}>
             {/* Local Video */}
-            <div className="relative bg-gray-800 rounded-xl overflow-hidden aspect-video min-h-[250px] shadow-lg group">
+            <div 
+              className="relative bg-gray-800 rounded-xl overflow-hidden aspect-video min-h-[250px] shadow-lg group cursor-pointer"
+              onClick={handleVideoClick}
+            >
               <video
                 ref={localVideoRef}
                 autoPlay
                 muted
                 playsInline
                 className="w-full h-full object-cover bg-gray-900"
-                onLoadedMetadata={() => console.log('[VideoCall] Local video metadata loaded')}
-                onCanPlay={() => console.log('[VideoCall] Local video can play')}
-                onError={(e) => console.error('[VideoCall] Local video error:', e)}
+                style={{ transform: 'scaleX(-1)' }} // Mirror effect
               />
-              <div className="absolute top-4 left-4 bg-black bg-opacity-70 px-3 py-1.5 rounded-full text-white text-sm font-medium backdrop-blur-sm">
+              
+              {/* User label */}
+              <div className="absolute top-4 left-4 bg-black bg-opacity-70 px-3 py-1.5 rounded-full text-white text-sm font-medium backdrop-blur-sm z-10">
                 You 
-                {isAudioMuted && <span className="ml-2">ðŸ”‡</span>}
-                {isVideoMuted && <span className="ml-1">ðŸ“¹âŒ</span>}
+                {isAudioMuted && <span className="ml-2">🔇</span>}
+                {isVideoMuted && <span className="ml-1">📹❌</span>}
               </div>
               
-              {/* Video muted bo'lsa */}
-              {isVideoMuted && (
+              {/* Video error message */}
+              {videoError && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-90 z-20">
+                  <div className="text-center p-4">
+                    <div className="text-yellow-400 text-sm mb-2">{videoError}</div>
+                    <Button
+                      size="sm"
+                      className="bg-blue-600 hover:bg-blue-700"
+                      onClick={handleVideoClick}
+                    >
+                      Enable Video
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
+              {/* Video muted overlay */}
+              {isVideoMuted && !videoError && (
                 <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
                   <div className="text-center">
                     <VideoOff className="h-12 w-12 text-gray-500 mx-auto mb-2" />
@@ -145,8 +273,8 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
                 </div>
               )}
               
-              {/* Stream mavjud emas bo'lsa */}
-              {!localStream && !isVideoMuted && (
+              {/* Loading state */}
+              {!localStream && !isVideoMuted && !videoError && (
                 <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-2"></div>
@@ -154,36 +282,44 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* Debug info (dev only) */}
+              {process.env.NODE_ENV === 'development' && (
+                <div className="absolute bottom-2 left-2 text-xs text-gray-400 bg-black bg-opacity-50 px-2 py-1 rounded">
+                  Stream: {localStream ? '✅' : '❌'} | 
+                  Video: {localStream?.getVideoTracks()[0]?.enabled ? '✅' : '❌'} |
+                  Audio: {localStream?.getAudioTracks()[0]?.enabled ? '✅' : '❌'}
+                </div>
+              )}
             </div>
 
             {/* Remote Videos */}
             {remoteStreamsArray.map(([userId, stream]) => {
               const participant = participants.find(p => p.id === userId);
-              const remoteVideoRef = useRef<HTMLVideoElement>(null);
-
-              useEffect(() => {
-                if (remoteVideoRef.current && stream) {
-                  console.log('[VideoCallModal] Setting remote video for user:', userId);
-                  remoteVideoRef.current.srcObject = stream;
-                  remoteVideoRef.current.play().catch(error => {
-                    console.error('[VideoCallModal] Error playing remote video:', error);
-                  });
-                }
-              }, [stream, userId]);
 
               return (
                 <div key={userId} className="relative bg-gray-800 rounded-xl overflow-hidden aspect-video min-h-[250px] shadow-lg group">
                   <video
-                    ref={remoteVideoRef}
+                    ref={(el) => {
+                      if (el) {
+                        remoteVideoRefs.current.set(userId, el);
+                      }
+                    }}
                     autoPlay
                     playsInline
                     className="w-full h-full object-cover bg-gray-900"
-                    onLoadedMetadata={() => console.log(`[VideoCall] Remote video ${userId} metadata loaded`)}
-                    onCanPlay={() => console.log(`[VideoCall] Remote video ${userId} can play`)}
                   />
+                  
                   <div className="absolute top-4 left-4 bg-black bg-opacity-70 px-3 py-1.5 rounded-full text-white text-sm font-medium backdrop-blur-sm">
                     {participant?.name || `User ${userId}`}
                   </div>
+
+                  {/* Debug info for remote stream */}
+                  {process.env.NODE_ENV === 'development' && (
+                    <div className="absolute bottom-2 left-2 text-xs text-gray-400 bg-black bg-opacity-50 px-2 py-1 rounded">
+                      User: {userId} | Tracks: {stream?.getTracks().length || 0}
+                    </div>
+                  )}
                 </div>
               );
             })}
