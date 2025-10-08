@@ -29,10 +29,11 @@ export const useNotificationWebSocket = ({
 
     try {
       const token = localStorage.getItem('access_token');
-      // Birinchi VideoCall xonasiga ulanamiz (har qanday xona bo'lishi mumkin)
-      const wsUrl = `wss://planshet2.stat.uz/ws/videocall/notifications/?token=${token}`;
+      // Foydalanuvchining shaxsiy notification room'i
+      const notificationRoomId = `user_${userId}_notifications`;
+      const wsUrl = `wss://planshet2.stat.uz/ws/videocall/${notificationRoomId}/?token=${token}`;
       
-      console.log('[NotificationWS] 🔌 Connecting to notification WebSocket');
+      console.log('[NotificationWS] 🔌 Connecting to:', notificationRoomId);
       
       wsRef.current = new WebSocket(wsUrl);
 
@@ -40,10 +41,13 @@ export const useNotificationWebSocket = ({
         console.log('[NotificationWS] ✅ Connected successfully');
         reconnectAttempts.current = 0;
         
-        // User group'ga ulanish
+        // Join call xabarini yuborish (backend user guruhiga qo'shish uchun)
         if (wsRef.current?.readyState === WebSocket.OPEN) {
-          // Bu backend'da avtomatik bo'lishi kerak, lekin qo'shimcha xavfsizlik uchun
-          console.log('[NotificationWS] 📡 Listening for user', userId);
+          wsRef.current.send(JSON.stringify({
+            type: 'join_call',
+            user_id: userId
+          }));
+          console.log('[NotificationWS] 📡 Joined notification room');
         }
       };
 
@@ -54,10 +58,7 @@ export const useNotificationWebSocket = ({
 
           switch (data.type) {
             case 'call_invitation':
-              console.log('[NotificationWS] 📞 Call invitation received:', {
-                from: data.from_user_name,
-                roomId: data.room_id
-              });
+              console.log('[NotificationWS] 📞 Call invitation received from:', data.from_user_name);
               onCallInvitation({
                 roomId: data.room_id,
                 fromUserId: data.from_user_id,
@@ -67,14 +68,14 @@ export const useNotificationWebSocket = ({
               break;
 
             case 'call_response':
-              console.log('[NotificationWS] 📲 Call response received');
+              console.log('[NotificationWS] 📲 Call response received:', data.accepted ? 'accepted' : 'rejected');
               if (onCallResponse) {
                 onCallResponse(data);
               }
               break;
 
             default:
-              console.log('[NotificationWS] ℹ️ Unknown message type:', data.type);
+              console.log('[NotificationWS] ℹ️ Ignored message type:', data.type);
           }
         } catch (error) {
           console.error('[NotificationWS] ❌ Error parsing message:', error);
@@ -89,7 +90,7 @@ export const useNotificationWebSocket = ({
         if (reconnectAttempts.current < maxReconnectAttempts) {
           reconnectAttempts.current++;
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
-          console.log(`[NotificationWS] 🔄 Reconnecting in ${delay}ms (attempt ${reconnectAttempts.current})`);
+          console.log(`[NotificationWS] 🔄 Reconnecting in ${delay}ms (attempt ${reconnectAttempts.current}/${maxReconnectAttempts})`);
           
           reconnectTimeoutRef.current = setTimeout(() => {
             connect();
@@ -110,6 +111,7 @@ export const useNotificationWebSocket = ({
 
   useEffect(() => {
     if (userId) {
+      console.log('[NotificationWS] 🚀 Initializing for user:', userId);
       connect();
     }
 
