@@ -141,9 +141,10 @@ export default function ChatPage() {
   } | null>(null)
 
   const videoCall = useVideoCall({
-  currentUserId: currentUser?.id ? Number(currentUser.id) : undefined,
-  currentUserName: currentUser?.name || currentUser?.username || 'User'
+  currentUserId: currentUser?.id ?? 0,
+  currentUserName: currentUser?.fullname || currentUser?.username || "User"
 });
+
 
   const [selectedChat, setSelectedChat] = useState<any>(null)
   const [message, setMessage] = useState("")
@@ -274,57 +275,57 @@ export default function ChatPage() {
     }
   }, [refreshChannelsTrigger])
 
-const handleStartVideoCall = async () => {
-  if (!selectedChat || !currentUser) {
-    console.error('[ChatPage] Cannot start call: no selected chat or current user');
-    return;
-  }
-
-  try {
-    const roomId = `videocall_${selectedChat.id}_${Date.now()}`;
-    
-    const targetUserId = selectedChat.type === 'private' 
-      ? selectedChat.sender_id    
-      : selectedChat.id;
-
-    console.log('[ChatPage] Video call details:', {
-      currentUserId: currentUser.id,
-      targetUserId,
-      selectedChatId: selectedChat.id,
-      selectedChatSenderId: selectedChat.sender_id,
-      roomId
-    });
-
-    if (targetUserId === currentUser.id) {
-      console.error('[ChatPage] Error: Cannot call yourself', {
-        currentUserId: currentUser.id,
-        targetUserId,
-        selectedChat
-      });
-      alert('Siz o\'zingizga qo\'ng\'iroq qila olmaysiz');
+  const handleStartVideoCall = async () => {
+    if (!selectedChat || !currentUser) {
+      console.error('[ChatPage] Cannot start call: no selected chat or current user');
       return;
     }
 
-    setVideoCallInfo({
-      roomId,
-      type: selectedChat.type === 'group' ? 'group' : 'private',
-      name: getChatName(selectedChat)
-    });
+    try {
+      const roomId = `videocall_${selectedChat.id}_${Date.now()}`;
 
-    await videoCall.startCall(roomId);
+      const targetUserId = selectedChat.type === 'private'
+        ? selectedChat.sender_id
+        : selectedChat.id;
 
-    if (selectedChat.type === 'private') {
-      videoCall.sendCallInvitation(roomId, targetUserId, 'video');
-      console.log('[ChatPage] Video call invitation sent to user:', targetUserId);
+      console.log('[ChatPage] Video call details:', {
+        currentUserId: currentUser.id,
+        targetUserId,
+        selectedChatId: selectedChat.id,
+        selectedChatSenderId: selectedChat.sender_id,
+        roomId
+      });
+
+      if (targetUserId === currentUser.id) {
+        console.error('[ChatPage] Error: Cannot call yourself', {
+          currentUserId: currentUser.id,
+          targetUserId,
+          selectedChat
+        });
+        alert('Siz o\'zingizga qo\'ng\'iroq qila olmaysiz');
+        return;
+      }
+
+      setVideoCallInfo({
+        roomId,
+        type: selectedChat.type === 'group' ? 'group' : 'private',
+        name: getChatName(selectedChat)
+      });
+
+      await videoCall.startCall(roomId);
+
+      if (selectedChat.type === 'private') {
+        videoCall.sendCallInvitation(roomId, targetUserId, 'video');
+        console.log('[ChatPage] Video call invitation sent to user:', targetUserId);
+      }
+
+      setVideoCallModalOpen(true);
+
+    } catch (error) {
+      console.error('Failed to start video call:', error);
+      alert('Video qo\'ng\'iroqni boshlash muvaffaqiyatsiz. Kamera/mikron ruxsatlarini tekshiring.');
     }
-
-    setVideoCallModalOpen(true);
-
-  } catch (error) {
-    console.error('Failed to start video call:', error);
-    alert('Video qo\'ng\'iroqni boshlash muvaffaqiyatsiz. Kamera/mikron ruxsatlarini tekshiring.');
-  }
-};
+  };
 
   const handleEndVideoCall = () => {
     videoCall.endCall();
@@ -368,23 +369,18 @@ const handleStartVideoCall = async () => {
   }, [selectedChat, messages, markAsRead])
 
   const getIsOwnMessage = (msg: any): boolean => {
-    if (selectedChat?.type === "channel") {
-      return msg.is_channel_owner || msg.can_edit || false;
-    }
-
-    if (msg.is_own !== undefined) {
-      return msg.is_own;
-    }
-
-    if (msg.isOwn !== undefined) {
-      return msg.isOwn;
-    }
-
-    const senderId = msg.sender?.id?.toString();
     const currentUserId = currentUser?.id?.toString();
+
+    if (!msg) return false;
+
+    const senderId =
+      msg.sender?.id?.toString() ||
+      msg.sender_id?.toString() ||
+      msg.user?.id?.toString();
 
     return senderId === currentUserId;
   };
+
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault()
@@ -600,17 +596,12 @@ const handleStartVideoCall = async () => {
       connectToGroup(groupId)
     } else if (chat.type === "channel") {
       const channelId = chat.id.toString();
-
-      if (!chat.owner_id || chat.isOwner === undefined) {
-        await refreshChannelOwnership(chat.id);
-
-
-      }
-
+      await refreshChannelOwnership(chat.id);
       if (chat.isSubscribed || chat.isOwner) {
         connectToChannel(channelId);
       }
-    } else {
+    }
+    else {
       const roomId = chat.room_id || chat.id?.toString()
 
       try {
@@ -2080,8 +2071,8 @@ const handleStartVideoCall = async () => {
                     onClick={handleChannelAction}
                     disabled={isChannelActionLoading}
                     className={`flex items-center gap-2 ${selectedChat.isSubscribed
-                        ? "bg-red-600 hover:bg-red-700 text-white"
-                        : "bg-blue-600 hover:bg-blue-700 text-white"
+                      ? "bg-red-600 hover:bg-red-700 text-white"
+                      : "bg-blue-600 hover:bg-blue-700 text-white"
                       }`}
                   >
                     {isChannelActionLoading ? (
