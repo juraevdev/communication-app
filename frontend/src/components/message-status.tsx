@@ -42,7 +42,6 @@ export function MessageStatus({
           )
         }
         return <CheckCheck className="w-3 h-3 text-blue-400" />
-      case "read":
       case "read_file":
         if (isChannel) {
           return (
