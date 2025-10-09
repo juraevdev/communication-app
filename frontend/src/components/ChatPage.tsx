@@ -2010,7 +2010,7 @@ export default function ChatPage() {
                                       {formatMessageTime(msg.timestamp)}
                                     </span>
 
-                                    {isRightAligned && selectedChat?.type === "private" && (
+                                    {isRightAligned && (
                                       <MessageStatus
                                         status={getMessageStatus(msg)}
                                         isOwn={true}
