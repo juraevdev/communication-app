@@ -1468,12 +1468,22 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
             await self.close()
             return
 
+        # Agar room_id user presence uchun bo'lsa
         if self.room_id.startswith('user_'):
+            # Faqat user group ga qo'shish
             await self.channel_layer.group_add(f"user_{self.user.id}", self.channel_name)
             await self.accept()
-            print(f"[VideoCall] User {self.user.id} connected to presence channel")
+            print(f"[VideoCall] User {self.user.id} connected to presence channel: {self.room_id}")
+            
+            # User group ga qo'shilganligi haqida xabar yuborish
+            await self.send_json({
+                'type': 'presence_connected',
+                'user_id': self.user.id,
+                'message': 'Connected to presence channel for incoming calls'
+            })
             return
 
+        # Oddiy video call room uchun
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.channel_layer.group_add(f"user_{self.user.id}", self.channel_name)
         await self.accept()
@@ -1482,21 +1492,25 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
     async def disconnect(self, close_code):
         try:
             if hasattr(self.user, 'id') and not isinstance(self.user, AnonymousUser):
-                user_name = getattr(self.user, 'fullname', None) or getattr(self.user, 'username', 'Unknown User')
+                # Faqat oddiy video call room uchun user_left xabarini yuborish
+                if not self.room_id.startswith('user_'):
+                    user_name = getattr(self.user, 'fullname', None) or getattr(self.user, 'username', 'Unknown User')
 
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'user_left',
-                        'user_id': self.user.id,
-                        'user_name': user_name
-                    }
-                )
+                    await self.channel_layer.group_send(
+                        self.room_group_name,
+                        {
+                            'type': 'user_left',
+                            'user_id': self.user.id,
+                            'user_name': user_name
+                        }
+                    )
 
         except Exception as e:
             print(f"[VideoCall] Error in disconnect: {e}")
         finally:
-            await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+            # Har doim group lardan chiqish
+            if not self.room_id.startswith('user_'):
+                await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
             await self.channel_layer.group_discard(f"user_{self.user.id}", self.channel_name)
 
     async def receive(self, text_data):
@@ -1505,58 +1519,81 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
             message_type = data.get('type')
             user_name = getattr(self.user, 'fullname', None) or getattr(self.user, 'username', 'Unknown User')
 
-            if message_type == 'offer':
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'offer',
-                        'offer': data['offer'],
-                        'from_user_id': self.user.id,
-                        'from_user_name': user_name
-                    }
-                )
+            print(f"[VideoCall] Received message type: {message_type} from user {self.user.id}")
+
+            if message_type == 'join_user_group':
+                # User group ga qo'shilish - bu faqat confirmation uchun
+                print(f"[VideoCall] User {self.user.id} joined user group")
+                await self.send_json({
+                    'type': 'user_group_joined',
+                    'user_id': self.user.id
+                })
+
+            elif message_type == 'offer':
+                # Faqat oddiy video call room lar uchun
+                if not self.room_id.startswith('user_'):
+                    await self.channel_layer.group_send(
+                        self.room_group_name,
+                        {
+                            'type': 'offer',
+                            'offer': data['offer'],
+                            'from_user_id': self.user.id,
+                            'from_user_name': user_name
+                        }
+                    )
+
             elif message_type == 'answer':
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'answer',
-                        'answer': data['answer'],
-                        'from_user_id': self.user.id
-                    }
-                )
+                if not self.room_id.startswith('user_'):
+                    await self.channel_layer.group_send(
+                        self.room_group_name,
+                        {
+                            'type': 'answer',
+                            'answer': data['answer'],
+                            'from_user_id': self.user.id
+                        }
+                    )
+
             elif message_type == 'ice_candidate':
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'ice_candidate',
-                        'candidate': data['candidate'],
-                        'from_user_id': self.user.id
-                    }
-                )
+                if not self.room_id.startswith('user_'):
+                    await self.channel_layer.group_send(
+                        self.room_group_name,
+                        {
+                            'type': 'ice_candidate',
+                            'candidate': data['candidate'],
+                            'from_user_id': self.user.id
+                        }
+                    )
 
             elif message_type == 'join_call':
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'user_joined',
-                        'user_id': self.user.id,
-                        'user_name': user_name
-                    }
-                )
+                # Join call faqat oddiy room lar uchun
+                if not self.room_id.startswith('user_'):
+                    await self.channel_layer.group_send(
+                        self.room_group_name,
+                        {
+                            'type': 'user_joined',
+                            'user_id': self.user.id,
+                            'user_name': user_name
+                        }
+                    )
+                else:
+                    # Presence channel uchun join call - yangi call room ochish kerak
+                    print(f"[VideoCall] User {self.user.id} trying to join call from presence channel")
 
             elif message_type == 'leave_call':
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'user_left',
-                        'user_id': self.user.id,
-                        'user_name': user_name
-                    }
-                )
+                if not self.room_id.startswith('user_'):
+                    await self.channel_layer.group_send(
+                        self.room_group_name,
+                        {
+                            'type': 'user_left',
+                            'user_id': self.user.id,
+                            'user_name': user_name
+                        }
+                    )
 
             elif message_type == 'call_invitation':
                 to_user_id = data.get('to_user_id')
                 if to_user_id:
+                    print(f"[VideoCall] Sending call invitation from {self.user.id} to {to_user_id}")
                     await self.channel_layer.group_send(
                         f"user_{to_user_id}",
                         {
@@ -1566,16 +1603,16 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
                             'from_user_name': user_name,
                             'call_type': data.get('call_type', 'video')
                         }
-                    )   
-                    print(f"[VideoCall] Call invitation sent to user_{to_user_id}")
+                    )
                 else:
                     print("[VideoCall] Error: to_user_id missing in call_invitation")
 
             elif message_type == 'call_response':
                 to_user_id = data.get('to_user_id')
                 if to_user_id:
+                    print(f"[VideoCall] Sending call response from {self.user.id} to {to_user_id}")
                     await self.channel_layer.group_send(
-                        f"user_{to_user_id}",       
+                        f"user_{to_user_id}",
                         {
                             'type': 'call_response',
                             'room_id': data['room_id'],
@@ -1584,7 +1621,6 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
                             'accepted': data['accepted']
                         }
                     )
-                    print(f"[VideoCall] Call response sent to user_{to_user_id}")
                 else:
                     print("[VideoCall] Error: to_user_id missing in call_response")
 
@@ -1611,24 +1647,8 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
         if self.user.id != event['user_id']:
             await self.send_json(event)
 
-    async def call_invitation(self, event):
-        try:
-            print(f"[VideoCall] 📞 Sending call invitation to user_{event['to_user_id']}")
-            await self.channel_layer.group_send(
-                f"user_{event['to_user_id']}",
-                {
-                    'type': 'call_invitation',
-                    'room_id': event['room_id'],
-                    'from_user_id': event['from_user_id'],
-                    'from_user_name': event['from_user_name'],
-                    'call_type': event.get('call_type', 'video')
-                }
-            )
-            print(f"[VideoCall] ✅ Call invitation sent successfully to user_{event['to_user_id']}")
-        except Exception as e:
-            print(f"[VideoCall] ❌ Error sending call invitation: {e}")
-            
     async def call_invitation_message(self, event):
+        print(f"[VideoCall] 📞 Delivering call invitation to user {self.user.id}")
         await self.send_json({
             'type': 'call_invitation',
             'room_id': event['room_id'],
@@ -1638,6 +1658,7 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
         })
 
     async def call_response(self, event):
+        print(f"[VideoCall] 📲 Delivering call response to user {self.user.id}")
         await self.send_json({
             'type': 'call_response',
             'room_id': event['room_id'],
@@ -1645,3 +1666,11 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
             'from_user_name': event['from_user_name'],
             'accepted': event['accepted']
         })
+
+    async def presence_connected(self, event):
+        """Presence channel ga ulanganda confirmation yuborish"""
+        await self.send_json(event)
+
+    async def user_group_joined(self, event):
+        """User group ga qo'shilganda confirmation yuborish"""
+        await self.send_json(event)
