@@ -186,6 +186,60 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
+useEffect(() => {
+  if (currentUser?.id && isConnected) {
+    console.log('[ChatPage] 🔌 Connecting to video call WebSocket for incoming calls');
+    
+    videoCall.connectToVideoCallWebSocket();
+  }
+}, [currentUser?.id, isConnected, videoCall]);
+
+useEffect(() => {
+  const handleMessage = (event: MessageEvent) => {
+    try {
+      const data = JSON.parse(event.data);
+      console.log('[ChatPage] 📨 Message:', data.type);
+
+      if (data.type === 'call_invitation') {
+        console.log('[ChatPage] 📞 Processing call invitation');
+        videoCall.handleExternalCallInvitation(data);
+      }
+    } catch (error) {
+      console.error('[ChatPage] ❌ Error:', error);
+    }
+  };
+
+  const addListeners = () => {
+    [chatWsRef.current, groupWsRef.current, channelWsRef.current].forEach((ws, index) => {
+      if (ws) {
+        const name = ['Chat', 'Group', 'Channel'][index];
+        console.log(`[ChatPage] 🔌 Listening to ${name} WS`);
+        ws.addEventListener('message', handleMessage);
+      }
+    });
+
+    if (videoCall.videoCallWs.current) {
+      console.log('[ChatPage] 🔌 Listening to VideoCall WS');
+      videoCall.videoCallWs.current.addEventListener('message', handleMessage);
+    }
+  };
+
+  const removeListeners = () => {
+    [chatWsRef.current, groupWsRef.current, channelWsRef.current].forEach((ws) => {
+      if (ws) {
+        ws.removeEventListener('message', handleMessage);
+      }
+    });
+
+    if (videoCall.videoCallWs.current) {
+      videoCall.videoCallWs.current.removeEventListener('message', handleMessage);
+    }
+  };
+
+  addListeners();
+  return removeListeners;
+}, [chatWsRef.current, groupWsRef.current, channelWsRef.current, videoCall]);
+
   const handleProfileUpdate = async (updatedUser: any) => {
     try {
       console.log("âœ… Profile update received:", updatedUser);

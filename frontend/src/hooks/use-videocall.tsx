@@ -161,6 +161,20 @@ export const useVideoCall = ({
     });
   }, [currentUserId, currentUserName, flushPendingMessages]);
 
+const connectToVideoCallWebSocket = useCallback((): void => {
+  if (videoCallWs.current?.readyState === WebSocket.OPEN) {
+    console.log('[VideoCall] ✅ WebSocket already connected');
+    return;
+  }
+
+  const roomId = `user_${currentUserId}_presence`;
+  initializeWebSocket(roomId).then(() => {
+    console.log('[VideoCall] ✅ Persistent WebSocket connection established for incoming calls');
+  }).catch(error => {
+    console.error('[VideoCall] ❌ Failed to establish persistent WebSocket connection:', error);
+  });
+}, [initializeWebSocket, currentUserId]);
+
   const createPeerConnection = useCallback((userId: number): RTCPeerConnection => {
     console.log('[VideoCall] 🔗 Creating peer connection for user:', userId);
 
@@ -648,6 +662,8 @@ export const useVideoCall = ({
     sendCallInvitation,
     acceptCall,
     rejectCall,
-    handleExternalCallInvitation
+    handleExternalCallInvitation,
+    connectToVideoCallWebSocket,  
+    videoCallWs,
   };
 };

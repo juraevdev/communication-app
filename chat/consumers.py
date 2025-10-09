@@ -1468,10 +1468,14 @@ class VideoCallConsumer(AsyncJsonWebsocketConsumer):
             await self.close()
             return
 
+        if self.room_id.startswith('user_'):
+            await self.channel_layer.group_add(f"user_{self.user.id}", self.channel_name)
+            await self.accept()
+            print(f"[VideoCall] User {self.user.id} connected to presence channel")
+            return
+
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
-
         await self.channel_layer.group_add(f"user_{self.user.id}", self.channel_name)
-
         await self.accept()
         print(f"[VideoCall] User {self.user.id} connected to room {self.room_id}")
 
