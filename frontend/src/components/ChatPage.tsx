@@ -327,39 +327,41 @@ export default function ChatPage() {
   };
 
   useEffect(() => {
-    const handleCallInvitation = (data: any) => {
-      console.log('[ChatPage] 📞 Received call invitation:', data);
-    };
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('[ChatPage] 📨 Message:', data.type);
 
-    const setupWebSocketListeners = (ws: WebSocket | null, name: string) => {
-      if (ws) {
-        ws.addEventListener('message', (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            console.log(`[${name}] Received message:`, data);
-
-            if (data.type === 'call_invitation') {
-              handleCallInvitation(data);
-            }
-          } catch (error) {
-            console.error(`[${name}] Error parsing message:`, error);
-          }
-        });
+        if (data.type === 'call_invitation') {
+          console.log('[ChatPage] 📞 Processing call invitation');
+          videoCall.handleExternalCallInvitation(data);
+        }
+      } catch (error) {
+        console.error('[ChatPage] ❌ Error:', error);
       }
     };
 
-    setupWebSocketListeners(chatWsRef.current, 'ChatWS');
-    setupWebSocketListeners(groupWsRef.current, 'GroupWS');
-    setupWebSocketListeners(channelWsRef.current, 'ChannelWS');
-
-    return () => {
-      [chatWsRef.current, groupWsRef.current, channelWsRef.current].forEach(ws => {
+    const addListeners = () => {
+      [chatWsRef.current, groupWsRef.current, channelWsRef.current].forEach((ws, index) => {
         if (ws) {
-          ws.removeEventListener('message', handleCallInvitation as any);
+          const name = ['Chat', 'Group', 'Channel'][index];
+          console.log(`[ChatPage] 🔌 Listening to ${name} WS`);
+          ws.addEventListener('message', handleMessage);
         }
       });
     };
-  }, []);
+
+    const removeListeners = () => {
+      [chatWsRef.current, groupWsRef.current, channelWsRef.current].forEach((ws) => {
+        if (ws) {
+          ws.removeEventListener('message', handleMessage);
+        }
+      });
+    };
+
+    addListeners();
+    return removeListeners;
+  }, [chatWsRef.current, groupWsRef.current, channelWsRef.current, videoCall]);
 
   const handleEndVideoCall = () => {
     videoCall.endCall();

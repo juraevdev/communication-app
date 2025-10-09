@@ -622,6 +622,20 @@ export const useVideoCall = ({
     };
   }, [state.isInCall, endCall]);
 
+  const handleExternalCallInvitation = useCallback((data: any) => {
+  console.log('[VideoCall] 📞 External call invitation:', data);
+  setState(prev => ({
+    ...prev,
+    incomingCall: {
+      roomId: data.room_id,
+      fromUserId: data.from_user_id,
+      fromUserName: data.from_user_name,
+      callType: data.call_type || 'video'
+    },
+    isRinging: true
+  }));
+}, []);
+
   return {
     ...state,
     startCall,
@@ -634,5 +648,6 @@ export const useVideoCall = ({
     sendCallInvitation,
     acceptCall,
     rejectCall,
+    handleExternalCallInvitation
   };
 };
