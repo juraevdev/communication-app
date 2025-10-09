@@ -66,113 +66,132 @@ export const useVideoCall = ({
     }
   }, []);
 
-  const initializeWebSocket = useCallback((roomId: string): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      try {
-        currentRoomId.current = roomId;
-        const token = localStorage.getItem('access_token');
-        const wsUrl = `wss://planshet2.stat.uz/ws/videocall/${roomId}/?token=${token}`;
+const initializeWebSocket = useCallback((roomId: string): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    try {
+      if (videoCallWs.current) {
+        videoCallWs.current.close();
+        videoCallWs.current = null;
+      }
 
-        console.log('[VideoCall] 🔌 Connecting to WebSocket:', wsUrl);
+      currentRoomId.current = roomId;
+      const token = localStorage.getItem('access_token');
+      const wsUrl = `wss://planshet2.stat.uz/ws/videocall/${roomId}/?token=${token}`;
 
-        videoCallWs.current = new WebSocket(wsUrl);
+      console.log('[VideoCall] 🔌 Connecting to WebSocket:', wsUrl);
 
-        videoCallWs.current.onopen = (): void => {
-          console.log('[VideoCall] ✅ WebSocket connected to room:', roomId);
+      videoCallWs.current = new WebSocket(wsUrl);
 
+      videoCallWs.current.onopen = (): void => {
+        console.log('[VideoCall] ✅ WebSocket connected to room:', roomId);
+        setState(prev => ({ ...prev, isWsConnected: true }));
+
+        if (roomId.startsWith('user_')) {
+          console.log('[VideoCall] ✅ Connected to presence channel for incoming calls');
+          
           if (currentUserId) {
-            const userGroupMessage = {
-              type: 'join_user_group',
-              user_id: currentUserId
-            };
-            videoCallWs.current?.send(JSON.stringify(userGroupMessage));
-            console.log('[VideoCall] ✅ Joined user group:', currentUserId);
+            setTimeout(() => {
+              if (videoCallWs.current?.readyState === WebSocket.OPEN) {
+                const userGroupMessage = {
+                  type: 'join_user_group',
+                  user_id: currentUserId
+                };
+                videoCallWs.current.send(JSON.stringify(userGroupMessage));
+                console.log('[VideoCall] ✅ Joined user group for presence');
+              }
+            }, 100);
           }
+          
+          resolve();
+          return;
+        }
 
-          setState(prev => ({ ...prev, isWsConnected: true }));
-
-          const joinMessage = {
-            type: 'join_call',
-            from_user_id: currentUserId,
-            user_name: currentUserName
-          };
-
-          setTimeout(() => {
-            if (videoCallWs.current?.readyState === WebSocket.OPEN) {
-              videoCallWs.current.send(JSON.stringify(joinMessage));
-              flushPendingMessages();
-              resolve();
-            }
-          }, 500);
+        const joinMessage = {
+          type: 'join_call',
+          from_user_id: currentUserId,
+          user_name: currentUserName
         };
 
-        videoCallWs.current.onmessage = async (event: MessageEvent): Promise<void> => {
-          try {
-            const data = JSON.parse(event.data);
-            console.log('[VideoCall] 📩 Received message:', data.type, data);
-
-            if (data.type === 'call_invitation') {
-              console.log('[VideoCall] 📞 Received call invitation:', data);
-              setState(prev => ({
-                ...prev,
-                incomingCall: {
-                  roomId: data.room_id,
-                  fromUserId: data.from_user_id,
-                  fromUserName: data.from_user_name,
-                  callType: data.call_type || 'video'
-                },
-                isRinging: true
-              }));
-              return;   
-            }
-
-            await handleSignalingMessage(data);
-          } catch (error) {
-            console.error('[VideoCall] ❌ Error parsing message:', error);
+        setTimeout(() => {
+          if (videoCallWs.current?.readyState === WebSocket.OPEN) {
+            videoCallWs.current.send(JSON.stringify(joinMessage));
+            flushPendingMessages();
+            resolve();
           }
-        };
+        }, 200);
+      };
 
-        videoCallWs.current.onclose = (event: CloseEvent): void => {
-          console.log('[VideoCall] 🔌 WebSocket disconnected:', event.code, event.reason);
-          setState(prev => ({ ...prev, isWsConnected: false }));
+      videoCallWs.current.onmessage = async (event: MessageEvent): Promise<void> => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('[VideoCall] 📩 Received message:', data.type, data);
 
-          if (connectionTimeout.current) {
-            clearTimeout(connectionTimeout.current);
-            connectionTimeout.current = null;
+          if (data.type === 'presence_connected' || data.type === 'user_group_joined') {
+            console.log('[VideoCall] ✅ Presence channel confirmed:', data.type);
+            return;
           }
-        };
 
-        videoCallWs.current.onerror = (error: Event): void => {
-          console.error('[VideoCall] ❌ WebSocket error:', error);
-          setState(prev => ({ ...prev, callStatus: 'failed', isWsConnected: false }));
-
-          if (connectionTimeout.current) {
-            clearTimeout(connectionTimeout.current);
-            connectionTimeout.current = null;
+          if (data.type === 'call_invitation') {
+            console.log('[VideoCall] 📞 Received call invitation:', data);
+            setState(prev => ({
+              ...prev,
+              incomingCall: {
+                roomId: data.room_id,
+                fromUserId: data.from_user_id,
+                fromUserName: data.from_user_name,
+                callType: data.call_type || 'video'
+              },
+              isRinging: true
+            }));
+            return;   
           }
-          reject(error);
-        };
 
-      } catch (error) {
-        console.error('[VideoCall] ❌ WebSocket connection failed:', error);
+          await handleSignalingMessage(data);
+        } catch (error) {
+          console.error('[VideoCall] ❌ Error parsing message:', error);
+        }
+      };
+
+      videoCallWs.current.onclose = (event: CloseEvent): void => {
+        console.log('[VideoCall] 🔌 WebSocket disconnected:', event.code, event.reason);
+        setState(prev => ({ ...prev, isWsConnected: false }));
+
+        if (connectionTimeout.current) {
+          clearTimeout(connectionTimeout.current);
+          connectionTimeout.current = null;
+        }
+      };
+
+      videoCallWs.current.onerror = (error: Event): void => {
+        console.error('[VideoCall] ❌ WebSocket error:', error);
         setState(prev => ({ ...prev, callStatus: 'failed', isWsConnected: false }));
         reject(error);
-      }
-    });
-  }, [currentUserId, currentUserName, flushPendingMessages]);
+      };
 
-const connectToVideoCallWebSocket = useCallback((): void => {
+    } catch (error) {
+      console.error('[VideoCall] ❌ WebSocket connection failed:', error);
+      setState(prev => ({ ...prev, callStatus: 'failed', isWsConnected: false }));
+      reject(error);
+    }
+  });
+}, [currentUserId, currentUserName, flushPendingMessages]);
+
+const connectToVideoCallWebSocket = useCallback(async (): Promise<void> => {
   if (videoCallWs.current?.readyState === WebSocket.OPEN) {
     console.log('[VideoCall] ✅ WebSocket already connected');
     return;
   }
 
   const roomId = `user_${currentUserId}_presence`;
-  initializeWebSocket(roomId).then(() => {
+  try {
+    await initializeWebSocket(roomId);
     console.log('[VideoCall] ✅ Persistent WebSocket connection established for incoming calls');
-  }).catch(error => {
+  } catch (error) {
     console.error('[VideoCall] ❌ Failed to establish persistent WebSocket connection:', error);
-  });
+    setTimeout(() => {
+      connectToVideoCallWebSocket();
+    }, 3000);
+  }
 }, [initializeWebSocket, currentUserId]);
 
   const createPeerConnection = useCallback((userId: number): RTCPeerConnection => {
