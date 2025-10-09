@@ -221,10 +221,6 @@ export function useChat() {
     try {
       const groupWs = new WebSocket(apiClient.getGroupWebSocketUrl(groupId))
 
-      groupWs.onopen = () => {
-        console.log(`[Chat] Group background listener connected to group ${groupId}`)
-      }
-
       groupWs.onmessage = (event) => {
         const data = JSON.parse(event.data)
 
@@ -1136,11 +1132,6 @@ export function useChat() {
     try {
       const channelWs = new WebSocket(apiClient.getChannelWebSocketUrl(channelId))
 
-      channelWs.onopen = () => {
-        console.log(`[Chat] Channel background listener connected to channel ${channelId}`)
-      }
-
-
       channelWs.onmessage = (event) => {
         const data = JSON.parse(event.data)
 
@@ -1508,7 +1499,6 @@ export function useChat() {
 const loadChannels = useCallback(async () => {
   try {
     const channelsData = await apiClient.getChannels();
-    console.log("[Chat] Raw channels data:", channelsData);
 
     const formattedChannels: Chat[] = channelsData.map((channel: any) => {
       const isOwner = getChannelOwnership(channel, currentUser);
@@ -1543,8 +1533,6 @@ const loadChannels = useCallback(async () => {
         owner_id: channel.owner 
       }
     });
-
-    console.log("[Chat] Formatted channels:", formattedChannels);
 
     formattedChannels.sort((a, b) => {
       const dateA = new Date(a.timestamp).getTime();

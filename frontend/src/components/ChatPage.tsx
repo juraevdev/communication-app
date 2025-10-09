@@ -409,14 +409,6 @@ export default function ChatPage() {
 
     if (!msg || !currentUserId) return false;
 
-    console.log("[UI] Message ownership check:", {
-      messageId: msg.id,
-      currentUserId,
-      msgSender: msg.sender,
-      msgSenderId: msg.sender_id,
-      msgUser: msg.user
-    });
-
     const senderId =
       msg.sender?.id?.toString() ||
       msg.sender_id?.toString() ||
@@ -424,13 +416,6 @@ export default function ChatPage() {
       msg.user_id?.toString();
 
     const isOwn = senderId === currentUserId;
-
-    console.log("[UI] Message ownership result:", {
-      messageId: msg.id,
-      senderId,
-      currentUserId,
-      isOwn
-    });
 
     return isOwn;
   };
@@ -1175,7 +1160,6 @@ export default function ChatPage() {
                 console.log(`[ChatPage] Updated chat:`, updatedChat);
                 return updatedChat;
               }
-              console.log(`[ChatPage] No alias for chat:`, chat);
               return chat;
             })
           );
