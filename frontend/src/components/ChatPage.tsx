@@ -434,6 +434,31 @@ export default function ChatPage() {
   };
 
 
+useEffect(() => {
+  Object.entries(messages).forEach(([roomKey, roomMessages]) => {
+    const unreadCount = roomMessages.filter((msg: any) => !msg.is_read && !msg.isOwn).length;
+
+    if (roomKey.startsWith("group_")) {
+      const groupId = Number(roomKey.replace("group_", ""));
+      setGroups(prev =>
+        prev.map(g => g.id === groupId ? { ...g, unread: unreadCount } : g)
+      );
+    } else if (roomKey.startsWith("channel_")) {
+      const channelId = Number(roomKey.replace("channel_", ""));
+      setChannels(prev =>
+        prev.map(c => c.id === channelId ? { ...c, unread: unreadCount } : c)
+      );
+    } else {
+      setChats(prev =>
+        prev.map(chat =>
+          chat.room_id === roomKey ? { ...chat, unread: unreadCount } : chat
+        )
+      );
+    }
+  });
+}, [messages]);
+
+
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault()
     if (!message.trim() || !selectedChat || !isConnected) return
