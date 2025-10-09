@@ -258,10 +258,8 @@ export function GroupInfoModal({ isOpen, onClose, group, onGroupUpdate }: GroupI
   };
 
   const formatPhoneNumber = (value: string) => {
-    // Faqat raqamlarni qoldirish
     const numbers = value.replace(/\D/g, '');
 
-    // Formatlash: +998 XX XXX-XX-XX
     if (numbers.length === 0) return '';
     if (numbers.length <= 3) return `+${numbers}`;
     if (numbers.length <= 5) return `+${numbers.slice(0, 3)} ${numbers.slice(3)}`;

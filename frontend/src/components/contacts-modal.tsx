@@ -102,7 +102,6 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
         const results = await apiClient.searchUsers(newUsername)
         console.log("Raw API search results:", results)
         
-        // API response'ni normalize qilish
         const normalizedResults = Array.isArray(results) ? results.map(user => ({
           id: user.id || user.user_id || user.pk,
           name: user.name || user.fullname || user.full_name,
@@ -141,9 +140,7 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
     )
   })
 
-  // FIXED: handleAddContact - targetUser ni to'g'ri ishlatish
   const handleAddContact = async (user?: User) => {
-    // Agar user parameter berilmasa, targetUser state dan foydalanish
     const userToAdd = user || targetUser;
 
     console.log("handleAddContact called");
@@ -174,17 +171,14 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
         text: "Kontakt muvaffaqiyatli qo'shildi"
       })
       
-      // Form ni tozalash
       setNewUsername("")
       setNewAlias("")
       setSearchResults([])
       setTargetUser(null)
 
-      // Kontaktlar ro'yxatini yangilash
       const contactsData = await apiClient.getContacts()
       setContacts(Array.isArray(contactsData) ? contactsData : [])
 
-      // 2 soniyadan keyin success message ni o'chirish
       setTimeout(() => {
         setAddContactMessage({ type: "", text: "" })
       }, 2000)
@@ -219,7 +213,6 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
     }
   }
 
-  // FIXED: handleUserSelect - targetUser ni o'rnatish va search natijalarini yopish
   const handleUserSelect = (user: User) => {
     console.log("handleUserSelect called with:", user);
     console.log("User ID:", user.id);
@@ -236,12 +229,11 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
     setTargetUser(user);
     setNewUsername(user.username);
     setNewAlias(user.name || user.username);
-    setSearchResults([]); // Search natijalarini yopish
-    setAddContactMessage({ type: "", text: "" }); // Clear any previous errors
+    setSearchResults([]);   
+    setAddContactMessage({ type: "", text: "" });   
     console.log("Target user set to:", user);
   }
 
-  // newUsername o'zgarganda targetUser va searchResults ni tozalash
   useEffect(() => {
     if (!newUsername.trim()) {
       setTargetUser(null);
@@ -249,7 +241,6 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
     }
   }, [newUsername]);
 
-  // FIXED: Add button holatini aniqlash
   const isAddButtonDisabled = isAddingContact || !targetUser;
 
   const handleEditContact = (contact: Contact) => {
@@ -450,7 +441,6 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
                     )}
                   </div>
 
-                  {/* FIXED: Search results display */}
                   {searchResults.length > 0 && !targetUser && (
                     <div className="space-y-2">
                       <Label>Search Results (Click to select):</Label>
@@ -480,7 +470,6 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
                     </div>
                   )}
 
-                  {/* FIXED: Selected user display */}
                   {targetUser && (
                     <div className="p-3 rounded-lg border-2 border-blue-500 bg-blue-50">
                       <p className="text-xs text-blue-600 font-semibold mb-2">Selected User:</p>
@@ -554,7 +543,6 @@ export function ContactsModal({ isOpen, onClose, onStartChat }: ContactsModalPro
         </DialogContent>
       </Dialog>
 
-      {/* Edit Contact Modal */}
       <Dialog open={!!editingContact} onOpenChange={() => setEditingContact(null)}>
         <DialogContent className="max-w-md bg-gray-300">
           <DialogHeader>

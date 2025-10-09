@@ -228,12 +228,10 @@ export function useChat() {
       groupWs.onmessage = (event) => {
         const data = JSON.parse(event.data)
 
-        // Faqat ochiq bo'lmagan guruhlar uchun notification
         if (currentGroupRef.current !== groupId) {
           switch (data.type) {
             case "chat_message":
             case "file_uploaded":
-              // Boshqa a'zoning xabari kelsa - unread count oshadi
               if (data.sender_id !== currentUser?.id) {
                 setGroups(prev => prev.map(group => {
                   if (group.id.toString() === groupId) {
@@ -245,7 +243,6 @@ export function useChat() {
               break;
 
             case "unread_count":
-              // Backend periodic ravishda har bir a'zoga o'zining unread count'ini yuborishi mumkin
               setGroups(prev => prev.map(group => {
                 if (group.id.toString() === groupId) {
                   return { ...group, unread: data.count };
@@ -303,16 +300,14 @@ export function useChat() {
 
   const loadChatsWithAliases = async () => {
     try {
-      // Kontaktlarni olish
       const contacts = await apiClient.getContacts();
       const contactsMap = new Map();
 
       console.log("[DEBUG] Contacts from API:", contacts);
 
-      // Kontaktlarni map ga joylash - contact_user ID sifatida
       contacts.forEach((contact: any) => {
         console.log(`[DEBUG] Processing contact:`, contact);
-        if (contact.contact_user) { // contact_user ID raqam
+        if (contact.contact_user) {   
           contactsMap.set(contact.contact_user, {
             alias: contact.alias,
             isContact: true
@@ -322,7 +317,6 @@ export function useChat() {
 
       console.log("[DEBUG] Contacts map:", contactsMap);
 
-      // Chatlarni yangilash
       setChats(prevChats =>
         prevChats.map(chat => {
           console.log(`[DEBUG] Checking chat:`, {
@@ -391,14 +385,13 @@ export function useChat() {
                 message_type: conv.message_type || "text",
                 room_id: conv.id?.toString(),
                 type: "private",
-                alias: null, // Hozircha null
-                isContact: false // Hozircha false
+                alias: null,  
+                isContact: false  
               }))
 
               console.log("[DEBUG] Formatted chats before aliases:", formattedChats);
               setChats(formattedChats)
 
-              // Chatlar yuklangandan so'ng alias larni yuklash
               setTimeout(() => {
                 loadChatsWithAliases();
               }, 100);
@@ -516,7 +509,6 @@ export function useChat() {
               }
               break
 
-            // Chat WebSocket handlerda message_updated va message_deleted holatlarini qo'shing
             case "message_updated":
               setMessages(prev => {
                 const targetRoomId = data.room_id?.toString() || roomId;
@@ -668,7 +660,6 @@ export function useChat() {
             type: "get_history"
           }))
 
-          // Backenddan joriy foydalanuvchi uchun unread count so'rash
           groupWs.send(JSON.stringify({
             type: "get_unread_count"
           }))
@@ -724,7 +715,6 @@ export function useChat() {
               break
 
             case 'initial_unread_count':
-              // Guruhga birinchi ulanishda unread count
               setGroups(prev => prev.map(group => {
                 if (group.id.toString() === groupId) {
                   return { ...group, unread: data.count };
@@ -734,7 +724,6 @@ export function useChat() {
               break;
 
             case 'message_read_confirmed':
-              // Xabar o'qilgandan keyin tasdiq
               setMessages(prev => {
                 const roomKey = `group_${groupId}`;
                 const updatedMessages = (prev[roomKey] || []).map(msg => {
@@ -975,13 +964,11 @@ export function useChat() {
 
   const markGroupMessageAsRead = useCallback((groupId: string, messageId: string) => {
     if (groupWsRef.current && groupWsRef.current.readyState === WebSocket.OPEN) {
-      // Backendga xabarni o'qilgan deb belgilash so'rovi
       groupWsRef.current.send(JSON.stringify({
         type: "mark_as_read",
         message_id: messageId
       }));
 
-      // Optimistic update - darhol UI'ni yangilash
       setMessages(prev => {
         const roomKey = `group_${groupId}`;
         const updatedMessages = (prev[roomKey] || []).map(msg => {
@@ -997,7 +984,6 @@ export function useChat() {
         };
       });
 
-      // Unread count kamayadi
       setGroups(prev => prev.map(group => {
         if (group.id.toString() === groupId && group.unread > 0) {
           return { ...group, unread: Math.max(0, group.unread - 1) };
@@ -1154,7 +1140,6 @@ export function useChat() {
         console.log(`[Chat] Channel background listener connected to channel ${channelId}`)
       }
 
-      // use-chat.txt - initializeChannelBackgroundListener funksiyasida
 
       channelWs.onmessage = (event) => {
         const data = JSON.parse(event.data)
@@ -1170,7 +1155,6 @@ export function useChat() {
                       return {
                         ...channel,
                         unread: (channel.unread || 0) + 1,
-                        // ✅ Timestamp va last_message yangilash
                         timestamp: data.message?.created_at || new Date().toISOString(),
                         last_message: data.message?.content || channel.last_message
                       };
@@ -1178,7 +1162,6 @@ export function useChat() {
                     return channel;
                   });
 
-                  // ✅ So'nggi xabar bo'yicha tartiblash
                   updatedChannels.sort((a, b) => {
                     const dateA = new Date(a.timestamp).getTime();
                     const dateB = new Date(b.timestamp).getTime();
@@ -1218,7 +1201,6 @@ export function useChat() {
   }, [currentUser])
 
 
-  // Kanalga ulanish
   const connectToChannel = useCallback((channelId: string) => {
     if (currentChannelRef.current === channelId && channelWsRef.current?.readyState === WebSocket.OPEN) {
       return
@@ -1278,7 +1260,6 @@ export function useChat() {
             }
             break
 
-          // Channel WebSocket handlerda message_updated va message_deleted holatlarini qo'shing
           case "message_updated":
             setMessages(prev => {
               const roomKey = `channel_${channelId}`;
@@ -1419,7 +1400,6 @@ export function useChat() {
             break;
 
           case "message_read_update":
-            // ✅ Xabar o'qilgan deb yangilash
             if (data.message_id) {
               const roomKey = `channel_${channelId}`
               setMessages(prev => ({
@@ -1450,7 +1430,6 @@ export function useChat() {
     }
   }, [currentUser])
 
-  // Kanal xabari yuborish
   const sendChannelMessage = useCallback((channelId: string, content: string) => {
     if (!channelWsRef.current || channelWsRef.current.readyState !== WebSocket.OPEN || !content.trim() || !channelId) {
       return
@@ -1463,7 +1442,6 @@ export function useChat() {
     }))
   }, [])
 
-  // Kanal fayli yuborish
   const sendChannelFile = useCallback((channelId: string, fileData: string, fileName: string, fileType: string) => {
     if (!channelWsRef.current || channelWsRef.current.readyState !== WebSocket.OPEN || !channelId) {
       return

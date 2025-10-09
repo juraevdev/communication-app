@@ -15,7 +15,7 @@ interface CreateGroupModalProps {
   isOpen: boolean
   onClose: () => void
   onCreateGroup?: (groupData: { name: string; description?: string; members: number[] }) => Promise<any> | any
-  onGroupCreated?: () => void // <- Yangi prop: guruh yaratilgandan keyin chaqiriladi
+  onGroupCreated?: () => void   
 }
 
 interface User {
@@ -89,7 +89,6 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup, onGroupCreate
     }
   }
 
-  // Step 1 da Save tugmasi bosilganda guruh yaratish
   const handleSaveGroup = async () => {
     if (!groupData.name.trim()) {
       alert("Enter group name")
@@ -110,11 +109,9 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup, onGroupCreate
         console.log("Result type:", typeof result)
         console.log("Result keys:", result ? Object.keys(result) : "No keys")
 
-        // Turli xil return formatlarini tekshirish
         let groupId = null
 
         if (result && typeof result === 'object') {
-          // Ko'proq mumkin bo'lgan formatlarni tekshiramiz
           groupId = result.id ||
             result.group_id ||
             result.groupId ||
@@ -132,20 +129,17 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup, onGroupCreate
           setGroupData(prev => ({ ...prev, id: groupId }))
           console.log("Group created with ID:", groupId)
 
-          // Guruh yaratilgandan so'ng callback chaqiramiz
           if (onGroupCreated) {
             onGroupCreated();
           }
         } else {
           console.warn("No group ID found in result:", result)
-          // Foydalanuvchiga aniqroq ma'lumot beramiz
           console.log("Please check your onCreateGroup callback. It should return an object with 'id' property or the ID directly.")
         }
       } else {
         console.warn("onCreateGroup callback not provided")
       }
 
-      // Har qanday holatda ham Step 2 ga o'tamiz
       setStep(2)
 
     } catch (error) {
@@ -156,10 +150,8 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup, onGroupCreate
     }
   }
 
-  // Step 2 da Create group tugmasi bosilganda a'zolarni qo'shish
   const handleAddMembers = async () => {
     if (selectedUsers.length === 0) {
-      // A'zo tanlanmasa shunchaki modal yopish
       resetModal()
       onClose()
       return
@@ -167,7 +159,6 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup, onGroupCreate
 
     if (!groupData.id) {
       console.warn("No group ID available for adding members")
-      // ID bo'lmasa ham modalini yopamiz
       alert("Group was created but members cannot be added automatically. Please add them manually.")
       resetModal()
       onClose()
@@ -179,7 +170,6 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup, onGroupCreate
     try {
       await addMembersToGroup(groupData.id, selectedUsers)
 
-      // A'zolar qo'shilgandan so'ng callback chaqiramiz
       if (onGroupCreated) {
         onGroupCreated();
       }
@@ -189,7 +179,6 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup, onGroupCreate
     } catch (error) {
       console.error("Failed to add members:", error)
       alert("Error while adding members to group: " + (error))
-      // Xato bo'lsa ham modalini yopamiz
       resetModal()
       onClose()
     } finally {
@@ -321,7 +310,6 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup, onGroupCreate
           </div>
         ) : (
           <div className="space-y-4 flex flex-col h-full">
-            {/* Qidiruv qismi */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
               <Input
@@ -333,7 +321,6 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup, onGroupCreate
               />
             </div>
 
-            {/* Tanlangan a'zolar */}
             {selectedUsers.length > 0 && (
               <div className="space-y-2">
                 <Label className="text-sm font-medium">
@@ -356,7 +343,6 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup, onGroupCreate
               </div>
             )}
 
-            {/* Foydalanuvchilar ro'yxati */}
             <div className="flex-1 min-h-0">
               <ScrollArea className="h-64 border rounded-lg bg-gray-200">
                 <div className="space-y-2 p-2">
@@ -406,7 +392,6 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup, onGroupCreate
               </ScrollArea>
             </div>
 
-            {/* Loading state */}
             {isCreating && (
               <div className="flex items-center justify-center py-2">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-2"></div>
@@ -414,7 +399,6 @@ export function CreateGroupModal({ isOpen, onClose, onCreateGroup, onGroupCreate
               </div>
             )}
 
-            {/* Tugmalar */}
             <div className="flex justify-between pt-4 border-t">
               <Button
                 className="cursor-pointer hover:scale-105 transition duration-300"

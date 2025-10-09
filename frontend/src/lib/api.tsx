@@ -167,7 +167,6 @@ export const apiClient = {
     return response.data;
   },
 
-  // api.js fayliga qo'shiladi
   async getVideoCallWebSocketUrl(roomId: any) {
     const token = localStorage.getItem('access_token');
     return `wss://planshet2.stat.uz/ws/videocall/${roomId}/?token=${token}`;
@@ -199,8 +198,6 @@ export const apiClient = {
     });
     return response.data;
   },
-
-  // Add these methods to your apiClient object in api.tsx
 
   async downloadGroupFile(fileUrl: string): Promise<Blob> {
     const response = await fetch(`planshet2.stat.uz/${fileUrl}`, {

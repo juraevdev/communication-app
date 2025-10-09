@@ -4,6 +4,7 @@ interface MessageStatusProps {
   status: "sending" | "sent" | "delivered" | "read" | "read_file"
   isOwn: boolean
   isGroup?: boolean
+  isChannel?: boolean
   readCount?: number 
   totalMembers?: number 
 }
@@ -11,7 +12,8 @@ interface MessageStatusProps {
 export function MessageStatus({ 
   status, 
   isOwn, 
-  isGroup = false, 
+  isGroup = true, 
+  isChannel = true,
   readCount = 0, 
   totalMembers = 0 
 }: MessageStatusProps) {
@@ -28,6 +30,21 @@ export function MessageStatus({
       case "read":
       case "read_file":
         if (isGroup) {
+          return (
+            <div className="flex items-center gap-1">
+              <CheckCheck className="w-3 h-3 text-blue-400" />
+              {readCount > 0 && (
+                <span className="text-xs text-blue-400">
+                  {readCount}/{totalMembers}
+                </span>
+              )}
+            </div>
+          )
+        }
+        return <CheckCheck className="w-3 h-3 text-blue-400" />
+      case "read":
+      case "read_file":
+        if (isChannel) {
           return (
             <div className="flex items-center gap-1">
               <CheckCheck className="w-3 h-3 text-blue-400" />

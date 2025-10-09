@@ -43,7 +43,6 @@ export const useVideoCall = ({
     iceCandidatePoolSize: 10,
   };
 
-  // WebSocket xabar yuborish - to'liq logging bilan
   const sendWebSocketMessage = useCallback((message: any): void => {
     if (videoCallWs.current?.readyState === WebSocket.OPEN && state.isWsConnected) {
       console.log('[VideoCall] ✅ Sending message:', JSON.stringify(message, null, 2));
@@ -54,7 +53,6 @@ export const useVideoCall = ({
     }
   }, [state.isWsConnected]);
 
-  // Kutayotgan xabarlarni yuborish
   const flushPendingMessages = useCallback((): void => {
     if (pendingMessages.current.length > 0) {
       console.log('[VideoCall] 📤 Flushing', pendingMessages.current.length, 'pending messages');
@@ -68,7 +66,6 @@ export const useVideoCall = ({
     }
   }, []);
 
-  // WebSocket initialization
   const initializeWebSocket = useCallback((roomId: string): Promise<void> => {
     return new Promise((resolve, reject) => {
       try {
@@ -80,11 +77,9 @@ export const useVideoCall = ({
 
         videoCallWs.current = new WebSocket(wsUrl);
 
-        // User-specific group qo'shish
         videoCallWs.current.onopen = (): void => {
           console.log('[VideoCall] ✅ WebSocket connected to room:', roomId);
 
-          // User groupga qo'shilish
           if (currentUserId) {
             const userGroupMessage = {
               type: 'join_user_group',
@@ -96,7 +91,6 @@ export const useVideoCall = ({
 
           setState(prev => ({ ...prev, isWsConnected: true }));
 
-          // Join call xabarini yuborish
           const joinMessage = {
             type: 'join_call',
             from_user_id: currentUserId,
@@ -167,7 +161,6 @@ export const useVideoCall = ({
     });
   }, [currentUserId, currentUserName, flushPendingMessages]);
 
-  // Peer connection yaratish
   const createPeerConnection = useCallback((userId: number): RTCPeerConnection => {
     console.log('[VideoCall] 🔗 Creating peer connection for user:', userId);
 
@@ -219,7 +212,6 @@ export const useVideoCall = ({
     return pc;
   }, [state.localStream, sendWebSocketMessage, currentUserId]);
 
-  // Signaling xabarlarni qayta ishlash
   const handleSignalingMessage = useCallback(async (data: any): Promise<void> => {
     const { type, from_user_id, user_name } = data;
 
@@ -303,7 +295,6 @@ export const useVideoCall = ({
     }
   }, [currentUserId]);
 
-  // WebRTC handlers
   const handleOffer = useCallback(async (offer: RTCSessionDescriptionInit, fromUserId: number): Promise<void> => {
     console.log('[VideoCall] 📨 Processing offer from:', fromUserId);
 
@@ -377,7 +368,6 @@ export const useVideoCall = ({
     }
   }, [createPeerConnection, sendWebSocketMessage, currentUserId]);
 
-  // Call invitation yuborish
   const sendCallInvitation = useCallback((roomId: string, toUserId: number, callType: 'video' | 'audio' = 'video'): void => {
     const currentId = Number(currentUserId);
     const targetId = Number(toUserId);
@@ -412,7 +402,6 @@ export const useVideoCall = ({
     sendWebSocketMessage(invitationMessage);
   }, [sendWebSocketMessage, currentUserId, currentUserName]);
 
-  // Call response yuborish
   const sendCallResponse = useCallback((roomId: string, toUserId: number, accepted: boolean): void => {
     const responseMessage = {
       type: 'call_response',
@@ -427,7 +416,6 @@ export const useVideoCall = ({
     sendWebSocketMessage(responseMessage);
   }, [sendWebSocketMessage, currentUserId, currentUserName]);
 
-  // Call boshqaruv funksiyalari
   const startCall = useCallback(async (roomId: string): Promise<void> => {
     try {
       console.log('[VideoCall] 🚀 Starting call in room:', roomId);
@@ -563,7 +551,6 @@ export const useVideoCall = ({
     pendingMessages.current = [];
   }, [state.localStream]);
 
-  // Media controls
   const toggleAudio = useCallback((): boolean => {
     if (state.localStream) {
       const audioTracks = state.localStream.getAudioTracks();
@@ -627,7 +614,6 @@ export const useVideoCall = ({
     }
   }, [state.localStream]);
 
-  // Cleanup
   useEffect(() => {
     return () => {
       if (state.isInCall) {

@@ -51,14 +51,12 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
     toggleVideo,
   } = videoCall;
 
-  // Har bir remote stream uchun alohida ref
   const remoteVideoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
 
   const remoteStreamsArray = Array.from(remoteStreams.entries());
 
-  // Local video stream o'rnatish
   useEffect(() => {
     if (!isOpen) return;
 
@@ -75,7 +73,6 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
       try {
         localVideoRef.current.srcObject = localStream;
         
-        // Forcefully play
         const playPromise = localVideoRef.current.play();
         
         if (playPromise !== undefined) {
@@ -88,7 +85,6 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
               console.error('[VideoCallModal] ❌ Local video play error:', error);
               setVideoError('Video playback failed. Click to enable.');
               
-              // User interaction orqali play qilish
               const enableVideo = () => {
                 localVideoRef.current?.play()
                   .then(() => {
@@ -102,7 +98,6 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
             });
         }
 
-        // Video metadata yuklanganda
         localVideoRef.current.onloadedmetadata = () => {
           console.log('[VideoCallModal] 📊 Local video metadata loaded:', {
             width: localVideoRef.current?.videoWidth,
@@ -111,12 +106,10 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
           });
         };
 
-        // Video play bo'lganda
         localVideoRef.current.onplay = () => {
           console.log('[VideoCallModal] ▶️ Local video started playing');
         };
 
-        // Video pause bo'lganda
         localVideoRef.current.onpause = () => {
           console.log('[VideoCallModal] ⏸️ Local video paused');
         };
@@ -128,7 +121,6 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
     }
   }, [localStream, isOpen, isVideoMuted]);
 
-  // Remote video streams o'rnatish
   useEffect(() => {
     if (!isOpen) return;
 
@@ -170,7 +162,6 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
     onClose();
   };
 
-  // Manual video enable
   const handleVideoClick = () => {
     if (localVideoRef.current) {
       localVideoRef.current.play().catch(console.error);
@@ -192,7 +183,6 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-95 z-50 flex items-center justify-center p-4">
       <div className="bg-gray-900 rounded-xl w-full h-full max-w-7xl max-h-[95vh] flex flex-col border border-gray-700 shadow-2xl">
-        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-700 bg-gray-800 rounded-t-xl">
           <div className="flex items-center gap-4">
             <div className="p-2 rounded-full bg-gray-700 text-green-400">
@@ -223,10 +213,8 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
           </Button>
         </div>
 
-        {/* Video Grid */}
         <ScrollArea className="flex-1 p-6 bg-gray-950">
           <div className={`grid gap-6 ${getGridClass()} mx-auto h-full`}>
-            {/* Local Video */}
             <div 
               className="relative bg-gray-800 rounded-xl overflow-hidden aspect-video min-h-[250px] shadow-lg group cursor-pointer"
               onClick={handleVideoClick}
@@ -237,17 +225,15 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
                 muted
                 playsInline
                 className="w-full h-full object-cover bg-gray-900"
-                style={{ transform: 'scaleX(-1)' }} // Mirror effect
+                style={{ transform: 'scaleX(-1)' }} 
               />
               
-              {/* User label */}
               <div className="absolute top-4 left-4 bg-black bg-opacity-70 px-3 py-1.5 rounded-full text-white text-sm font-medium backdrop-blur-sm z-10">
                 You 
                 {isAudioMuted && <span className="ml-2">🔇</span>}
                 {isVideoMuted && <span className="ml-1">📹❌</span>}
               </div>
               
-              {/* Video error message */}
               {videoError && (
                 <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-90 z-20">
                   <div className="text-center p-4">
@@ -263,7 +249,6 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
                 </div>
               )}
               
-              {/* Video muted overlay */}
               {isVideoMuted && !videoError && (
                 <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
                   <div className="text-center">
@@ -273,7 +258,6 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
                 </div>
               )}
               
-              {/* Loading state */}
               {!localStream && !isVideoMuted && !videoError && (
                 <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
                   <div className="text-center">
@@ -283,7 +267,6 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
                 </div>
               )}
 
-              {/* Debug info (dev only) */}
               {process.env.NODE_ENV === 'development' && (
                 <div className="absolute bottom-2 left-2 text-xs text-gray-400 bg-black bg-opacity-50 px-2 py-1 rounded">
                   Stream: {localStream ? '✅' : '❌'} | 
@@ -293,7 +276,6 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
               )}
             </div>
 
-            {/* Remote Videos */}
             {remoteStreamsArray.map(([userId, stream]) => {
               const participant = participants.find(p => p.id === userId);
 
@@ -314,7 +296,6 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
                     {participant?.name || `User ${userId}`}
                   </div>
 
-                  {/* Debug info for remote stream */}
                   {process.env.NODE_ENV === 'development' && (
                     <div className="absolute bottom-2 left-2 text-xs text-gray-400 bg-black bg-opacity-50 px-2 py-1 rounded">
                       User: {userId} | Tracks: {stream?.getTracks().length || 0}
@@ -324,7 +305,6 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
               );
             })}
 
-            {/* No remote participants */}
             {remoteStreamsArray.length === 0 && callStatus === 'connected' && (
               <div className="col-span-2 flex items-center justify-center h-64">
                 <div className="text-center">
@@ -337,10 +317,8 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
           </div>
         </ScrollArea>
 
-        {/* Controls */}
         <div className="p-6 border-t border-gray-700 bg-gray-800 rounded-b-xl">
           <div className="flex items-center justify-center gap-4">
-            {/* Audio Toggle */}
             <Button
               variant="outline"
               size="lg"
@@ -358,7 +336,6 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
               )}
             </Button>
 
-            {/* Video Toggle */}
             <Button
               variant="outline"
               size="lg"
@@ -376,7 +353,6 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
               )}
             </Button>
 
-            {/* End Call */}
             <Button
               variant="destructive"
               size="lg"

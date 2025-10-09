@@ -23,7 +23,6 @@ import {
   LogOut,
   Send,
   Paperclip,
-  Smile,
   Phone,
   Video,
   User,
@@ -973,7 +972,6 @@ export default function ChatPage() {
       }
     } catch (error) {
       console.error("Failed to edit message:", error);
-      alert("Xabarni tahrirlash muvaffaqiyatsiz. Iltimos, qayta urinib ko'ring.");
     }
   };
 
@@ -2011,11 +2009,12 @@ export default function ChatPage() {
                                     <span className="text-xs text-gray-400">
                                       {formatMessageTime(msg.timestamp)}
                                     </span>
-                                    {isRightAligned && selectedChat?.type === "private" && (
+                                    {isRightAligned && (
                                       <MessageStatus
                                         status={getMessageStatus(msg)}
                                         isOwn={true}
-                                        isGroup={false}
+                                        isGroup={true}
+                                        isChannel={true}
                                       />
                                     )}
                                   </div>
@@ -2176,14 +2175,6 @@ export default function ChatPage() {
                         className="pr-10 bg-gray-800 border-gray-600 text-white"
                         disabled={!isConnected}
                       />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:bg-gray-700"
-                      >
-                        <Smile className="h-4 w-4" />
-                      </Button>
                     </div>
                     <Button
                       type="submit"
@@ -2195,9 +2186,7 @@ export default function ChatPage() {
                     </Button>
                   </form>
                 ) : (
-                  <div className="flex justify-center">
-                    {/* <p className="text-gray-400 text-sm">You can't send message!</p> */}
-                  </div>
+                  <div className="flex justify-center"></div>
                 )
               )}
             </div>

@@ -1,4 +1,3 @@
-// edit-message-modal.tsx
 import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,7 +23,6 @@ export function EditMessageModal({
 
   useEffect(() => {
     if (isOpen) {
-      // Agar file message bo'lsa, faqat file nomini olamiz
       if (messageType === "file" && originalMessage.startsWith("File: ")) {
         setEditedContent(originalMessage.replace("File: ", ""))
       } else {
@@ -35,7 +33,6 @@ export function EditMessageModal({
 
   const handleSave = () => {
     if (editedContent.trim()) {
-      // Agar file message bo'lsa, "File: " prefiksini qaytaramiz
       const finalContent = messageType === "file" 
         ? `File: ${editedContent.trim()}`
         : editedContent.trim()

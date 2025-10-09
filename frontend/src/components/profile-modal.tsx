@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { MessageSquare, Phone, Video, UserPlus, UserMinus } from "lucide-react"
+import { MessageSquare } from "lucide-react"
 
 interface ProfileModalProps {
   isOpen: boolean
@@ -36,14 +36,6 @@ export function ProfileModal({ isOpen, onClose, user, isOwnProfile = false }: Pr
     return user.name.charAt(0).toUpperCase()
   }
 
-  const handleAddContact = () => {
-    console.log("Adding contact:", user.id)
-  }
-
-  const handleRemoveContact = () => {
-    console.log("Removing contact:", user.id)
-  }
-
   const handleStartChat = () => {
     console.log("Starting chat with:", user.id)
     onClose()
@@ -68,49 +60,37 @@ export function ProfileModal({ isOpen, onClose, user, isOwnProfile = false }: Pr
             </div>
             <div className="w-full space-y-2">
               <h3 className="text-xl font-semibold">{user.name || ""}</h3>
-              {/* Haqiqiy username ko'rsatish */}
               <p className="text-muted-foreground">@{user.username || "user"}</p>
             </div>
           </div>
 
           <Tabs defaultValue="info" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-">
               <TabsTrigger className="cursor-pointer" value="info">Info</TabsTrigger>
-              <TabsTrigger className="cursor-pointer" value="media">Media</TabsTrigger>
             </TabsList>
 
             <TabsContent value="info" className="space-y-4">
               <div className="space-y-3">
-                {/* Haqiqiy email ko'rsatish */}
                 <div>
                   <Label className="text-sm font-medium">Email</Label>
                   <p className="text-sm text-muted-foreground">{user.email || "No email"}</p>
                 </div>
-                {/* Haqiqiy username ko'rsatish */}
                 <div>
                   <Label className="text-sm font-medium">Username</Label>
                   <p className="text-sm text-muted-foreground">@{user.username || "user"}</p>
                 </div>
-                {/* Bio ma'lumotini ko'rsatish */}
                 {user.bio && (
                   <div>
                     <Label className="text-sm font-medium">Bio</Label>
                     <p className="text-sm text-muted-foreground">{user.bio}</p>
                   </div>
                 )}
-                {/* Telefon raqamini ko'rsatish */}
                 {user.phone_number && (
                   <div>
                     <Label className="text-sm font-medium">Phone</Label>
                     <p className="text-sm text-muted-foreground">{user.phone_number}</p>
                   </div>
                 )}
-              </div>
-            </TabsContent>
-
-            <TabsContent value="media" className="space-y-4">
-              <div className="text-center text-muted-foreground">
-                <p className="text-sm">No media</p>
               </div>
             </TabsContent>
           </Tabs>
@@ -120,20 +100,6 @@ export function ProfileModal({ isOpen, onClose, user, isOwnProfile = false }: Pr
               <Button onClick={handleStartChat} className="flex-1 cursor-pointer">
                 <MessageSquare className="mr-2 h-4 w-4" />
                 Message
-              </Button>
-              <Button variant="outline" size="icon" className="cursor-pointer">
-                <Phone className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="icon" className="cursor-pointer">
-                <Video className="h-4 w-4" />
-              </Button>
-              <Button 
-                className="cursor-pointer" 
-                variant="outline" 
-                size="icon" 
-                onClick={user.isContact ? handleRemoveContact : handleAddContact}
-              >
-                {user.isContact ? <UserMinus className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
               </Button>
             </div>
           )}

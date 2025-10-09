@@ -11,7 +11,7 @@ interface CreateChannelModalProps {
   onClose: () => void
   onCreateChannel: (data: { name: string; description?: string; username: string; owner?: string }) => Promise<void>
   currentUserId: string
-  onChannelCreated?: () => void // <- Yangi prop: kanal yaratilgandan keyin chaqiriladi
+  onChannelCreated?: () => void   
 }
 
 export function CreateChannelModal({ 
@@ -19,7 +19,7 @@ export function CreateChannelModal({
   onClose, 
   onCreateChannel, 
   currentUserId,
-  onChannelCreated // <- Yangi prop
+  onChannelCreated  
 }: CreateChannelModalProps) {
   const [channelData, setChannelData] = useState({
     name: "",
@@ -41,7 +41,6 @@ export function CreateChannelModal({
         owner: currentUserId 
       })
       
-      // Kanal yaratilgandan so'ng callback chaqiramiz
       if (onChannelCreated) {
         onChannelCreated();
       }
@@ -60,7 +59,6 @@ export function CreateChannelModal({
     }
   }
 
-  // Modal yopilganda reset qilish
   const handleClose = () => {
     setChannelData({
       name: "",

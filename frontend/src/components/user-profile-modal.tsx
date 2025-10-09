@@ -123,12 +123,10 @@ export function UserProfileModal({
 
     console.log("✅ Profile updated:", updatedUser);
 
-    // ✅ 1. Parent component ni yangilash
     if (onProfileUpdate) {
       onProfileUpdate(updatedUser);
     }
 
-    // ✅ 2. Local state larni yangilash
     setEditData({
       fullname: updatedUser.fullname,
       username: updatedUser.username,
@@ -138,7 +136,6 @@ export function UserProfileModal({
     
     setCurrentUserPhone(updatedUser.phone_number);
 
-    // ✅ 3. localStorage ni yangilash (agar kerak bo'lsa)
     if (isOwnProfile) {
       const currentUserData = localStorage.getItem('user_data');
       if (currentUserData) {
