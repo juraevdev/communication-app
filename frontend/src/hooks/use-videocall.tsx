@@ -302,88 +302,89 @@ export const useVideoCall = ({
   }, [createPeerConnection, sendWebSocketMessage, currentUserId]);
 
   const handleSignalingMessage = useCallback(async (data: any): Promise<void> => {
-    const { type, from_user_id, user_name } = data;
+  const { type, from_user_id, user_name } = data;
 
-    console.log('[VideoCall] 🔄 Handling message:', type, 'from user:', from_user_id, 'current user:', currentUserId);
+  console.log('[VideoCall] 🔄 Handling message:', type, 'from user:', from_user_id, 'current user:', currentUserId);
 
-    // O'z xabarimizni ignore qilish
-    if (from_user_id && from_user_id === currentUserId) {
-      console.log('[VideoCall] ⏭️ Ignoring own message:', type);
-      return;
-    }
+  // O'z xabarimizni ignore qilish
+  if (from_user_id && from_user_id === currentUserId) {
+    console.log('[VideoCall] ⏭️ Ignoring own message:', type);
+    return;
+  }
 
-    switch (type) {
-      case 'user_joined':
-        console.log('[VideoCall] 👤 User joined:', from_user_id, user_name);
+  switch (type) {
+    case 'user_joined':
+      console.log('[VideoCall] 👤 User joined:', from_user_id, user_name);
+      
+      if (!from_user_id) {
+        console.warn('[VideoCall] ⚠️ user_joined without from_user_id');
+        return;
+      }
 
-        if (!from_user_id) {
-          console.warn('[VideoCall] ⚠️ user_joined without from_user_id');
-          return;
-        }
+      // Participantlar ro'yxatiga qo'shish
+      setState(prev => ({
+        ...prev,
+        participants: [...prev.participants.filter(p => p.id !== from_user_id), 
+                     { id: from_user_id, name: user_name || 'User' }]
+      }));
 
-        // Participantlar ro'yxatiga qo'shish
-        setState(prev => ({
-          ...prev,
-          participants: [...prev.participants.filter(p => p.id !== from_user_id), { id: from_user_id, name: user_name || 'User' }]
-        }));
+      // MUHIM: Agar biz qo'ng'iroq qiluvchi bo'lsak (call room ni biz yaratgan bo'lsak)
+      // va local stream'imiz bo'lsa, yangi user uchun offer yaratamiz
+      if (state.localStream && state.isInCall && currentRoomId.current) {
+        console.log('[VideoCall] 📤 We are the caller, creating offer for newly joined user:', from_user_id);
+        
+        // Kichik kechikish bilan offer yaratish
+        setTimeout(async () => {
+          try {
+            await createOffer(from_user_id);
+            console.log('[VideoCall] ✅ Offer created for user:', from_user_id);
+          } catch (error) {
+            console.error('[VideoCall] ❌ Error creating offer:', error);
+          }
+        }, 1000);
+      } else {
+        console.log('[VideoCall] ℹ️ We are the answerer, waiting for offer from caller');
+      }
+      break;
 
-        // Agar bizning stream tayyor bo'lsa, offer yuboramiz
-        if (state.localStream && state.isInCall) {
-          console.log('[VideoCall] 📤 Creating offer for newly joined user:', from_user_id);
-          setTimeout(() => {
-            createOffer(from_user_id);
-          }, 500);
-        } else {
-          console.log('[VideoCall] ⏳ Waiting for local stream before creating offer');
-          // Stream tayyor bo'lganda offer yuborish uchun kechikish
-          const checkInterval = setInterval(() => {
-            if (state.localStream && state.isInCall) {
-              clearInterval(checkInterval);
-              console.log('[VideoCall] 📤 Local stream ready, creating offer for:', from_user_id);
-              createOffer(from_user_id);
-            }
-          }, 500);
+    case 'user_left':
+      console.log('[VideoCall] 👋 User left:', from_user_id);
+      setState(prev => ({
+        ...prev,
+        participants: prev.participants.filter(p => p.id !== from_user_id),
+        remoteStreams: (() => {
+          const newStreams = new Map(prev.remoteStreams);
+          newStreams.delete(from_user_id);
+          return newStreams;
+        })(),
+      }));
 
-          // 5 sekunddan keyin to'xtatish
-          setTimeout(() => clearInterval(checkInterval), 5000);
-        }
-        break;
+      const pc = peerConnections.current.get(from_user_id);
+      if (pc) {
+        pc.close();
+        peerConnections.current.delete(from_user_id);
+      }
+      break;
 
-      case 'user_left':
-        console.log('[VideoCall] 👋 User left:', from_user_id);
-        setState(prev => ({
-          ...prev,
-          participants: prev.participants.filter(p => p.id !== from_user_id),
-          remoteStreams: (() => {
-            const newStreams = new Map(prev.remoteStreams);
-            newStreams.delete(from_user_id);
-            return newStreams;
-          })(),
-        }));
+    case 'offer':
+      console.log('[VideoCall] 📨 Handling offer from:', from_user_id);
+      await handleOffer(data.offer, from_user_id);
+      break;
 
-        const pc = peerConnections.current.get(from_user_id);
-        if (pc) {
-          pc.close();
-          peerConnections.current.delete(from_user_id);
-        }
-        break;
+    case 'answer':
+      console.log('[VideoCall] 📬 Handling answer from:', from_user_id);
+      await handleAnswer(data.answer, from_user_id);
+      break;
 
-      case 'offer':
-        console.log('[VideoCall] 📨 Handling offer from:', from_user_id);
-        await handleOffer(data.offer, from_user_id);
-        break;
+    case 'ice_candidate':
+      console.log('[VideoCall] 🧊 Handling ICE candidate from:', from_user_id);
+      await handleIceCandidate(data.candidate, from_user_id);
+      break;
 
-      case 'answer':
-        console.log('[VideoCall] 📬 Handling answer from:', from_user_id);
-        await handleAnswer(data.answer, from_user_id);
-        break;
-
-      case 'ice_candidate':
-        console.log('[VideoCall] 🧊 Handling ICE candidate from:', from_user_id);
-        await handleIceCandidate(data.candidate, from_user_id);
-        break;
-    }
-  }, [currentUserId, createOffer, handleOffer, handleAnswer, handleIceCandidate]);
+    default:
+      console.log('[VideoCall] 📩 Unknown message type:', type);
+  }
+}, [currentUserId, createOffer, handleOffer, handleAnswer, handleIceCandidate, state.localStream, state.isInCall]);
 
   const initializePresenceWebSocket = useCallback((): Promise<void> => {
     return new Promise((resolve, reject) => {
@@ -589,50 +590,56 @@ export const useVideoCall = ({
     }
   }, [sendWebSocketMessage]);
 
-  const startCall = useCallback(async (roomId: string): Promise<void> => {
-    try {
-      console.log('[VideoCall] 🚀 Starting call in room:', roomId);
-      setState(prev => ({ ...prev, callStatus: 'calling' }));
+  const startCall = useCallback(async (roomId: string, targetUserId?: number): Promise<void> => {
+  try {
+    console.log('[VideoCall] 🚀 Starting call in room:', roomId, 'target:', targetUserId);
+    setState(prev => ({ ...prev, callStatus: 'calling' }));
 
-      // 1. Avval media stream olish
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'user'
-        },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true
-        }
-      });
-
-      console.log('[VideoCall] ✅ Got local media stream');
-
-      // 2. Holatni yangilash
-      setState(prev => ({
-        ...prev,
-        localStream: stream,
-        isInCall: true,
-        callStatus: 'connected',
-      }));
-
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-        localVideoRef.current.play().catch(console.error);
+    // 1. Avval media stream olish
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { 
+        width: { ideal: 1280 }, 
+        height: { ideal: 720 },
+        facingMode: 'user'
+      },
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true
       }
+    });
 
-      // 3. WebSocket ulanishni o'rnatish
-      await initializeCallWebSocket(roomId);
+    console.log('[VideoCall] ✅ Got local media stream');
 
-      console.log('[VideoCall] ✅ Call started successfully');
+    // 2. Holatni yangilash
+    setState(prev => ({
+      ...prev,
+      localStream: stream,
+      isInCall: true,
+      callStatus: 'connected',
+    }));
 
-    } catch (error) {
-      console.error('[VideoCall] ❌ Error starting call:', error);
-      setState(prev => ({ ...prev, callStatus: 'failed' }));
-      throw error;
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = stream;
+      localVideoRef.current.play().catch(console.error);
     }
-  }, [initializeCallWebSocket]);
+
+    // 3. WebSocket ulanishni o'rnatish
+    await initializeCallWebSocket(roomId);
+
+    // 4. Agar private call bo'lsa, invitation yuborish
+    if (targetUserId && targetUserId !== currentUserId) {
+      console.log('[VideoCall] 📞 Sending call invitation to:', targetUserId);
+      await sendCallInvitation(roomId, targetUserId, 'video');
+    }
+
+    console.log('[VideoCall] ✅ Call started successfully - waiting for participants...');
+
+  } catch (error) {
+    console.error('[VideoCall] ❌ Error starting call:', error);
+    setState(prev => ({ ...prev, callStatus: 'failed' }));
+    throw error;
+  }
+}, [initializeCallWebSocket, sendCallInvitation, currentUserId]);
 
   const acceptCall = useCallback(async (): Promise<void> => {
   if (!state.incomingCall) {
@@ -644,8 +651,10 @@ export const useVideoCall = ({
   console.log('[VideoCall] ✅ Accepting call:', callInfo.roomId);
   
   try {
+    // 1. Avval call response yuborish
     await sendCallResponse(callInfo.roomId, callInfo.fromUserId, true);
 
+    // 2. Media stream olish
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { 
         width: { ideal: 1280 }, 
@@ -654,18 +663,13 @@ export const useVideoCall = ({
       },
       audio: {
         echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
+        noiseSuppression: true
       }
     });
 
-    console.log('[VideoCall] ✅ Got local media stream with tracks:', {
-      video: stream.getVideoTracks().length,
-      audio: stream.getAudioTracks().length,
-      videoTrack: stream.getVideoTracks()[0]?.id,
-      audioTrack: stream.getAudioTracks()[0]?.id
-    });
+    console.log('[VideoCall] ✅ Got local media stream');
 
+    // 3. Holatni yangilash
     setState(prev => ({
       ...prev,
       localStream: stream,
@@ -675,19 +679,17 @@ export const useVideoCall = ({
       incomingCall: null
     }));
 
+    // 4. Video elementga ulash
     if (localVideoRef.current) {
       localVideoRef.current.srcObject = stream;
-      const playPromise = localVideoRef.current.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => console.log('[VideoCall] ✅ Local video playing'))
-          .catch(err => console.error('[VideoCall] ❌ Video play error:', err));
-      }
+      await localVideoRef.current.play();
+      console.log('[VideoCall] ✅ Local video playing');
     }
 
+    // 5. Call WebSocket ochish
     await initializeCallWebSocket(callInfo.roomId);
 
-    console.log('[VideoCall] ✅ Call accepted successfully - waiting for remote stream...');
+    console.log('[VideoCall] ✅ Call accepted successfully - waiting for offer from caller...');
 
   } catch (error) {
     console.error('[VideoCall] ❌ Error accepting call:', error);
