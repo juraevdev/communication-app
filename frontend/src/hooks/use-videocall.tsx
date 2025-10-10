@@ -47,10 +47,10 @@ export const useVideoCall = ({
 
   const peerConnections = useRef<Map<number, RTCPeerConnection>>(new Map());
   const videoCallWs = useRef<WebSocket | null>(null);
+  const presenceWs = useRef<WebSocket | null>(null);  
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const currentRoomId = useRef<string | null>(null);
   const pendingMessages = useRef<WebSocketMessage[]>([]);
-  const connectionTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const rtcConfig: RTCConfiguration = {
     iceServers: [
@@ -61,20 +61,18 @@ export const useVideoCall = ({
     iceCandidatePoolSize: 10,
   };
 
-  // Helper functions first
-  const waitForWebSocketOpen = useCallback((): Promise<void> => {
+  const waitForWebSocketOpen = useCallback((ws: WebSocket | null): Promise<void> => {
     return new Promise((resolve, reject) => {
-      if (videoCallWs.current?.readyState === WebSocket.OPEN) {
+      if (ws?.readyState === WebSocket.OPEN) {
         resolve();
         return;
       }
 
       const checkInterval = setInterval(() => {
-        if (videoCallWs.current?.readyState === WebSocket.OPEN) {
+        if (ws?.readyState === WebSocket.OPEN) {
           clearInterval(checkInterval);
           resolve();
-        } else if (videoCallWs.current?.readyState === WebSocket.CLOSED || 
-                   videoCallWs.current?.readyState === WebSocket.CLOSING) {
+        } else if (ws?.readyState === WebSocket.CLOSED || ws?.readyState === WebSocket.CLOSING) {
           clearInterval(checkInterval);
           reject(new Error('WebSocket closed before opening'));
         }
@@ -87,16 +85,18 @@ export const useVideoCall = ({
     });
   }, []);
 
-  const sendWebSocketMessage = useCallback(async (message: WebSocketMessage): Promise<void> => {
+  const sendWebSocketMessage = useCallback(async (message: WebSocketMessage, isPresence: boolean = false): Promise<void> => {
     try {
-      if (videoCallWs.current?.readyState === WebSocket.OPEN) {
-        console.log('[VideoCall] ✅ Sending message:', JSON.stringify(message, null, 2));
-        videoCallWs.current.send(JSON.stringify(message));
-      } else if (videoCallWs.current?.readyState === WebSocket.CONNECTING) {
+      const ws = isPresence ? presenceWs.current : videoCallWs.current;
+      
+      if (ws?.readyState === WebSocket.OPEN) {
+        console.log('[VideoCall] ✅ Sending message:', message.type, 'via', isPresence ? 'presence' : 'call', 'WS');
+        ws.send(JSON.stringify(message));
+      } else if (ws?.readyState === WebSocket.CONNECTING) {
         console.log('[VideoCall] ⏳ WebSocket connecting, waiting...');
-        await waitForWebSocketOpen();
+        await waitForWebSocketOpen(ws);
         console.log('[VideoCall] ✅ WebSocket ready, sending message:', message.type);
-        videoCallWs.current.send(JSON.stringify(message));
+        ws.send(JSON.stringify(message));
       } else {
         console.warn('[VideoCall] ⚠️ WebSocket not ready, queuing message:', message.type);
         pendingMessages.current.push(message);
@@ -120,7 +120,6 @@ export const useVideoCall = ({
     }
   }, []);
 
-  // WebRTC functions next
   const createPeerConnection = useCallback((userId: number): RTCPeerConnection => {
     console.log('[VideoCall] 🔗 Creating peer connection for user:', userId);
 
@@ -134,17 +133,16 @@ export const useVideoCall = ({
     }
 
     pc.ontrack = (event: RTCTrackEvent): void => {
-      console.log('[VideoCall] 📺 Received remote track from user:', userId);
+      console.log('[VideoCall] 📺 Received remote track from user:', userId, 'kind:', event.track.kind);
       const remoteStream = event.streams[0];
 
       if (remoteStream) {
         setState(prev => {
           const newRemoteStreams = new Map(prev.remoteStreams);
           newRemoteStreams.set(userId, remoteStream);
+          console.log('[VideoCall] ✅ Remote stream added. Total streams:', newRemoteStreams.size);
           return { ...prev, remoteStreams: newRemoteStreams };
         });
-
-        console.log('[VideoCall] ✅ Remote stream added for user:', userId);
       }
     };
 
@@ -154,14 +152,20 @@ export const useVideoCall = ({
         sendWebSocketMessage({
           type: 'ice_candidate',
           candidate: event.candidate,
-          to_user_id: userId,
           from_user_id: currentUserId,
-        });
+        }, false);
       }
     };
 
     pc.onconnectionstatechange = (): void => {
       console.log(`[VideoCall] 📊 Peer ${userId} connection state:`, pc.connectionState);
+      if (pc.connectionState === 'connected') {
+        console.log('[VideoCall] ✅ Peer connection established with user:', userId);
+        setState(prev => ({ ...prev, callStatus: 'connected' }));
+      } else if (pc.connectionState === 'failed') {
+        console.error('[VideoCall] ❌ Peer connection failed with user:', userId);
+        setState(prev => ({ ...prev, callStatus: 'failed' }));
+      }
     };
 
     pc.oniceconnectionstatechange = (): void => {
@@ -175,19 +179,26 @@ export const useVideoCall = ({
   const handleOffer = useCallback(async (offer: RTCSessionDescriptionInit, fromUserId: number): Promise<void> => {
     console.log('[VideoCall] 📨 Processing offer from:', fromUserId);
 
-    const pc = createPeerConnection(fromUserId);
+    let pc = peerConnections.current.get(fromUserId);
+    
+    if (!pc) {
+      console.log('[VideoCall] 🔗 Creating new peer connection for offer');
+      pc = createPeerConnection(fromUserId);
+    }
 
     try {
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      console.log('[VideoCall] ✅ Remote description set');
+      
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
+      console.log('[VideoCall] ✅ Local description set');
 
       await sendWebSocketMessage({
         type: 'answer',
         answer: answer,
-        to_user_id: fromUserId,
         from_user_id: currentUserId,
-      });
+      }, false);
 
       console.log('[VideoCall] ✅ Answer sent to:', fromUserId);
     } catch (error) {
@@ -196,7 +207,9 @@ export const useVideoCall = ({
   }, [createPeerConnection, sendWebSocketMessage, currentUserId]);
 
   const handleAnswer = useCallback(async (answer: RTCSessionDescriptionInit, fromUserId: number): Promise<void> => {
+    console.log('[VideoCall] 📬 Processing answer from:', fromUserId);
     const pc = peerConnections.current.get(fromUserId);
+    
     if (pc) {
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
@@ -204,11 +217,14 @@ export const useVideoCall = ({
       } catch (error) {
         console.error('[VideoCall] ❌ Error handling answer:', error);
       }
+    } else {
+      console.warn('[VideoCall] ⚠️ No peer connection found for user:', fromUserId);
     }
   }, []);
 
   const handleIceCandidate = useCallback(async (candidate: RTCIceCandidateInit, fromUserId: number): Promise<void> => {
     const pc = peerConnections.current.get(fromUserId);
+    
     if (pc && pc.remoteDescription) {
       try {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
@@ -216,6 +232,8 @@ export const useVideoCall = ({
       } catch (error) {
         console.error('[VideoCall] ❌ Error adding ICE candidate:', error);
       }
+    } else {
+      console.warn('[VideoCall] ⚠️ Cannot add ICE candidate - no peer or remote description');
     }
   }, []);
 
@@ -231,13 +249,13 @@ export const useVideoCall = ({
       });
 
       await pc.setLocalDescription(offer);
+      console.log('[VideoCall] ✅ Local description set for offer');
 
       await sendWebSocketMessage({
         type: 'offer',
         offer: offer,
-        to_user_id: userId,
         from_user_id: currentUserId,
-      });
+      }, false);
 
       console.log('[VideoCall] ✅ Offer sent to:', userId);
     } catch (error) {
@@ -245,7 +263,6 @@ export const useVideoCall = ({
     }
   }, [createPeerConnection, sendWebSocketMessage, currentUserId]);
 
-  // Signaling message handler
   const handleSignalingMessage = useCallback(async (data: any): Promise<void> => {
     const { type, from_user_id, user_name } = data;
 
@@ -285,33 +302,6 @@ export const useVideoCall = ({
         }
         break;
 
-      case 'call_invitation':
-        console.log('[VideoCall] 📞 Incoming call from:', from_user_id, data.from_user_name);
-        setState(prev => ({
-          ...prev,
-          incomingCall: {
-            roomId: data.room_id,
-            fromUserId: from_user_id,
-            fromUserName: data.from_user_name || user_name || 'Unknown',
-            callType: data.call_type || 'video'
-          },
-          isRinging: true
-        }));
-        break;
-
-      case 'call_response':
-        console.log('[VideoCall] 📲 Call response from:', from_user_id, 'accepted:', data.accepted);
-        if (data.accepted) {
-          setState(prev => ({ ...prev, isRinging: false }));
-        } else {
-          setState(prev => ({
-            ...prev,
-            incomingCall: null,
-            isRinging: false
-          }));
-        }
-        break;
-
       case 'offer':
         console.log('[VideoCall] 📨 Handling offer from:', from_user_id);
         await handleOffer(data.offer, from_user_id);
@@ -329,8 +319,85 @@ export const useVideoCall = ({
     }
   }, [currentUserId, createOffer, handleOffer, handleAnswer, handleIceCandidate]);
 
-  // WebSocket functions
-  const initializeWebSocket = useCallback((roomId: string): Promise<void> => {
+  const initializePresenceWebSocket = useCallback((): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      try {
+        if (presenceWs.current) {
+          console.log('[VideoCall] ℹ️ Presence WebSocket already exists');
+          if (presenceWs.current.readyState === WebSocket.OPEN) {
+            resolve();
+            return;
+          }
+        }
+
+        const roomId = `user_${currentUserId}`;
+        const token = localStorage.getItem('access_token');
+        const wsUrl = `wss://planshet2.stat.uz/ws/videocall/${roomId}/?token=${token}`;
+
+        console.log('[VideoCall] 🔌 Connecting presence WebSocket');
+
+        presenceWs.current = new WebSocket(wsUrl);
+
+        presenceWs.current.onopen = (): void => {
+          console.log('[VideoCall] ✅ Presence WebSocket connected');
+          resolve();
+        };
+
+        presenceWs.current.onmessage = async (event: MessageEvent): Promise<void> => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log('[VideoCall] 📩 Presence message:', data.type);
+
+            if (data.type === 'presence_connected') {
+              console.log('[VideoCall] ✅ Presence confirmed');
+              return;
+            }
+
+            if (data.type === 'call_invitation') {
+              console.log('[VideoCall] 📞 Call invitation received:', data);
+              setState(prev => ({
+                ...prev,
+                incomingCall: {
+                  roomId: data.room_id,
+                  fromUserId: data.from_user_id,
+                  fromUserName: data.from_user_name,
+                  callType: data.call_type || 'video'
+                },
+                isRinging: true
+              }));
+              return;
+            }
+
+            if (data.type === 'call_response') {
+              console.log('[VideoCall] 📲 Call response:', data);
+              return;
+            }
+          } catch (error) {
+            console.error('[VideoCall] ❌ Error parsing presence message:', error);
+          }
+        };
+
+        presenceWs.current.onclose = (): void => {
+          console.log('[VideoCall] 🔌 Presence WebSocket disconnected');
+          setTimeout(() => {
+            console.log('[VideoCall] 🔄 Reconnecting presence WebSocket');
+            initializePresenceWebSocket();
+          }, 3000);
+        };
+
+        presenceWs.current.onerror = (error: Event): void => {
+          console.error('[VideoCall] ❌ Presence WebSocket error:', error);
+          reject(error);
+        };
+
+      } catch (error) {
+        console.error('[VideoCall] ❌ Failed to initialize presence WebSocket:', error);
+        reject(error);
+      }
+    });
+  }, [currentUserId]);
+
+  const initializeCallWebSocket = useCallback((roomId: string): Promise<void> => {
     return new Promise((resolve, reject) => {
       try {
         if (videoCallWs.current) {
@@ -342,35 +409,13 @@ export const useVideoCall = ({
         const token = localStorage.getItem('access_token');
         const wsUrl = `wss://planshet2.stat.uz/ws/videocall/${roomId}/?token=${token}`;
 
-        console.log('[VideoCall] 🔌 Connecting to WebSocket:', wsUrl);
+        console.log('[VideoCall] 🔌 Connecting call WebSocket to:', roomId);
 
         videoCallWs.current = new WebSocket(wsUrl);
 
         videoCallWs.current.onopen = (): void => {
-          console.log('[VideoCall] ✅ WebSocket connected to room:', roomId);
+          console.log('[VideoCall] ✅ Call WebSocket connected to room:', roomId);
           setState(prev => ({ ...prev, isWsConnected: true }));
-
-          if (roomId.startsWith('user_')) {
-            console.log('[VideoCall] ✅ Connected to presence channel for incoming calls');
-            
-            if (currentUserId) {
-              setTimeout(async () => {
-                try {
-                  const userGroupMessage: WebSocketMessage = {
-                    type: 'join_user_group',
-                    user_id: currentUserId
-                  };
-                  await sendWebSocketMessage(userGroupMessage);
-                  console.log('[VideoCall] ✅ Joined user group for presence');
-                } catch (error) {
-                  console.error('[VideoCall] ❌ Failed to join user group:', error);
-                }
-              }, 100);
-            }
-            
-            resolve();
-            return;
-          }
 
           const joinMessage: WebSocketMessage = {
             type: 'join_call',
@@ -380,11 +425,12 @@ export const useVideoCall = ({
 
           setTimeout(async () => {
             try {
-              await sendWebSocketMessage(joinMessage);
+              await sendWebSocketMessage(joinMessage, false);
               flushPendingMessages();
+              console.log('[VideoCall] ✅ Joined call room');
               resolve();
             } catch (error) {
-              console.error('[VideoCall] ❌ Failed to send join call message:', error);
+              console.error('[VideoCall] ❌ Failed to join call:', error);
               reject(error);
             }
           }, 200);
@@ -393,103 +439,39 @@ export const useVideoCall = ({
         videoCallWs.current.onmessage = async (event: MessageEvent): Promise<void> => {
           try {
             const data = JSON.parse(event.data);
-            console.log('[VideoCall] 📩 Received message:', data.type, data);
-
-            if (data.type === 'presence_connected' || data.type === 'user_group_joined') {
-              console.log('[VideoCall] ✅ Presence channel confirmed:', data.type);
-              return;
-            }
-
-            if (data.type === 'call_invitation') {
-              console.log('[VideoCall] 📞 Received call invitation:', data);
-              setState(prev => ({
-                ...prev,
-                incomingCall: {
-                  roomId: data.room_id,
-                  fromUserId: data.from_user_id,
-                  fromUserName: data.from_user_name,
-                  callType: data.call_type || 'video'
-                },
-                isRinging: true
-              }));
-              return;   
-            }
-
+            console.log('[VideoCall] 📩 Call message:', data.type);
             await handleSignalingMessage(data);
           } catch (error) {
-            console.error('[VideoCall] ❌ Error parsing message:', error);
+            console.error('[VideoCall] ❌ Error parsing call message:', error);
           }
         };
 
-        videoCallWs.current.onclose = (event: CloseEvent): void => {
-          console.log('[VideoCall] 🔌 WebSocket disconnected:', event.code, event.reason);
+        videoCallWs.current.onclose = (): void => {
+          console.log('[VideoCall] 🔌 Call WebSocket disconnected');
           setState(prev => ({ ...prev, isWsConnected: false }));
-
-          if (connectionTimeout.current) {
-            clearTimeout(connectionTimeout.current);
-            connectionTimeout.current = null;
-          }
-
-          if (roomId.startsWith('user_')) {
-            console.log('[VideoCall] 🔄 Presence channel disconnected, attempting reconnect...');
-            setTimeout(() => {
-              connectToVideoCallWebSocket();
-            }, 3000);
-          }
         };
 
         videoCallWs.current.onerror = (error: Event): void => {
-          console.error('[VideoCall] ❌ WebSocket error:', error);
-          setState(prev => ({ ...prev, callStatus: 'failed', isWsConnected: false }));
+          console.error('[VideoCall] ❌ Call WebSocket error:', error);
           reject(error);
         };
 
-        connectionTimeout.current = setTimeout(() => {
-          if (videoCallWs.current?.readyState === WebSocket.CONNECTING) {
-            console.error('[VideoCall] ❌ WebSocket connection timeout');
-            videoCallWs.current.close();
-            reject(new Error('WebSocket connection timeout'));
-          }
-        }, 10000);
-
       } catch (error) {
-        console.error('[VideoCall] ❌ WebSocket connection failed:', error);
-        setState(prev => ({ ...prev, callStatus: 'failed', isWsConnected: false }));
+        console.error('[VideoCall] ❌ Failed to initialize call WebSocket:', error);
         reject(error);
       }
     });
   }, [currentUserId, currentUserName, flushPendingMessages, sendWebSocketMessage, handleSignalingMessage]);
 
   const connectToVideoCallWebSocket = useCallback(async (): Promise<void> => {
-    if (videoCallWs.current?.readyState === WebSocket.OPEN) {
-      console.log('[VideoCall] ✅ WebSocket already connected');
-      return;
-    }
-
-    if (videoCallWs.current?.readyState === WebSocket.CONNECTING) {
-      console.log('[VideoCall] ⏳ WebSocket already connecting, waiting...');
-      try {
-        await waitForWebSocketOpen();
-        console.log('[VideoCall] ✅ WebSocket connected successfully');
-        return;
-      } catch (error) {
-        console.error('[VideoCall] ❌ Waiting for connection failed:', error);
-      }
-    }
-
-    const roomId = `user_${currentUserId}_presence`;
     try {
-      await initializeWebSocket(roomId);
-      console.log('[VideoCall] ✅ Persistent WebSocket connection established for incoming calls');
+      await initializePresenceWebSocket();
+      console.log('[VideoCall] ✅ Presence WebSocket established');
     } catch (error) {
-      console.error('[VideoCall] ❌ Failed to establish persistent WebSocket connection:', error);
-      setTimeout(() => {
-        connectToVideoCallWebSocket();
-      }, 5000);
+      console.error('[VideoCall] ❌ Failed to establish presence WebSocket:', error);
     }
-  }, [initializeWebSocket, currentUserId, waitForWebSocketOpen]);
+  }, [initializePresenceWebSocket]);
 
-  // Rest of the functions remain the same...
   const sendCallInvitation = useCallback(async (roomId: string, toUserId: number, callType: 'video' | 'audio' = 'video'): Promise<void> => {
     const currentId = Number(currentUserId);
     const targetId = Number(toUserId);
@@ -506,61 +488,47 @@ export const useVideoCall = ({
       return;
     }
 
-    if (!toUserId || toUserId <= 0) {
-      console.error('[VideoCall] ❌ Invalid toUserId:', toUserId);
-      return;
-    }
-
     const invitationMessage: WebSocketMessage = {
       type: 'call_invitation',
       room_id: roomId,
       call_type: callType,
-      from_user_id: currentUserId,
-      from_user_name: currentUserName,
       to_user_id: toUserId
     };
 
-    console.log('[VideoCall] 📤 Call invitation message:', invitationMessage);
+    console.log('[VideoCall] 📤 Sending via presence WebSocket');
     
     try {
-      await sendWebSocketMessage(invitationMessage);
-      console.log('[VideoCall] ✅ Call invitation sent successfully');
+      await sendWebSocketMessage(invitationMessage, true);
+      console.log('[VideoCall] ✅ Call invitation sent');
     } catch (error) {
       console.error('[VideoCall] ❌ Failed to send call invitation:', error);
-      throw error;
     }
-  }, [sendWebSocketMessage, currentUserId, currentUserName]);
+  }, [sendWebSocketMessage, currentUserId]);
 
   const sendCallResponse = useCallback(async (roomId: string, toUserId: number, accepted: boolean): Promise<void> => {
     const responseMessage: WebSocketMessage = {
       type: 'call_response',
       room_id: roomId,
       accepted: accepted,
-      from_user_id: currentUserId,
-      user_name: currentUserName,
       to_user_id: toUserId
     };
 
-    console.log('[VideoCall] 📲 Sending call response:', responseMessage);
+    console.log('[VideoCall] 📲 Sending call response:', accepted);
     
     try {
-      await sendWebSocketMessage(responseMessage);
-      console.log('[VideoCall] ✅ Call response sent successfully');
+      await sendWebSocketMessage(responseMessage, true);
+      console.log('[VideoCall] ✅ Call response sent');
     } catch (error) {
       console.error('[VideoCall] ❌ Failed to send call response:', error);
-      throw error;
     }
-  }, [sendWebSocketMessage, currentUserId, currentUserName]);
+  }, [sendWebSocketMessage]);
 
   const startCall = useCallback(async (roomId: string): Promise<void> => {
     try {
       console.log('[VideoCall] 🚀 Starting call in room:', roomId);
       setState(prev => ({ ...prev, callStatus: 'calling' }));
 
-      if (!state.isWsConnected || videoCallWs.current?.readyState !== WebSocket.OPEN) {
-        console.log('[VideoCall] 🔌 Establishing WebSocket connection first...');
-        await initializeWebSocket(roomId);
-      }
+      await initializeCallWebSocket(roomId);
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 1280, height: 720 },
@@ -586,70 +554,59 @@ export const useVideoCall = ({
       setState(prev => ({ ...prev, callStatus: 'failed' }));
       throw error;
     }
-  }, [initializeWebSocket, state.isWsConnected]);
-
-  const joinCall = useCallback(async (roomId: string): Promise<void> => {
-    try {
-      console.log('[VideoCall] 🔗 Joining call in room:', roomId);
-      setState(prev => ({ ...prev, callStatus: 'ringing' }));
-
-      if (!state.isWsConnected || videoCallWs.current?.readyState !== WebSocket.OPEN) {
-        console.log('[VideoCall] 🔌 Establishing WebSocket connection first...');
-        await initializeWebSocket(roomId);
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 1280, height: 720 },
-        audio: true
-      });
-
-      console.log('[VideoCall] ✅ Got local media stream');
-
-      setState(prev => ({
-        ...prev,
-        localStream: stream,
-        isInCall: true,
-        callStatus: 'connected',
-      }));
-
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-        localVideoRef.current.play().catch(console.error);
-      }
-
-    } catch (error) {
-      console.error('[VideoCall] ❌ Error joining call:', error);
-      setState(prev => ({ ...prev, callStatus: 'failed' }));
-      throw error;
-    }
-  }, [initializeWebSocket, state.isWsConnected]);
+  }, [initializeCallWebSocket]);
 
   const acceptCall = useCallback(async (): Promise<void> => {
     if (state.incomingCall) {
       console.log('[VideoCall] ✅ Accepting call:', state.incomingCall.roomId);
       
       try {
-        await joinCall(state.incomingCall.roomId);
         await sendCallResponse(state.incomingCall.roomId, state.incomingCall.fromUserId, true);
 
         setState(prev => ({
           ...prev,
+          isRinging: false,
+          callStatus: 'calling'
+        }));
+
+        await initializeCallWebSocket(state.incomingCall.roomId);
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 1280, height: 720 },
+          audio: true
+        });
+
+        console.log('[VideoCall] ✅ Got local media stream');
+
+        setState(prev => ({
+          ...prev,
+          localStream: stream,
+          isInCall: true,
+          callStatus: 'connected',
+          incomingCall: null
+        }));
+
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+          localVideoRef.current.play().catch(console.error);
+        }
+
+      } catch (error) {
+        console.error('[VideoCall] ❌ Error accepting call:', error);
+        setState(prev => ({
+          ...prev,
+          callStatus: 'failed',
           incomingCall: null,
           isRinging: false
         }));
-      } catch (error) {
-        console.error('[VideoCall] ❌ Error accepting call:', error);
-        throw error;
       }
     }
-  }, [state.incomingCall, joinCall, sendCallResponse]);
+  }, [state.incomingCall, sendCallResponse, initializeCallWebSocket]);
 
   const rejectCall = useCallback((): void => {
     if (state.incomingCall) {
-      console.log('[VideoCall] ❌ Rejecting call:', state.incomingCall.roomId);
-
+      console.log('[VideoCall] ❌ Rejecting call');
       sendCallResponse(state.incomingCall.roomId, state.incomingCall.fromUserId, false);
-
       setState(prev => ({
         ...prev,
         incomingCall: null,
@@ -665,9 +622,8 @@ export const useVideoCall = ({
       state.localStream.getTracks().forEach(track => track.stop());
     }
 
-    peerConnections.current.forEach((pc, userId) => {
+    peerConnections.current.forEach((pc) => {
       pc.close();
-      console.log('[VideoCall] 🔌 Closed peer connection for user:', userId);
     });
     peerConnections.current.clear();
 
@@ -676,12 +632,8 @@ export const useVideoCall = ({
       videoCallWs.current = null;
     }
 
-    if (connectionTimeout.current) {
-      clearTimeout(connectionTimeout.current);
-      connectionTimeout.current = null;
-    }
-
-    setState({
+    setState(prev => ({
+      ...prev,
       isInCall: false,
       localStream: null,
       remoteStreams: new Map(),
@@ -689,13 +641,10 @@ export const useVideoCall = ({
       participants: [],
       isAudioMuted: false,
       isVideoMuted: false,
-      incomingCall: null,
-      isRinging: false,
       isWsConnected: false,
-    });
+    }));
 
     currentRoomId.current = null;
-    pendingMessages.current = [];
   }, [state.localStream]);
 
   const toggleAudio = useCallback((): boolean => {
@@ -733,7 +682,7 @@ export const useVideoCall = ({
 
       const videoTrack = screenStream.getVideoTracks()[0];
 
-      peerConnections.current.forEach((pc, _userId) => {
+      peerConnections.current.forEach((pc) => {
         const sender = pc.getSenders().find(s =>
           s.track && s.track.kind === 'video'
         );
@@ -745,7 +694,7 @@ export const useVideoCall = ({
       videoTrack.onended = (): void => {
         if (state.localStream) {
           const cameraTrack = state.localStream.getVideoTracks()[0];
-          peerConnections.current.forEach((pc, _userId) => {
+          peerConnections.current.forEach((pc) => {
             const sender = pc.getSenders().find(s =>
               s.track && s.track.kind === 'video'
             );
@@ -761,14 +710,6 @@ export const useVideoCall = ({
     }
   }, [state.localStream]);
 
-  useEffect(() => {
-    return () => {
-      if (state.isInCall) {
-        endCall();
-      }
-    };
-  }, [state.isInCall, endCall]);
-
   const handleExternalCallInvitation = useCallback((data: any) => {
     console.log('[VideoCall] 📞 External call invitation:', data);
     setState(prev => ({
@@ -783,10 +724,20 @@ export const useVideoCall = ({
     }));
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (state.isInCall) {
+        endCall();
+      }
+      if (presenceWs.current) {
+        presenceWs.current.close();
+      }
+    };
+  }, [state.isInCall, endCall]);
+
   return {
     ...state,
     startCall,
-    joinCall,
     endCall,
     toggleAudio,
     toggleVideo,
