@@ -47,7 +47,7 @@ export const useVideoCall = ({
 
   const peerConnections = useRef<Map<number, RTCPeerConnection>>(new Map());
   const videoCallWs = useRef<WebSocket | null>(null);
-  const presenceWs = useRef<WebSocket | null>(null);  
+  const presenceWs = useRef<WebSocket | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const currentRoomId = useRef<string | null>(null);
   const pendingMessages = useRef<WebSocketMessage[]>([]);
@@ -88,7 +88,7 @@ export const useVideoCall = ({
   const sendWebSocketMessage = useCallback(async (message: WebSocketMessage, isPresence: boolean = false): Promise<void> => {
     try {
       const ws = isPresence ? presenceWs.current : videoCallWs.current;
-      
+
       if (ws?.readyState === WebSocket.OPEN) {
         console.log('[VideoCall] ✅ Sending message:', message.type, 'via', isPresence ? 'presence' : 'call', 'WS');
         ws.send(JSON.stringify(message));
@@ -121,30 +121,53 @@ export const useVideoCall = ({
   }, []);
 
   const createPeerConnection = useCallback((userId: number): RTCPeerConnection => {
-    console.log('[VideoCall] 🔗 Creating peer connection for user:', userId);
+  console.log('[VideoCall] 🔗 Creating peer connection for user:', userId);
 
-    const pc = new RTCPeerConnection(rtcConfig);
+  const pc = new RTCPeerConnection(rtcConfig);
 
-    if (state.localStream) {
-      state.localStream.getTracks().forEach(track => {
-        console.log('[VideoCall] ➕ Adding local track:', track.kind);
+  if (state.localStream) {
+    console.log('[VideoCall] ➕ Adding local tracks to peer connection');
+    state.localStream.getTracks().forEach(track => {
+      try {
+        console.log('[VideoCall] ➕ Adding track:', track.kind, track.id);
         pc.addTrack(track, state.localStream!);
-      });
-    }
-
-    pc.ontrack = (event: RTCTrackEvent): void => {
-      console.log('[VideoCall] 📺 Received remote track from user:', userId, 'kind:', event.track.kind);
-      const remoteStream = event.streams[0];
-
-      if (remoteStream) {
-        setState(prev => {
-          const newRemoteStreams = new Map(prev.remoteStreams);
-          newRemoteStreams.set(userId, remoteStream);
-          console.log('[VideoCall] ✅ Remote stream added. Total streams:', newRemoteStreams.size);
-          return { ...prev, remoteStreams: newRemoteStreams };
-        });
+        console.log('[VideoCall] ✅ Track added successfully:', track.kind);
+      } catch (error) {
+        console.error('[VideoCall] ❌ Error adding track:', error);
       }
-    };
+    });
+  } else {
+    console.warn('[VideoCall] ⚠️ No local stream available when creating peer connection');
+  }
+
+  pc.ontrack = (event: RTCTrackEvent): void => {
+    console.log('[VideoCall] 📺 Received remote track from user:', userId, 
+                'kind:', event.track.kind, 
+                'streams:', event.streams.length,
+                'track id:', event.track.id);
+
+    if (event.streams && event.streams.length > 0) {
+      const remoteStream = event.streams[0];
+      
+      console.log('[VideoCall] 🔄 Remote stream tracks:', 
+                  remoteStream.getTracks().map(t => ({kind: t.kind, id: t.id, enabled: t.enabled})));
+      
+      setState(prev => {
+        const newRemoteStreams = new Map(prev.remoteStreams);
+        newRemoteStreams.set(userId, remoteStream);
+        console.log('[VideoCall] ✅ Remote stream added for user:', userId, 
+                    'Total remote streams:', newRemoteStreams.size);
+        return { ...prev, remoteStreams: newRemoteStreams };
+      });
+
+      event.track.onmute = () => console.log('[VideoCall] 🔇 Remote track muted:', event.track.kind);
+      event.track.onunmute = () => console.log('[VideoCall] 🔊 Remote track unmuted:', event.track.kind);
+      event.track.onended = () => console.log('[VideoCall] ⏹️ Remote track ended:', event.track.kind);
+      
+    } else {
+      console.warn('[VideoCall] ⚠️ No streams in track event');
+    }
+  };
 
     pc.onicecandidate = (event: RTCPeerConnectionIceEvent): void => {
       if (event.candidate) {
@@ -180,7 +203,7 @@ export const useVideoCall = ({
     console.log('[VideoCall] 📨 Processing offer from:', fromUserId);
 
     let pc = peerConnections.current.get(fromUserId);
-    
+
     if (!pc) {
       console.log('[VideoCall] 🔗 Creating new peer connection for offer');
       pc = createPeerConnection(fromUserId);
@@ -189,7 +212,7 @@ export const useVideoCall = ({
     try {
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
       console.log('[VideoCall] ✅ Remote description set');
-      
+
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       console.log('[VideoCall] ✅ Local description set');
@@ -209,22 +232,37 @@ export const useVideoCall = ({
   const handleAnswer = useCallback(async (answer: RTCSessionDescriptionInit, fromUserId: number): Promise<void> => {
     console.log('[VideoCall] 📬 Processing answer from:', fromUserId);
     const pc = peerConnections.current.get(fromUserId);
-    
+
     if (pc) {
       try {
+        if (pc.signalingState !== 'stable') {
+          console.log('[VideoCall] ⚠️ Peer connection not stable, current state:', pc.signalingState);
+        }
+
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
         console.log('[VideoCall] ✅ Remote answer set for:', fromUserId);
+
+        if (pc.remoteDescription) {
+          console.log('[VideoCall] ✅ Remote description ready for ICE candidates');
+        }
       } catch (error) {
         console.error('[VideoCall] ❌ Error handling answer:', error);
       }
     } else {
       console.warn('[VideoCall] ⚠️ No peer connection found for user:', fromUserId);
+      const newPc = createPeerConnection(fromUserId);
+      try {
+        await newPc.setRemoteDescription(new RTCSessionDescription(answer));
+        console.log('[VideoCall] ✅ Created new peer connection and set remote answer');
+      } catch (error) {
+        console.error('[VideoCall] ❌ Error setting remote description on new PC:', error);
+      }
     }
-  }, []);
+  }, [createPeerConnection]);
 
   const handleIceCandidate = useCallback(async (candidate: RTCIceCandidateInit, fromUserId: number): Promise<void> => {
     const pc = peerConnections.current.get(fromUserId);
-    
+
     if (pc && pc.remoteDescription) {
       try {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
@@ -277,7 +315,7 @@ export const useVideoCall = ({
     switch (type) {
       case 'user_joined':
         console.log('[VideoCall] 👤 User joined:', from_user_id, user_name);
-        
+
         if (!from_user_id) {
           console.warn('[VideoCall] ⚠️ user_joined without from_user_id');
           return;
@@ -305,7 +343,7 @@ export const useVideoCall = ({
               createOffer(from_user_id);
             }
           }, 500);
-          
+
           // 5 sekunddan keyin to'xtatish
           setTimeout(() => clearInterval(checkInterval), 5000);
         }
@@ -524,7 +562,7 @@ export const useVideoCall = ({
     };
 
     console.log('[VideoCall] 📤 Sending via presence WebSocket');
-    
+
     try {
       await sendWebSocketMessage(invitationMessage, true);
       console.log('[VideoCall] ✅ Call invitation sent');
@@ -542,7 +580,7 @@ export const useVideoCall = ({
     };
 
     console.log('[VideoCall] 📲 Sending call response:', accepted);
-    
+
     try {
       await sendWebSocketMessage(responseMessage, true);
       console.log('[VideoCall] ✅ Call response sent');
@@ -558,8 +596,8 @@ export const useVideoCall = ({
 
       // 1. Avval media stream olish
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          width: { ideal: 1280 }, 
+        video: {
+          width: { ideal: 1280 },
           height: { ideal: 720 },
           facingMode: 'user'
         },
@@ -597,83 +635,75 @@ export const useVideoCall = ({
   }, [initializeCallWebSocket]);
 
   const acceptCall = useCallback(async (): Promise<void> => {
-    if (!state.incomingCall) {
-      console.warn('[VideoCall] ⚠️ No incoming call to accept');
-      return;
-    }
+  if (!state.incomingCall) {
+    console.warn('[VideoCall] ⚠️ No incoming call to accept');
+    return;
+  }
 
-    const callInfo = state.incomingCall;
-    console.log('[VideoCall] ✅ Accepting call:', callInfo.roomId);
-    
-    try {
-      // 1. Avval response yuborish
-      await sendCallResponse(callInfo.roomId, callInfo.fromUserId, true);
+  const callInfo = state.incomingCall;
+  console.log('[VideoCall] ✅ Accepting call:', callInfo.roomId);
+  
+  try {
+    await sendCallResponse(callInfo.roomId, callInfo.fromUserId, true);
 
-      // 2. Media stream olish
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          width: { ideal: 1280 }, 
-          height: { ideal: 720 },
-          facingMode: 'user'
-        },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true
-        }
-      });
-
-      console.log('[VideoCall] ✅ Got local media stream with tracks:', {
-        video: stream.getVideoTracks().length,
-        audio: stream.getAudioTracks().length
-      });
-
-      // 3. Holatni yangilash
-      setState(prev => ({
-        ...prev,
-        localStream: stream,
-        isInCall: true,
-        isRinging: false,
-        callStatus: 'calling',
-        incomingCall: null
-      }));
-
-      // 4. Video elementga ulash
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-        const playPromise = localVideoRef.current.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => console.log('[VideoCall] ✅ Local video playing'))
-            .catch(err => console.error('[VideoCall] ❌ Video play error:', err));
-        }
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { 
+        width: { ideal: 1280 }, 
+        height: { ideal: 720 },
+        facingMode: 'user'
+      },
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
       }
+    });
 
-      // 5. Call WebSocket ochish
-      await initializeCallWebSocket(callInfo.roomId);
+    console.log('[VideoCall] ✅ Got local media stream with tracks:', {
+      video: stream.getVideoTracks().length,
+      audio: stream.getAudioTracks().length,
+      videoTrack: stream.getVideoTracks()[0]?.id,
+      audioTrack: stream.getAudioTracks()[0]?.id
+    });
 
-      // 6. Holatni connected qilish
-      setState(prev => ({
-        ...prev,
-        callStatus: 'connected',
-      }));
+    setState(prev => ({
+      ...prev,
+      localStream: stream,
+      isInCall: true,
+      isRinging: false,
+      callStatus: 'connected',
+      incomingCall: null
+    }));
 
-      console.log('[VideoCall] ✅ Call accepted successfully');
-
-    } catch (error) {
-      console.error('[VideoCall] ❌ Error accepting call:', error);
-      
-      setState(prev => ({
-        ...prev,
-        callStatus: 'failed',
-        incomingCall: null,
-        isRinging: false,
-        isInCall: false,
-        localStream: null
-      }));
-      
-      throw error;
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = stream;
+      const playPromise = localVideoRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => console.log('[VideoCall] ✅ Local video playing'))
+          .catch(err => console.error('[VideoCall] ❌ Video play error:', err));
+      }
     }
-  }, [state.incomingCall, sendCallResponse, initializeCallWebSocket]);
+
+    await initializeCallWebSocket(callInfo.roomId);
+
+    console.log('[VideoCall] ✅ Call accepted successfully - waiting for remote stream...');
+
+  } catch (error) {
+    console.error('[VideoCall] ❌ Error accepting call:', error);
+    
+    setState(prev => ({
+      ...prev,
+      callStatus: 'failed',
+      incomingCall: null,
+      isRinging: false,
+      isInCall: false,
+      localStream: null
+    }));
+    
+    throw error;
+  }
+}, [state.incomingCall, sendCallResponse, initializeCallWebSocket]);
 
   const rejectCall = useCallback((): void => {
     if (state.incomingCall) {
