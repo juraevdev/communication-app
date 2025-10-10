@@ -557,49 +557,81 @@ export const useVideoCall = ({
   }, [initializeCallWebSocket]);
 
   const acceptCall = useCallback(async (): Promise<void> => {
-    if (state.incomingCall) {
-      console.log('[VideoCall] ✅ Accepting call:', state.incomingCall.roomId);
-      
-      try {
-        await sendCallResponse(state.incomingCall.roomId, state.incomingCall.fromUserId, true);
+    if (!state.incomingCall) {
+      console.warn('[VideoCall] ⚠️ No incoming call to accept');
+      return;
+    }
 
-        setState(prev => ({
-          ...prev,
-          isRinging: false,
-          callStatus: 'calling'
-        }));
+    const callInfo = state.incomingCall;
+    console.log('[VideoCall] ✅ Accepting call:', callInfo.roomId);
+    
+    try {
+      // 1. Avval response yuborish
+      await sendCallResponse(callInfo.roomId, callInfo.fromUserId, true);
 
-        await initializeCallWebSocket(state.incomingCall.roomId);
+      // 2. Holatni yangilash
+      setState(prev => ({
+        ...prev,
+        isRinging: false,
+        callStatus: 'calling',
+        incomingCall: null // Call info endi kerak emas
+      }));
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 1280, height: 720 },
-          audio: true
-        });
+      // 3. Call WebSocket ochish
+      await initializeCallWebSocket(callInfo.roomId);
 
-        console.log('[VideoCall] ✅ Got local media stream');
-
-        setState(prev => ({
-          ...prev,
-          localStream: stream,
-          isInCall: true,
-          callStatus: 'connected',
-          incomingCall: null
-        }));
-
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-          localVideoRef.current.play().catch(console.error);
+      // 4. Media stream olish
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+          width: { ideal: 1280 }, 
+          height: { ideal: 720 },
+          facingMode: 'user'
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true
         }
+      });
 
-      } catch (error) {
-        console.error('[VideoCall] ❌ Error accepting call:', error);
-        setState(prev => ({
-          ...prev,
-          callStatus: 'failed',
-          incomingCall: null,
-          isRinging: false
-        }));
+      console.log('[VideoCall] ✅ Got local media stream with tracks:', {
+        video: stream.getVideoTracks().length,
+        audio: stream.getAudioTracks().length
+      });
+
+      // 5. Holatni yangilash va video elementga ulash
+      setState(prev => ({
+        ...prev,
+        localStream: stream,
+        isInCall: true,
+        callStatus: 'connected',
+      }));
+
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+        const playPromise = localVideoRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => console.log('[VideoCall] ✅ Local video playing'))
+            .catch(err => console.error('[VideoCall] ❌ Video play error:', err));
+        }
       }
+
+      console.log('[VideoCall] ✅ Call accepted successfully');
+
+    } catch (error) {
+      console.error('[VideoCall] ❌ Error accepting call:', error);
+      
+      // Xatolik yuz bersa, holatni tozalash
+      setState(prev => ({
+        ...prev,
+        callStatus: 'failed',
+        incomingCall: null,
+        isRinging: false,
+        isInCall: false,
+        localStream: null
+      }));
+      
+      throw error;
     }
   }, [state.incomingCall, sendCallResponse, initializeCallWebSocket]);
 

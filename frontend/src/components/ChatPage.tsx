@@ -186,59 +186,61 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-useEffect(() => {
-  if (currentUser?.id && isConnected) {
-    console.log('[ChatPage] 🔌 Connecting to video call WebSocket for incoming calls');
-    
-    videoCall.connectToVideoCallWebSocket();
-  }
-}, [currentUser?.id, isConnected, videoCall]);
-
-useEffect(() => {
-  const handleMessage = (event: MessageEvent) => {
-    try {
-      const data = JSON.parse(event.data);
-      console.log('[ChatPage] 📨 Message:', data.type);
-
-      if (data.type === 'call_invitation') {
-        console.log('[ChatPage] 📞 Processing call invitation');
-        videoCall.handleExternalCallInvitation(data);
-      }
-    } catch (error) {
-      console.error('[ChatPage] ❌ Error:', error);
+  useEffect(() => {
+    if (currentUser?.id && isConnected) {
+      console.log('[ChatPage] 🔌 Connecting to video call WebSocket for incoming calls');
+      videoCall.connectToVideoCallWebSocket();
     }
-  };
 
-  const addListeners = () => {
-    [chatWsRef.current, groupWsRef.current, channelWsRef.current].forEach((ws, index) => {
-      if (ws) {
-        const name = ['Chat', 'Group', 'Channel'][index];
-        console.log(`[ChatPage] 🔌 Listening to ${name} WS`);
-        ws.addEventListener('message', handleMessage);
+    return () => {
+      console.log('[ChatPage] 🧹 Cleaning up video call connection');
+    };
+  }, [currentUser?.id, isConnected]);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        if (data.type === 'call_invitation') {
+          console.log('[ChatPage] 📞 Processing call invitation from message event');
+          videoCall.handleExternalCallInvitation(data);
+        }
+      } catch (error) {
+        console.error('[ChatPage] ❌ Error processing message:', error);
       }
-    });
+    };
 
-    if (videoCall.videoCallWs.current) {
-      console.log('[ChatPage] 🔌 Listening to VideoCall WS');
-      videoCall.videoCallWs.current.addEventListener('message', handleMessage);
-    }
-  };
+    const addListeners = () => {
+      [chatWsRef.current, groupWsRef.current, channelWsRef.current].forEach((ws, index) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          const name = ['Chat', 'Group', 'Channel'][index];
+          console.log(`[ChatPage] 🔌 Adding message listener to ${name} WS`);
+          ws.addEventListener('message', handleMessage);
+        }
+      });
+    };
 
-  const removeListeners = () => {
-    [chatWsRef.current, groupWsRef.current, channelWsRef.current].forEach((ws) => {
-      if (ws) {
-        ws.removeEventListener('message', handleMessage);
-      }
-    });
+    const removeListeners = () => {
+      [chatWsRef.current, groupWsRef.current, channelWsRef.current].forEach((ws) => {
+        if (ws) {
+          ws.removeEventListener('message', handleMessage);
+        }
+      });
+    };
 
-    if (videoCall.videoCallWs.current) {
-      videoCall.videoCallWs.current.removeEventListener('message', handleMessage);
-    }
-  };
+    addListeners();
 
-  addListeners();
-  return removeListeners;
-}, [chatWsRef.current, groupWsRef.current, channelWsRef.current, videoCall]);
+    return () => {
+      console.log('[ChatPage] 🧹 Removing message listeners');
+      removeListeners();
+    };
+  }, [
+    chatWsRef.current,
+    groupWsRef.current,
+    channelWsRef.current,
+    videoCall.handleExternalCallInvitation
+  ]);
 
   const handleProfileUpdate = async (updatedUser: any) => {
     try {
@@ -336,25 +338,18 @@ useEffect(() => {
 
     try {
       const roomId = `videocall_${selectedChat.id}_${Date.now()}`;
-
       const targetUserId = selectedChat.type === 'private'
         ? selectedChat.sender_id
         : selectedChat.id;
 
-      console.log('[ChatPage] Video call details:', {
+      console.log('[ChatPage] 📞 Starting video call:', {
         currentUserId: currentUser.id,
         targetUserId,
-        selectedChatId: selectedChat.id,
-        selectedChatSenderId: selectedChat.sender_id,
         roomId
       });
 
       if (targetUserId === currentUser.id) {
-        console.error('[ChatPage] Error: Cannot call yourself', {
-          currentUserId: currentUser.id,
-          targetUserId,
-          selectedChat
-        });
+        console.error('[ChatPage] ❌ Cannot call yourself');
         alert('Siz o\'zingizga qo\'ng\'iroq qila olmaysiz');
         return;
       }
@@ -364,19 +359,20 @@ useEffect(() => {
         type: selectedChat.type === 'group' ? 'group' : 'private',
         name: getChatName(selectedChat)
       });
+      setVideoCallModalOpen(true);
 
       await videoCall.startCall(roomId);
 
       if (selectedChat.type === 'private') {
-        videoCall.sendCallInvitation(roomId, targetUserId, 'video');
-        console.log('[ChatPage] Video call invitation sent to user:', targetUserId);
+        await videoCall.sendCallInvitation(roomId, targetUserId, 'video');
+        console.log('[ChatPage] ✅ Video call invitation sent to user:', targetUserId);
       }
 
-      setVideoCallModalOpen(true);
-
     } catch (error) {
-      console.error('Failed to start video call:', error);
-      alert('Video qo\'ng\'iroqni boshlash muvaffaqiyatsiz. Kamera/mikron ruxsatlarini tekshiring.');
+      console.error('[ChatPage] ❌ Failed to start video call:', error);
+      setVideoCallModalOpen(false);
+      setVideoCallInfo(null);
+      alert('Video qo\'ng\'iroqni boshlash muvaffaqiyatsiz. Kamera/mikrofon ruxsatlarini tekshiring.');
     }
   };
 
@@ -457,6 +453,47 @@ useEffect(() => {
       }
     }
   }, [selectedChat, messages, markAsRead])
+
+  useEffect(() => {
+    const handleAcceptCall = async () => {
+      if (videoCall.incomingCall && videoCall.isRinging) {
+        console.log('[ChatPage] 📞 Auto-opening modal for incoming call');
+
+        setVideoCallInfo({
+          roomId: videoCall.incomingCall.roomId,
+          type: 'private',
+          name: videoCall.incomingCall.fromUserName
+        });
+
+      }
+    };
+
+    handleAcceptCall();
+  }, [videoCall.incomingCall, videoCall.isRinging]);
+
+
+  const handleAcceptIncomingCall = async () => {
+    try {
+      console.log('[ChatPage] ✅ User accepted call');
+
+      if (videoCall.incomingCall) {
+        setVideoCallInfo({
+          roomId: videoCall.incomingCall.roomId,
+          type: 'private',
+          name: videoCall.incomingCall.fromUserName
+        });
+        setVideoCallModalOpen(true);
+      }
+
+      await videoCall.acceptCall();
+
+    } catch (error) {
+      console.error('[ChatPage] ❌ Error accepting call:', error);
+      setVideoCallModalOpen(false);
+      setVideoCallInfo(null);
+      alert('Qo\'ng\'iroqni qabul qilishda xatolik yuz berdi');
+    }
+  };
 
   const getIsOwnMessage = (msg: any): boolean => {
     const currentUserId = currentUser?.id?.toString();
@@ -943,16 +980,16 @@ useEffect(() => {
       const diffDays = Math.floor(diffHours / 24)
 
       if (diffDays === 0) {
-        return date.toLocaleTimeString("uz-UZ", {
+        return date.toLocaleTimeString("en-En", {
           hour: "2-digit",
           minute: "2-digit",
         })
       } else if (diffDays === 1) {
-        return "Kecha"
+        return "Yesterday"
       } else if (diffDays < 7) {
-        return `${diffDays} kun oldin`
+        return `${diffDays} days ago`
       } else {
-        return date.toLocaleDateString("uz-UZ")
+        return date.toLocaleDateString("en-En")
       }
     } catch {
       return timestamp || ""
@@ -2246,7 +2283,7 @@ useEffect(() => {
 
       <IncomingCallModal
         isOpen={videoCall.isRinging}
-        onAccept={videoCall.acceptCall}
+        onAccept={handleAcceptIncomingCall}
         onReject={videoCall.rejectCall}
         callInfo={
           videoCall.incomingCall ? {
