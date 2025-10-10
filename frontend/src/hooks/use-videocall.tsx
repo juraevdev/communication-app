@@ -266,21 +266,49 @@ export const useVideoCall = ({
   const handleSignalingMessage = useCallback(async (data: any): Promise<void> => {
     const { type, from_user_id, user_name } = data;
 
-    if (!from_user_id || from_user_id === currentUserId) return;
+    console.log('[VideoCall] 🔄 Handling message:', type, 'from user:', from_user_id, 'current user:', currentUserId);
 
-    console.log('[VideoCall] 🔄 Handling message:', type, 'from user:', from_user_id);
+    // O'z xabarimizni ignore qilish
+    if (from_user_id && from_user_id === currentUserId) {
+      console.log('[VideoCall] ⏭️ Ignoring own message:', type);
+      return;
+    }
 
     switch (type) {
       case 'user_joined':
         console.log('[VideoCall] 👤 User joined:', from_user_id, user_name);
+        
+        if (!from_user_id) {
+          console.warn('[VideoCall] ⚠️ user_joined without from_user_id');
+          return;
+        }
+
+        // Participantlar ro'yxatiga qo'shish
         setState(prev => ({
           ...prev,
-          participants: [...prev.participants.filter(p => p.id !== from_user_id), { id: from_user_id, name: user_name }]
+          participants: [...prev.participants.filter(p => p.id !== from_user_id), { id: from_user_id, name: user_name || 'User' }]
         }));
 
-        setTimeout(() => {
-          createOffer(from_user_id);
-        }, 1000);
+        // Agar bizning stream tayyor bo'lsa, offer yuboramiz
+        if (state.localStream && state.isInCall) {
+          console.log('[VideoCall] 📤 Creating offer for newly joined user:', from_user_id);
+          setTimeout(() => {
+            createOffer(from_user_id);
+          }, 500);
+        } else {
+          console.log('[VideoCall] ⏳ Waiting for local stream before creating offer');
+          // Stream tayyor bo'lganda offer yuborish uchun kechikish
+          const checkInterval = setInterval(() => {
+            if (state.localStream && state.isInCall) {
+              clearInterval(checkInterval);
+              console.log('[VideoCall] 📤 Local stream ready, creating offer for:', from_user_id);
+              createOffer(from_user_id);
+            }
+          }, 500);
+          
+          // 5 sekunddan keyin to'xtatish
+          setTimeout(() => clearInterval(checkInterval), 5000);
+        }
         break;
 
       case 'user_left':
@@ -528,15 +556,22 @@ export const useVideoCall = ({
       console.log('[VideoCall] 🚀 Starting call in room:', roomId);
       setState(prev => ({ ...prev, callStatus: 'calling' }));
 
-      await initializeCallWebSocket(roomId);
-
+      // 1. Avval media stream olish
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 1280, height: 720 },
-        audio: true
+        video: { 
+          width: { ideal: 1280 }, 
+          height: { ideal: 720 },
+          facingMode: 'user'
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true
+        }
       });
 
       console.log('[VideoCall] ✅ Got local media stream');
 
+      // 2. Holatni yangilash
       setState(prev => ({
         ...prev,
         localStream: stream,
@@ -548,6 +583,11 @@ export const useVideoCall = ({
         localVideoRef.current.srcObject = stream;
         localVideoRef.current.play().catch(console.error);
       }
+
+      // 3. WebSocket ulanishni o'rnatish
+      await initializeCallWebSocket(roomId);
+
+      console.log('[VideoCall] ✅ Call started successfully');
 
     } catch (error) {
       console.error('[VideoCall] ❌ Error starting call:', error);
@@ -569,18 +609,7 @@ export const useVideoCall = ({
       // 1. Avval response yuborish
       await sendCallResponse(callInfo.roomId, callInfo.fromUserId, true);
 
-      // 2. Holatni yangilash
-      setState(prev => ({
-        ...prev,
-        isRinging: false,
-        callStatus: 'calling',
-        incomingCall: null // Call info endi kerak emas
-      }));
-
-      // 3. Call WebSocket ochish
-      await initializeCallWebSocket(callInfo.roomId);
-
-      // 4. Media stream olish
+      // 2. Media stream olish
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
           width: { ideal: 1280 }, 
@@ -598,14 +627,17 @@ export const useVideoCall = ({
         audio: stream.getAudioTracks().length
       });
 
-      // 5. Holatni yangilash va video elementga ulash
+      // 3. Holatni yangilash
       setState(prev => ({
         ...prev,
         localStream: stream,
         isInCall: true,
-        callStatus: 'connected',
+        isRinging: false,
+        callStatus: 'calling',
+        incomingCall: null
       }));
 
+      // 4. Video elementga ulash
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
         const playPromise = localVideoRef.current.play();
@@ -616,12 +648,20 @@ export const useVideoCall = ({
         }
       }
 
+      // 5. Call WebSocket ochish
+      await initializeCallWebSocket(callInfo.roomId);
+
+      // 6. Holatni connected qilish
+      setState(prev => ({
+        ...prev,
+        callStatus: 'connected',
+      }));
+
       console.log('[VideoCall] ✅ Call accepted successfully');
 
     } catch (error) {
       console.error('[VideoCall] ❌ Error accepting call:', error);
       
-      // Xatolik yuz bersa, holatni tozalash
       setState(prev => ({
         ...prev,
         callStatus: 'failed',
